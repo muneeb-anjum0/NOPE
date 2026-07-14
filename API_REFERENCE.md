@@ -1,0 +1,27 @@
+# NOPE API Reference
+
+FastAPI exposes interactive OpenAPI documentation at `/docs`.
+
+## Core endpoints
+
+- `GET /health` - service health, version, scanner availability, AI runtime status.
+- `GET /api/projects` - list projects.
+- `POST /api/projects` - create project.
+- `POST /api/scans/url` - start authorized URL scan.
+- `POST /api/scans/repository` - start repository ZIP scan.
+- `POST /api/scans/full` - start combined repository and URL scan.
+- `GET /api/scans` - list scans.
+- `GET /api/scans/{scan_id}` - scan detail.
+- `GET /api/scans/{scan_id}/findings` - normalized findings.
+- `GET /api/scans/{scan_id}/coverage` - coverage records.
+- `GET /api/scans/{scan_id}/attack-map` - attack-surface graph.
+- `GET /api/scans/{scan_id}/report.{format}` - export report as `json`, `md`, or `sarif`.
+- `GET /api/settings/model` - current AI model configuration.
+- `POST /api/settings/model/test` - test AI runtime reachability.
+
+## Guarantees
+
+- Scanners that fail are returned as failed scanner runs.
+- AI output is optional and separately marked.
+- URL scans without authorization confirmation are rejected.
+- Private network targets are rejected unless local sandbox mode is explicitly allowed.

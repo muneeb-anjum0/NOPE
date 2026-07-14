@@ -1,0 +1,101 @@
+[
+  {
+    "id": "NOPE-SEC-001",
+    "title": "Potential hardcoded secret",
+    "severity": "high",
+    "confidence": "high",
+    "category": "Secrets",
+    "cwe": "CWE-798",
+    "owasp": "A02:2021-Cryptographic Failures",
+    "description": "A credential-like value appears to be hardcoded in source.",
+    "remediation": "Move the secret to a managed secret store or server-only environment variable, rotate the exposed value, and ensure it is never bundled into client code.",
+    "test_guidance": "Add a secret scanning regression test and verify the key is absent from built client artifacts.",
+    "patterns": [
+      "(?i)(api[_-]?key|secret|token|password|service[_-]?role[_-]?key)\\s*[:=]\\s*['\\\"][A-Za-z0-9_\\-./+=]{12,}['\\\"]",
+      "-----BEGIN (?:RSA |EC |OPENSSH |)?PRIVATE KEY-----"
+    ],
+    "file_patterns": ["**/*"]
+  },
+  {
+    "id": "NOPE-AUTHZ-001",
+    "title": "Database lookup by ID may lack owner scope",
+    "severity": "high",
+    "confidence": "medium",
+    "category": "Authorization",
+    "cwe": "CWE-639",
+    "owasp": "A01:2021-Broken Access Control",
+    "description": "A route appears to load a resource by caller-controlled ID without an obvious owner, tenant, or authorization predicate.",
+    "remediation": "Require server-side authorization and constrain the query by authenticated user, organization, tenant, or explicit policy.",
+    "test_guidance": "Create a regression test proving User A cannot read, update, or delete User B's resource.",
+    "patterns": [
+      "(findUnique|findFirst|select\\(|\\.from\\([^\\n]+\\)\\s*\\.select|where\\s*:\\s*\\{\\s*id\\s*:)"
+    ],
+    "requires_absent": ["owner", "tenant", "organization", "orgId", "userId", "auth.uid", "authorize"]
+  },
+  {
+    "id": "NOPE-AUTHZ-002",
+    "title": "Client-provided role or tenant trusted",
+    "severity": "critical",
+    "confidence": "medium",
+    "category": "Authorization",
+    "cwe": "CWE-807",
+    "owasp": "A01:2021-Broken Access Control",
+    "description": "The code appears to read role, tenant, or owner identity from request-controlled input.",
+    "remediation": "Derive role, tenant, and owner information from the authenticated server-side session or token claims, then verify it server-side.",
+    "test_guidance": "Add tests that tamper with role, owner, and tenant request fields.",
+    "patterns": [
+      "(body|query|params)\\.(role|tenantId|ownerId|isAdmin)",
+      "localStorage\\.(getItem|setItem)\\(['\\\"](role|isAdmin)"
+    ]
+  },
+  {
+    "id": "NOPE-CORS-001",
+    "title": "Overly broad CORS configuration",
+    "severity": "medium",
+    "confidence": "high",
+    "category": "CORS",
+    "cwe": "CWE-942",
+    "owasp": "A05:2021-Security Misconfiguration",
+    "description": "CORS appears to allow every origin.",
+    "remediation": "Restrict CORS origins to known application origins and avoid wildcard origins with credentials.",
+    "test_guidance": "Verify untrusted origins are denied and trusted origins receive expected CORS headers.",
+    "patterns": [
+      "Access-Control-Allow-Origin['\\\"]?\\s*[:=]\\s*['\\\"]\\*",
+      "origin\\s*:\\s*['\\\"]\\*['\\\"]"
+    ]
+  },
+  {
+    "id": "NOPE-SUPABASE-001",
+    "title": "Supabase service role key may be exposed",
+    "severity": "critical",
+    "confidence": "high",
+    "category": "Supabase",
+    "cwe": "CWE-798",
+    "owasp": "A01:2021-Broken Access Control",
+    "description": "A Supabase service role key or server-only Supabase credential appears in code.",
+    "remediation": "Keep service role keys server-side only, rotate exposed keys, and verify RLS is enabled on sensitive tables.",
+    "test_guidance": "Assert service role keys are absent from frontend bundles and public environment variables.",
+    "patterns": [
+      "SUPABASE_SERVICE_ROLE",
+      "service_role"
+    ]
+  },
+  {
+    "id": "NOPE-AI-001",
+    "title": "AI call may lack cost or abuse controls",
+    "severity": "medium",
+    "confidence": "medium",
+    "category": "AI abuse",
+    "cwe": "CWE-770",
+    "owasp": "API4:2023-Unrestricted Resource Consumption",
+    "description": "An AI API call was found without nearby rate, token, timeout, or budget controls.",
+    "remediation": "Add per-user rate limits, token caps, request timeouts, and budget enforcement around AI calls.",
+    "test_guidance": "Add tests for token limit, timeout, and repeated-call throttling behavior.",
+    "patterns": [
+      "openai\\.",
+      "chat\\.completions",
+      "responses\\.create"
+    ],
+    "requires_absent": ["rate", "limit", "timeout", "max_tokens", "budget"]
+  }
+]

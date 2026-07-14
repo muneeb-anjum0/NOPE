@@ -1,0 +1,12 @@
+.git
+node_modules
+**/node_modules
+.next
+**/.next
+.venv
+__pycache__
+.pytest_cache
+.ruff_cache
+.nope-workspaces
+.env
+*.log

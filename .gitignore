@@ -1,0 +1,13 @@
+node_modules/
+.next/
+out/
+dist/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.nope-workspaces/
+.env
+*.pyc
+*.log
+*.tsbuildinfo

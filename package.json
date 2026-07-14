@@ -1,0 +1,15 @@
+{
+  "name": "nope",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.5.0",
+  "scripts": {
+    "web:dev": "pnpm --dir apps/web dev",
+    "web:build": "pnpm --dir apps/web build",
+    "web:lint": "pnpm --dir apps/web lint",
+    "web:typecheck": "pnpm --dir apps/web typecheck",
+    "api:test": "cd apps/api && pytest",
+    "api:lint": "cd apps/api && ruff check nope_api tests",
+    "dev": "pnpm --dir apps/web dev"
+  }
+}
