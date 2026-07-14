@@ -1,11 +1,12 @@
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
 from nope_api import __version__
 from nope_api.ai import check_ai_health, explain_finding
+from nope_api.auth import create_or_login, delete_session, get_user_for_token, init_auth_db
 from nope_api.config import get_settings
 from nope_api.ingestion import extract_zip
 from nope_api.models import AuthorizationScope, Project, Scan, ScanMode, ScanRequest
@@ -30,6 +31,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def startup() -> None:
+    try:
+        init_auth_db(settings)
+    except Exception:
+        # Core scanning must still start if Postgres is temporarily unavailable.
+        pass
 
 
 @app.get("/health")
@@ -57,6 +67,32 @@ async def health() -> dict:
 @app.get("/api/projects", response_model=list[Project])
 def list_projects() -> list[Project]:
     return store.list_projects()
+
+
+@app.post("/api/auth/login")
+def login(payload: dict) -> dict:
+    try:
+        return create_or_login(settings, str(payload.get("email", "")), str(payload.get("password", "")))
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/auth/me")
+def me(authorization: str | None = Header(default=None)) -> dict:
+    token = authorization.removeprefix("Bearer ").strip() if authorization else None
+    user = get_user_for_token(settings, token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated.")
+    return {"user": user}
+
+
+@app.post("/api/auth/logout")
+def logout(authorization: str | None = Header(default=None)) -> dict:
+    token = authorization.removeprefix("Bearer ").strip() if authorization else None
+    delete_session(settings, token)
+    return {"ok": True}
 
 
 @app.post("/api/projects", response_model=Project)

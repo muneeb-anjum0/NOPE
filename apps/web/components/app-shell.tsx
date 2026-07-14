@@ -1,8 +1,8 @@
-import { Brain, Command, Play, ShieldCheck } from "lucide-react";
+import { Brain, Command, LogOut, Play, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { LineSidebar } from "@/components/line-sidebar";
 
-export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) {
+export function AppShell({ children, userEmail }: Readonly<{ children: React.ReactNode; userEmail: string }>) {
   return (
     <div className="app-layout">
       <LineSidebar />
@@ -12,6 +12,7 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
             <ShieldCheck size={16} color="var(--passed)" />
             <span>NOPE Local Workspace</span>
             <span className="mono muted">main</span>
+            <span className="mono muted">{userEmail}</span>
           </div>
           <div className="hero-actions" style={{ marginTop: 0 }}>
             <button className="button ghost" type="button" aria-label="Open command palette">
@@ -23,6 +24,11 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
             <Link className="button primary" href="/app/projects/local/scans">
               <Play size={15} /> Run scan
             </Link>
+            <form action="/api/auth/logout" method="post">
+              <button className="button ghost" type="submit">
+                <LogOut size={15} /> Sign out
+              </button>
+            </form>
           </div>
         </header>
         <div className="app-content">{children}</div>

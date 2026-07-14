@@ -24,8 +24,8 @@ Core tokens live in `apps/web/app/globals.css`.
 
 ## Components
 
-- `LineSidebar`: route-aware icon navigation with active rail, tooltips, keyboard focus, and mobile dock behavior.
-- `AppShell`: top bar, workspace chip, command button, AI status action, scan action.
+- `LineSidebar`: React Bits-inspired line-marker navigation with proximity motion, numbered labels, active state, keyboard focus, and a compact mobile row.
+- `AppShell`: top bar, authenticated workspace chip, logout action, AI status action, scan action.
 - `ScanLauncher`: dark upload/URL/depth/authorization controls.
 - `FindingTable`: dense evidence table.
 - `AttackMapPanel`: dark graph canvas for route/file/data nodes.
@@ -53,13 +53,13 @@ Motion is CSS-based and intentionally restrained:
 
 - Desktop is primary.
 - Landing hero collapses to one column under 980px.
-- App sidebar becomes a bottom icon dock on mobile.
+- App sidebar becomes a compact horizontal line navigation on mobile.
 - Dense tables scroll inside panels on mobile.
 - Attack maps remain scrollable rather than squashed.
 
 ## Accessibility
 
 - Keyboard focus rings use brand red.
-- Icon-only navigation includes screen-reader labels and hover/focus labels.
+- Dashboard navigation exposes text labels, keyboard activation, and active-route state.
 - Color is reinforced with text labels for severity/status.
 - Reduced-motion preferences are respected.

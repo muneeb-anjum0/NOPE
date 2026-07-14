@@ -2,10 +2,10 @@ import { AttackMapPanel } from "@/components/attack-map";
 import { FindingTable } from "@/components/finding-table";
 import { ScanLauncher } from "@/components/scan-launcher";
 import { SeveritySummary } from "@/components/summary";
-import { demoScan, getLatestScan } from "@/lib/nope-data";
+import { freshScan, getLatestScan } from "@/lib/nope-data";
 
 export default async function ProjectOverview() {
-  const scan = (await getLatestScan()) ?? demoScan();
+  const scan = (await getLatestScan()) ?? freshScan();
   return (
     <>
       <section className="page-header">

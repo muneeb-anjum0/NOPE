@@ -22,6 +22,32 @@ export async function getModelSettings(): Promise<ModelSettings | null> {
   }
 }
 
+export function freshScan(): Scan {
+  return {
+    id: "fresh_workspace",
+    status: "ready",
+    mode: "full",
+    verdict: "Fresh dashboard. Run a scan when ready.",
+    score: 0,
+    coverage_percent: 0,
+    repository_name: "not connected",
+    target_url: null,
+    branch: null,
+    commit_sha: null,
+    findings: [],
+    coverage: [
+      { domain: "Secrets", status: "Not tested", scanners: [], notes: "Run a repository scan to check for leaked credentials." },
+      { domain: "Authentication", status: "Not tested", scanners: [], notes: "Run a full scan to inspect session and login surfaces." },
+      { domain: "Authorization", status: "Not tested", scanners: [], notes: "Run a full scan to inspect server-side access checks." },
+      { domain: "Dependencies", status: "Not tested", scanners: [], notes: "Dependency scanners have not run for this workspace yet." },
+      { domain: "Dynamic testing", status: "Not tested", scanners: [], notes: "No authorized runtime target has been tested yet." },
+    ],
+    scanner_runs: [],
+    code_graph: { nodes: [] },
+    ai_review: { status: "Not tested", provider: "none", message: "Run a scan to generate focused evidence for Qwen review." },
+  };
+}
+
 export function demoScan(): Scan {
   return {
     id: "scan_demo_local",

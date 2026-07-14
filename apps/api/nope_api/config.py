@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     base_url: str = "http://localhost:8000"
     web_url: str = "http://localhost:3000"
     database_url: str = "postgresql+psycopg://nope:nope@localhost:5432/nope"
+    auth_database_url: str = "postgresql://nope:nope@localhost:5432/nope"
     redis_url: str = "redis://localhost:6379/0"
     minio_endpoint: str = "http://localhost:9000"
     session_secret: str = "development-session-secret-change-me"

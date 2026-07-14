@@ -1,7 +1,6 @@
 import {
   ArrowRight,
   Brain,
-  CheckCircle2,
   Code2,
   GitBranch,
   LockKeyhole,
@@ -27,20 +26,28 @@ const findings = [
 ];
 
 const coverage = [
-  "Secrets",
-  "Authentication",
-  "Authorization",
-  "IDOR",
-  "Dependencies",
-  "APIs",
-  "Supabase",
-  "RLS",
-  "Storage",
-  "Rate limiting",
-  "AI cost abuse",
-  "Staging exposure",
-  "Privacy",
-  "Dynamic testing",
+  ["Secrets", "key leaks"],
+  ["Authentication", "session/auth flows"],
+  ["Authorization", "server-side access"],
+  ["IDOR", "cross-user data"],
+  ["Dependencies", "known CVEs"],
+  ["APIs", "route exposure"],
+  ["Supabase", "client/RLS safety"],
+  ["Storage", "bucket access"],
+  ["Rate limiting", "abuse/cost controls"],
+  ["AI cost abuse", "token burn"],
+  ["Staging exposure", "debug surfaces"],
+  ["Privacy", "third parties"],
+  ["Dynamic testing", "runtime checks"],
+];
+
+const methodSteps = [
+  ["Repository", GitBranch, "Map files, routes", "and config evidence."],
+  ["Authorized URL", LockKeyhole, "Probe headers, cookies", "and public exposure."],
+  ["Scanners", Radar, "Run tools that fit", "the detected stack."],
+  ["Code graph", Code2, "Connect routes to", "data and sinks."],
+  ["Focused RAG", TerminalSquare, "Retrieve only the", "evidence that matters."],
+  ["Qwen", Brain, "Reason locally over", "bounded context."],
 ];
 
 export default function LandingPage() {
@@ -49,7 +56,6 @@ export default function LandingPage() {
       <header className="landing-nav">
         <div className="container landing-nav-inner">
           <a className="wordmark" href="#top" aria-label="NOPE home">
-            <span className="wordmark-mark">N</span>
             <span>NOPE.</span>
           </a>
           <nav className="landing-links" aria-label="Landing navigation">
@@ -60,11 +66,8 @@ export default function LandingPage() {
             <a href="#github">GitHub</a>
           </nav>
           <div className="hero-actions" style={{ marginTop: 0 }}>
-            <a className="button ghost" href="/app">
+            <a className="button ghost" href="/login">
               Open dashboard
-            </a>
-            <a className="button primary" href="/app/projects/local/scans">
-              Scan my app <ArrowRight size={15} />
             </a>
           </div>
         </div>
@@ -72,9 +75,6 @@ export default function LandingPage() {
 
       <section id="top" className="container hero">
         <div>
-          <div className="eyebrow">
-            <Radar size={14} /> Rules-first. AI-assisted. Evidence-backed.
-          </div>
           <h1>
             NOPE<span>.</span>
           </h1>
@@ -83,8 +83,8 @@ export default function LandingPage() {
             add the deployed URL, and find what you should not ship.
           </p>
           <div className="hero-actions">
-            <a className="button primary" href="/app/projects/local/scans">
-              Scan my app <ArrowRight size={15} />
+            <a className="button primary" href="/login">
+              Open dashboard <ArrowRight size={15} />
             </a>
             <a className="button" href="#method">
               See how NOPE works
@@ -164,21 +164,18 @@ export default function LandingPage() {
             connects, retrieves, reasons, tests, and records coverage gaps.
           </p>
           <div className="method-flow">
-            {[
-              ["Repository", GitBranch],
-              ["Authorized URL", LockKeyhole],
-              ["Scanners", Radar],
-              ["Code graph", Code2],
-              ["Focused RAG", TerminalSquare],
-              ["Qwen", Brain],
-              ["Rescan", CheckCircle2],
-            ].map(([label, Icon], index) => {
+            {methodSteps.map(([label, Icon, line1, line2], index) => {
               const MethodIcon = Icon as typeof GitBranch;
               return (
                 <div className="method-step" key={label as string}>
                   <span>{String(index + 1).padStart(2, "0")}</span>
                   <MethodIcon size={22} color="var(--brand-primary)" />
                   <strong>{label as string}</strong>
+                  <p>
+                    {line1 as string}
+                    <br />
+                    {line2 as string}
+                  </p>
                 </div>
               );
             })}
@@ -190,11 +187,12 @@ export default function LandingPage() {
         <div className="container">
           <p className="section-kicker">Coverage</p>
           <h2>Not tested is not secure.</h2>
-          <div className="coverage-grid">
-            {coverage.map((item) => (
-              <div className="coverage-panel" key={item}>
-                <span>coverage</span>
-                <h3>{item}</h3>
+          <div className="coverage-matrix">
+            {coverage.map(([item, detail], index) => (
+              <div className="coverage-row" key={item}>
+                <span className="mono">{String(index + 1).padStart(2, "0")}</span>
+                <strong>{item}</strong>
+                <em>{detail}</em>
               </div>
             ))}
           </div>
@@ -239,7 +237,7 @@ export default function LandingPage() {
             evidence, coverage, and exportable reports.
           </p>
           <div className="hero-actions">
-            <a className="button primary" href="/app">
+            <a className="button primary" href="/login">
               Open local workspace <Sparkles size={15} />
             </a>
           </div>

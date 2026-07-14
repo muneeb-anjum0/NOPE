@@ -9,8 +9,10 @@ NOPE is a local-first, evidence-driven application security orchestration platfo
 NOPE is a working local MVP, not a finished production platform. The current build includes:
 
 - A redesigned public graphite landing page at `/`.
+- Transparent landing navigation with a login-gated `Open dashboard` flow.
 - A routed dark app workspace under `/app/projects/local`.
-- A LineSidebar-style icon navigation shell.
+- A React Bits LineSidebar-style dashboard navigation shell.
+- Local Postgres-backed account creation, login, sessions, and logout.
 - FastAPI orchestration API.
 - Next.js dashboard.
 - ZIP repository ingestion with Zip Slip protections.
@@ -85,7 +87,7 @@ flowchart LR
 
   subgraph Stores["Local Stores"]
     Memory["Development Store<br/>projects, scans, findings"]:::store
-    Postgres["Postgres<br/>planned durable persistence"]:::partial
+    Postgres["Postgres<br/>local auth sessions<br/>planned scan persistence"]:::store
     MinIO["MinIO<br/>planned artifacts/reports"]:::partial
     Redis["Redis<br/>planned queued jobs"]:::partial
   end
@@ -123,7 +125,7 @@ flowchart LR
   Coverage --> Reports
   Reports --> UI
   API --> Memory
-  API -.next phase.-> Postgres
+  API --> Postgres
   API -.next phase.-> MinIO
   API -.next phase.-> Redis
   Sandbox -.deep scan path.-> Orchestrator
@@ -133,9 +135,17 @@ flowchart LR
 ## Local endpoints
 
 - Web UI: `http://localhost:3000`
+- Login: `http://localhost:3000/login`
+- Dashboard: `http://localhost:3000/app/projects/local`
 - API: `http://localhost:8000`
 - API docs: `http://localhost:8000/docs`
 - MinIO UI: `http://localhost:9001`
+
+## Local login
+
+The `Open dashboard` action goes to `/login`. The first successful login with an email and an 8+ character password creates a local account in Postgres. Later logins use the same credentials, issue an HttpOnly `nope_session` cookie, and unlock a fresh dashboard workspace.
+
+For Docker, the web container uses `API_URL_INTERNAL=http://nope-api:8000` for server-side auth calls and `NEXT_PUBLIC_API_URL=http://localhost:8000` for browser-facing report links.
 
 ## Run
 
@@ -207,6 +217,9 @@ Full scan:
 ## API highlights
 
 - `GET /health`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `POST /api/auth/logout`
 - `POST /api/scans/url`
 - `POST /api/scans/repository`
 - `POST /api/scans/full`
@@ -227,11 +240,12 @@ See `API_REFERENCE.md` for more detail.
 
 Last verified locally:
 
-- `python -m pytest`: passed, 9 tests.
+- `python -m pytest`: passed, 10 tests.
 - `python -m compileall nope_api tests`: passed.
 - `pnpm --dir apps/web lint`: passed.
 - `pnpm --dir apps/web typecheck`: passed.
 - `pnpm --dir apps/web build`: passed.
+- Login-gated dashboard flow: unauthenticated `/app/projects/local` redirects to `/login`; local Postgres login issues `nope_session`; authenticated dashboard returns HTTP 200.
 - Visual inspection with Playwright + system Edge: landing desktop, app overview desktop, findings mobile.
 - `docker compose up --build -d`: passed.
 - Docker services healthy: `NOPE`, `nope-api`, `nope-postgres`, `nope-redis`, `nope-minio`.

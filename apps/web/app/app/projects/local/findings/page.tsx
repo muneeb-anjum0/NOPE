@@ -1,8 +1,8 @@
 import { FindingTable } from "@/components/finding-table";
-import { demoScan, getLatestScan } from "@/lib/nope-data";
+import { freshScan, getLatestScan } from "@/lib/nope-data";
 
 export default async function FindingsPage() {
-  const scan = (await getLatestScan()) ?? demoScan();
+  const scan = (await getLatestScan()) ?? freshScan();
   const first = scan.findings[0];
   return (
     <>

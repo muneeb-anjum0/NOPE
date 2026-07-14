@@ -1,8 +1,8 @@
 import { AttackMapPanel } from "@/components/attack-map";
-import { demoScan, getLatestScan } from "@/lib/nope-data";
+import { freshScan, getLatestScan } from "@/lib/nope-data";
 
 export default async function AttackMapPage() {
-  const scan = (await getLatestScan()) ?? demoScan();
+  const scan = (await getLatestScan()) ?? freshScan();
   return (
     <>
       <section className="page-header">
