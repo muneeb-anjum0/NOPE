@@ -28,6 +28,7 @@ services:
       NOPE_WEB_URL: http://localhost:3000
       NOPE_DATABASE_URL: postgresql+psycopg://nope:nope@nope-postgres:5432/nope
       NOPE_AUTH_DATABASE_URL: postgresql://nope:nope@nope-postgres:5432/nope
+      NOPE_TEMP_ROOT: /tmp/nope-workspaces
       NOPE_REDIS_URL: redis://nope-redis:6379/0
       NOPE_MINIO_ENDPOINT: http://nope-minio:9000
       NOPE_AI_PROVIDER: none

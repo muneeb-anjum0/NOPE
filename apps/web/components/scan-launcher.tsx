@@ -1,17 +1,50 @@
+"use client";
+
+import { useRef, useState } from "react";
 import { Upload } from "lucide-react";
 
 export function ScanLauncher() {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [fileName, setFileName] = useState("");
+
+  const setFiles = (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    if (inputRef.current) {
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      inputRef.current.files = transfer.files;
+    }
+    setFileName(file.name);
+  };
+
   return (
     <form className="app-grid" action="/api/start-scan" method="post" encType="multipart/form-data">
-      <label className="dropzone" htmlFor="repository">
+      <label
+        className="dropzone"
+        htmlFor="repository"
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.preventDefault();
+          setFiles(event.dataTransfer.files);
+        }}
+      >
         <span>
           <Upload size={22} />
           <br />
-          Drop a repository ZIP or choose a file
+          {fileName || "Drop a repository ZIP or choose a file"}
           <br />
           <span className="mono muted">Zip Slip checks, file limits, cleanup</span>
         </span>
-        <input id="repository" name="repository" type="file" accept=".zip" style={{ display: "none" }} />
+        <input
+          ref={inputRef}
+          id="repository"
+          name="repository"
+          type="file"
+          accept=".zip"
+          style={{ display: "none" }}
+          onChange={(event) => setFiles(event.currentTarget.files)}
+        />
       </label>
       <input className="input-shell" name="targetUrl" type="url" placeholder="https://your-authorized-app.example" />
       <select className="select-shell" name="depth" defaultValue="full" aria-label="Scan depth">

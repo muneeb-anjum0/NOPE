@@ -31,15 +31,27 @@ export function LineSidebar() {
   const currentRef = useRef<number[]>([]);
   const rafRef = useRef<number | null>(null);
   const lastRef = useRef(0);
+  const activeRef = useRef(0);
   const defaultActive = Math.max(
     0,
     links.findIndex((link) => pathname === link.href || (link.href !== "/app/projects/local" && pathname.startsWith(link.href))),
   );
   const [activeIndex, setActiveIndex] = useState(defaultActive);
+  activeRef.current = activeIndex;
+
+  const resetMotion = useCallback((active: number) => {
+    targetsRef.current = links.map(() => 0);
+    currentRef.current = links.map((_, index) => (index === active ? 1 : 0));
+    itemRefs.current.forEach((el, index) => {
+      el?.style.setProperty("--effect", index === active ? "1.0000" : "0.0000");
+    });
+  }, []);
 
   useEffect(() => {
     setActiveIndex(defaultActive);
-  }, [defaultActive]);
+    activeRef.current = defaultActive;
+    resetMotion(defaultActive);
+  }, [defaultActive, resetMotion]);
 
   const runFrame = useCallback((now: number) => {
     const dt = Math.min((now - lastRef.current) / 1000, 0.05);
@@ -49,7 +61,7 @@ export function LineSidebar() {
     for (let i = 0; i < itemRefs.current.length; i += 1) {
       const el = itemRefs.current[i];
       if (!el) continue;
-      const target = Math.max(targetsRef.current[i] || 0, activeIndex === i ? 1 : 0);
+      const target = Math.max(targetsRef.current[i] || 0, activeRef.current === i ? 1 : 0);
       const cur = currentRef.current[i] || 0;
       const next = cur + (target - cur) * k;
       const settled = Math.abs(target - next) < 0.0015;
@@ -59,7 +71,7 @@ export function LineSidebar() {
       if (!settled) moving = true;
     }
     rafRef.current = moving ? requestAnimationFrame(runFrame) : null;
-  }, [activeIndex]);
+  }, []);
 
   const startLoop = useCallback(() => {
     if (rafRef.current != null) return;
@@ -112,12 +124,16 @@ export function LineSidebar() {
               aria-current={activeIndex === index ? "true" : undefined}
               onClick={() => {
                 setActiveIndex(index);
+                activeRef.current = index;
+                resetMotion(index);
                 router.push(link.href);
               }}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
                   setActiveIndex(index);
+                  activeRef.current = index;
+                  resetMotion(index);
                   router.push(link.href);
                 }
               }}

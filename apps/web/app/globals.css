@@ -634,10 +634,7 @@ textarea:focus-visible {
   top: 0;
   height: 100vh;
   border-right: 1px solid var(--border-subtle);
-  background:
-    radial-gradient(circle at 15% 0%, rgba(240, 42, 86, 0.13), transparent 18rem),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent),
-    var(--background-sidebar);
+  background: transparent;
   display: flex;
   flex-direction: column;
   padding: 24px 18px;

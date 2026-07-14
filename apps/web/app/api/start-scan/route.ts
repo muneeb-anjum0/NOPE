@@ -1,6 +1,18 @@
 import { NextResponse } from "next/server";
+import { API_BASE } from "@/lib/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+function redirectWithError(request: Request, message: string) {
+  return NextResponse.redirect(new URL(`/app/projects/local/scans?error=${encodeURIComponent(message)}`, request.url));
+}
+
+async function forwardScan(request: Request, path: string, init: RequestInit) {
+  const response = await fetch(`${API_BASE}${path}`, init);
+  if (!response.ok) {
+    const detail = await response.text();
+    return redirectWithError(request, detail || `Scan request failed with ${response.status}.`);
+  }
+  return NextResponse.redirect(new URL("/app/projects/local", request.url));
+}
 
 export async function POST(request: Request) {
   const form = await request.formData();
@@ -15,13 +27,13 @@ export async function POST(request: Request) {
     full.append("authorization_confirmed", String(confirmed));
     const host = new URL(targetUrl).hostname;
     full.append("approved_hosts", host);
-    await fetch(`${API_BASE}/api/scans/full`, { method: "POST", body: full });
+    return forwardScan(request, "/api/scans/full", { method: "POST", body: full });
   } else if (file instanceof File && file.size > 0) {
     const repo = new FormData();
     repo.append("file", file);
-    await fetch(`${API_BASE}/api/scans/repository`, { method: "POST", body: repo });
+    return forwardScan(request, "/api/scans/repository", { method: "POST", body: repo });
   } else if (targetUrl) {
-    await fetch(`${API_BASE}/api/scans/url`, {
+    return forwardScan(request, "/api/scans/url", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -36,5 +48,5 @@ export async function POST(request: Request) {
     });
   }
 
-  return NextResponse.redirect(new URL("/app/projects/local", request.url));
+  return redirectWithError(request, "Choose a repository ZIP, enter a target URL, or provide both.");
 }

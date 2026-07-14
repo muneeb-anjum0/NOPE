@@ -1,7 +1,12 @@
 import { ScanLauncher } from "@/components/scan-launcher";
 import { getScans } from "@/lib/nope-data";
 
-export default async function ScansPage() {
+export default async function ScansPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const params = await searchParams;
   const scans = await getScans();
   return (
     <>
@@ -15,6 +20,7 @@ export default async function ScansPage() {
       <div className="app-grid split">
         <div className="app-panel">
           <div className="panel-title"><h2>Start scan</h2><span className="mono muted">authorized scope required</span></div>
+          {params.error ? <p className="login-error">{params.error}</p> : null}
           <ScanLauncher />
         </div>
         <div className="app-panel">
