@@ -8,6 +8,9 @@ NOPE is a local-first, evidence-driven application security orchestration platfo
 
 NOPE is a working local MVP, not a finished production platform. The current build includes:
 
+- A redesigned public graphite landing page at `/`.
+- A routed dark app workspace under `/app/projects/local`.
+- A LineSidebar-style icon navigation shell.
 - FastAPI orchestration API.
 - Next.js dashboard.
 - ZIP repository ingestion with Zip Slip protections.
@@ -18,7 +21,7 @@ NOPE is a working local MVP, not a finished production platform. The current bui
 - NOPE deterministic rule pack.
 - Scanner plugin contracts for Semgrep, Gitleaks, OSV-Scanner, Trivy, Checkov, Hadolint, Bandit, and ecosystem audit adapters.
 - Finding normalization, deduplication, scoring, verdicts, coverage tracking, and reports.
-- Optional Qwen/local-AI configuration with graceful failure.
+- Optional Qwen/local-AI configuration through llama.cpp with graceful failure.
 - Docker Compose stack with web, API, worker, Postgres, Redis, and MinIO.
 
 External scanner CLIs and a local Qwen runtime are intentionally not faked. If they are unavailable, NOPE marks that coverage as failed, skipped, or not tested.
@@ -144,6 +147,20 @@ docker compose up --build -d
 docker compose down
 ```
 
+AI CPU mode:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.ai-cpu.yml --profile ai-cpu up --build -d
+```
+
+AI GPU mode:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.ai-gpu.yml --profile ai-gpu up --build -d
+```
+
+Set `NOPE_MODEL_DIR` and `NOPE_QWEN_MODEL_FILE` before starting AI mode. See `LOCAL_AI.md`.
+
 ## Local development
 
 API:
@@ -215,6 +232,7 @@ Last verified locally:
 - `pnpm --dir apps/web lint`: passed.
 - `pnpm --dir apps/web typecheck`: passed.
 - `pnpm --dir apps/web build`: passed.
+- Visual inspection with Playwright + system Edge: landing desktop, app overview desktop, findings mobile.
 - `docker compose up --build -d`: passed.
 - Docker services healthy: `NOPE`, `nope-api`, `nope-postgres`, `nope-redis`, `nope-minio`.
 - API health returned `status: ok`.
@@ -226,7 +244,7 @@ Known verification caveats:
 
 - Ruff lint was not completed because the Ruff wheel download stalled locally.
 - External scanner CLIs were not installed locally or in the API image.
-- Qwen/Ollama/llama.cpp runtime was not present.
+- Qwen GGUF/llama.cpp runtime inference was not verified in this pass because no GGUF model file was found during local search.
 - npm reported two moderate frontend dependency advisories during Docker install.
 
 ## Important docs
@@ -238,6 +256,8 @@ Known verification caveats:
 - `DEVELOPMENT.md` - local development commands.
 - `DEPLOYMENT.md` - Docker deployment notes.
 - `API_REFERENCE.md` - API endpoint reference.
+- `DESIGN_SYSTEM.md` - graphite design tokens, typography, motion, components, and responsive rules.
+- `LOCAL_AI.md` - llama.cpp/Qwen setup, CPU/GPU modes, security notes, and troubleshooting.
 
 ## README maintenance
 

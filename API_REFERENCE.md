@@ -18,6 +18,7 @@ FastAPI exposes interactive OpenAPI documentation at `/docs`.
 - `GET /api/scans/{scan_id}/report.{format}` - export report as `json`, `md`, or `sarif`.
 - `GET /api/settings/model` - current AI model configuration.
 - `POST /api/settings/model/test` - test AI runtime reachability.
+- `POST /api/findings/explain` - send one normalized finding to the configured llama.cpp adapter for a focused explanation.
 
 ## Guarantees
 
@@ -25,3 +26,4 @@ FastAPI exposes interactive OpenAPI documentation at `/docs`.
 - AI output is optional and separately marked.
 - URL scans without authorization confirmation are rejected.
 - Private network targets are rejected unless local sandbox mode is explicitly allowed.
+- AI failures do not fail deterministic scans.

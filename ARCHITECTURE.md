@@ -43,7 +43,22 @@ Repository ZIP / Authorized URL
 - `nope-postgres`: planned persistent database.
 - `nope-redis`: queue broker.
 - `nope-minio`: object/artifact storage.
-- Optional AI runtime: configured by URL, not bundled.
+- `nope-ai`: optional llama.cpp server for local Qwen inference, enabled with CPU or GPU Compose profiles.
+
+## UI architecture
+
+- `/`: public landing page.
+- `/app`: redirects to the local workspace.
+- `/app/projects/local`: project overview.
+- `/app/projects/local/findings`: findings and detail workflow.
+- `/app/projects/local/attack-map`: attack graph canvas.
+- `/app/projects/local/coverage`: coverage matrix.
+- `/app/projects/local/scans`: scan launcher and history.
+- `/app/projects/local/assets`: asset classes.
+- `/app/projects/local/reports`: report exports.
+- `/app/projects/local/settings`: scanner/model settings.
+
+The app shell uses a route-aware LineSidebar-style icon rail and a single graphite design system.
 
 ## Storage model
 
@@ -60,5 +75,5 @@ NOPE separates evidence from reasoning:
 - Deterministic scanners and custom rules create findings.
 - The pipeline normalizes, deduplicates, and connects findings to evidence.
 - RAG retrieves focused context only.
-- AI analysis can challenge or explain findings, but cannot silently downgrade scanner evidence.
+- AI analysis can challenge or explain findings through llama.cpp, but cannot silently downgrade scanner evidence.
 - Failed scanners and failed AI are visible coverage gaps.

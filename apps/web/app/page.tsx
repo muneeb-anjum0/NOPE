@@ -1,252 +1,250 @@
 import {
-  Activity,
-  AlertTriangle,
-  Boxes,
-  FileText,
-  Gauge,
+  ArrowRight,
+  Brain,
+  CheckCircle2,
+  Code2,
   GitBranch,
-  Map,
-  Play,
+  LockKeyhole,
   Radar,
-  Settings,
   ShieldAlert,
-  Upload,
+  Sparkles,
+  TerminalSquare,
+  TriangleAlert,
 } from "lucide-react";
-import { api } from "@/lib/api";
 
-type Finding = {
-  id: string;
-  severity: "critical" | "high" | "medium" | "low" | "info";
-  title: string;
-  category: string;
-  affected_file?: string | null;
-  affected_route?: string | null;
-  confidence: string;
-  scanner_sources: string[];
-  status: string;
-  remediation: string;
-};
+const stages = [
+  "Repository mapped",
+  "Stack detected: Next.js + Supabase",
+  "43 routes discovered",
+  "18 scanner stages queued",
+  "Qwen review scoped to evidence",
+];
 
-type Scan = {
-  id: string;
-  status: string;
-  verdict: string;
-  score: number;
-  coverage_percent: number;
-  target_url?: string | null;
-  repository_name?: string | null;
-  branch?: string | null;
-  commit_sha?: string | null;
-  findings: Finding[];
-  coverage: Array<{ domain: string; status: string; notes: string; scanners: string[] }>;
-  scanner_runs: Array<{ scanner: string; status: string; message: string; findings_count: number }>;
-  code_graph: { nodes: Array<{ id: string; label: string; kind: string; risk?: string | null }> };
-  ai_review: { status: string; provider: string; model?: string | null; message: string };
-};
+const findings = [
+  ["critical", "Users can read other users' invoices"],
+  ["high", "Service-role key entered the client bundle"],
+  ["high", "Private storage bucket is publicly readable"],
+];
 
-async function loadLatestScan(): Promise<Scan | null> {
-  try {
-    const scans = await api<Scan[]>("/api/scans");
-    return scans[0] ?? null;
-  } catch {
-    return null;
-  }
-}
+const coverage = [
+  "Secrets",
+  "Authentication",
+  "Authorization",
+  "IDOR",
+  "Dependencies",
+  "APIs",
+  "Supabase",
+  "RLS",
+  "Storage",
+  "Rate limiting",
+  "AI cost abuse",
+  "Staging exposure",
+  "Privacy",
+  "Dynamic testing",
+];
 
-function severityClass(severity: string) {
-  return `severity ${severity}`;
-}
-
-function count(findings: Finding[], severity: string) {
-  return findings.filter((finding) => finding.severity === severity).length;
-}
-
-export default async function Dashboard() {
-  const scan = await loadLatestScan();
-  const findings = scan?.findings ?? [];
-  const coverage = scan?.coverage ?? [];
-
+export default function LandingPage() {
   return (
-    <div className="app">
-      <aside className="sidebar" aria-label="Primary navigation">
-        <div className="brand">
-          <div className="brand-mark">N</div>
-          <div>
-            <strong>NOPE</strong>
-            <span>Evidence over vibes</span>
+    <main className="page-shell">
+      <header className="landing-nav">
+        <div className="container landing-nav-inner">
+          <a className="wordmark" href="#top" aria-label="NOPE home">
+            <span className="wordmark-mark">N</span>
+            <span>NOPE.</span>
+          </a>
+          <nav className="landing-links" aria-label="Landing navigation">
+            <a href="#product">Product</a>
+            <a href="#method">Method</a>
+            <a href="#coverage">Coverage</a>
+            <a href="#local-ai">Local AI</a>
+            <a href="#github">GitHub</a>
+          </nav>
+          <div className="hero-actions" style={{ marginTop: 0 }}>
+            <a className="button ghost" href="/app">
+              Open dashboard
+            </a>
+            <a className="button primary" href="/app/projects/local/scans">
+              Scan my app <ArrowRight size={15} />
+            </a>
           </div>
         </div>
-        <nav className="nav">
-          <a className="active" href="#overview"><Gauge size={17} />Overview</a>
-          <a href="#findings"><ShieldAlert size={17} />Findings</a>
-          <a href="#attack-map"><Map size={17} />Attack Map</a>
-          <a href="#coverage"><Radar size={17} />Coverage</a>
-          <a href="#scans"><Activity size={17} />Scans</a>
-          <a href="#assets"><Boxes size={17} />Assets</a>
-          <a href="#reports"><FileText size={17} />Reports</a>
-          <a href="#settings"><Settings size={17} />Settings</a>
-        </nav>
-        <div className="sidebar-footer">
-          Local project<br />
-          Not tested is not secure.
+      </header>
+
+      <section id="top" className="container hero">
+        <div>
+          <div className="eyebrow">
+            <Radar size={14} /> Rules-first. AI-assisted. Evidence-backed.
+          </div>
+          <h1>
+            NOPE<span>.</span>
+          </h1>
+          <p className="hero-copy">
+            Your app works. That does not mean it is secure. Connect your repository,
+            add the deployed URL, and find what you should not ship.
+          </p>
+          <div className="hero-actions">
+            <a className="button primary" href="/app/projects/local/scans">
+              Scan my app <ArrowRight size={15} />
+            </a>
+            <a className="button" href="#method">
+              See how NOPE works
+            </a>
+          </div>
         </div>
-      </aside>
-      <main className="main">
-        <div className="topbar">
-          <select className="project-select" aria-label="Project selector" defaultValue="demo">
-            <option value="demo">NOPE Local Demo</option>
-          </select>
-          <a className="button" href="#onboarding"><Play size={16} />Run scan</a>
+
+        <div className="scan-console" aria-label="Animated demo scan">
+          <div className="console-header">
+            <span>demo/nope-demo</span>
+            <span>demonstration data</span>
+          </div>
+          <div className="console-body">
+            <div className="stage-list">
+              {stages.map((stage, index) => (
+                <div className="stage-row" style={{ animationDelay: `${index * 90}ms` }} key={stage}>
+                  <span>{stage}</span>
+                  <span className="status-dot ok" aria-label="complete" />
+                </div>
+              ))}
+            </div>
+            <div className="stage-row">
+              <span className="mono">2,847 files mapped</span>
+              <span className="mono">43 routes</span>
+            </div>
+            {findings.map(([severity, title]) => (
+              <div className="finding-row" key={title}>
+                <div>
+                  <span className={`severity-pill severity-${severity}`}>{severity}</span>
+                  <div style={{ marginTop: 8 }}>{title}</div>
+                </div>
+                <TriangleAlert color={`var(--${severity})`} size={18} />
+              </div>
+            ))}
+            <div className="finding-row">
+              <div>
+                <span className="mono muted">Final demo verdict</span>
+                <h3 style={{ margin: "8px 0 0", fontSize: 28 }}>NOPE. Do not ship this.</h3>
+              </div>
+              <ShieldAlert color="var(--critical)" />
+            </div>
+          </div>
         </div>
-        <div className="content">
-          <section id="overview" className="grid">
-            <div>
-              <p className="muted">Your app works. That does not mean it is secure.</p>
-              <h1>{scan?.verdict ?? "Let’s see what you’ve done."}</h1>
-              <p className="muted">
-                {scan
-                  ? `Last scan ${scan.id} checked ${scan.repository_name ?? "no repository"} ${scan.target_url ? `and ${scan.target_url}` : ""}.`
-                  : "Upload a repository ZIP or scan an authorized URL to get evidence-backed results."}
+      </section>
+
+      <section id="product" className="section">
+        <div className="container">
+          <p className="section-kicker">Why NOPE exists</p>
+          <h2>Vibe-coded software can work while still being wildly unsafe.</h2>
+          <div className="editorial-grid">
+            <div className="editorial-panel">
+              <p className="section-intro" style={{ marginTop: 0 }}>
+                Fast builders need security evidence, not a chatbot that says things sound fine.
+                NOPE looks for server-side authorization gaps, exposed secrets, unsafe RLS,
+                public storage, scanner failures, privacy leakage, and untested areas.
               </p>
             </div>
-            <div className="grid cols-4">
-              <div className="card metric"><span>Score</span><strong>{scan?.score ?? 0}</strong></div>
-              <div className="card metric"><span>Coverage</span><strong>{scan?.coverage_percent ?? 0}%</strong></div>
-              <div className="card metric"><span>Critical</span><strong>{count(findings, "critical")}</strong></div>
-              <div className="card metric"><span>High</span><strong>{count(findings, "high")}</strong></div>
+            <div className="editorial-panel">
+              <ul className="danger-list">
+                <li>Frontend route protection is not authorization.</li>
+                <li>UUIDs do not prevent IDOR.</li>
+                <li>Public Supabase keys require correct RLS.</li>
+                <li>Hidden endpoints are not security.</li>
+                <li>Scanner scores do not prove application security.</li>
+              </ul>
             </div>
-          </section>
-
-          <section id="onboarding" className="band">
-            <h2>Let’s see what you’ve done.</h2>
-            <form className="form" action="/api/start-scan" method="post" encType="multipart/form-data">
-              <div className="field">
-                <label htmlFor="repository">Repository ZIP</label>
-                <input id="repository" name="repository" type="file" accept=".zip" />
-              </div>
-              <div className="field">
-                <label htmlFor="targetUrl">Authorized deployed URL</label>
-                <input id="targetUrl" name="targetUrl" type="url" placeholder="https://your-app.example" />
-              </div>
-              <div className="field">
-                <label htmlFor="depth">Scan depth</label>
-                <select id="depth" name="depth" defaultValue="full">
-                  <option value="quick">Quick: secrets, dependencies, headers</option>
-                  <option value="full">Full: repository, code graph, custom rules, AI review</option>
-                  <option value="deep">Deep: sandbox and dynamic testing when configured</option>
-                </select>
-              </div>
-              <label>
-                <input name="confirmed" type="checkbox" /> I own this target or have explicit permission to test it.
-              </label>
-              <button className="button danger" type="submit"><Upload size={16} />Start scan</button>
-            </form>
-          </section>
-
-          <section id="findings" className="card">
-            <h2>Findings</h2>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Severity</th>
-                  <th>Finding</th>
-                  <th>Location</th>
-                  <th>Evidence</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {findings.length === 0 ? (
-                  <tr><td colSpan={5}>No findings yet. No scan evidence has been produced.</td></tr>
-                ) : findings.map((finding) => (
-                  <tr key={finding.id}>
-                    <td><span className={severityClass(finding.severity)}>{finding.severity}</span></td>
-                    <td><strong>{finding.title}</strong><br /><span className="muted">{finding.category} · {finding.confidence}</span></td>
-                    <td>{finding.affected_file ?? finding.affected_route ?? "n/a"}</td>
-                    <td>{finding.scanner_sources.join(" + ")}</td>
-                    <td>{finding.status}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-
-          <section id="attack-map" className="split">
-            <div className="card">
-              <h2>Attack Map</h2>
-              <div className="node-map" aria-label="Attack surface map">
-                {(scan?.code_graph.nodes ?? []).slice(0, 8).map((node, index) => (
-                  <div
-                    className="map-node"
-                    key={node.id}
-                    style={{ left: 24 + (index % 3) * 220, top: 24 + Math.floor(index / 3) * 120 }}
-                  >
-                    <strong>{node.label}</strong>
-                    <p className="muted">{node.kind}{node.risk ? ` · ${node.risk}` : ""}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="card">
-              <h2>Finding Detail</h2>
-              {findings[0] ? (
-                <>
-                  <span className={severityClass(findings[0].severity)}>{findings[0].severity}</span>
-                  <h3>{findings[0].title}</h3>
-                  <p>{findings[0].remediation}</p>
-                  <div className="grid cols-3">
-                    <button className="button secondary" type="button">Explain</button>
-                    <button className="button secondary" type="button">Generate fix</button>
-                    <button className="button secondary" type="button">Regression test</button>
-                  </div>
-                </>
-              ) : <p className="muted">Open a finding after a scan to inspect evidence, code flow, fix guidance, tests, and history.</p>}
-            </div>
-          </section>
-
-          <section id="coverage" className="card">
-            <h2>Coverage</h2>
-            <p className="muted">Not tested does not mean secure.</p>
-            <table className="table">
-              <tbody>
-                {coverage.map((record) => (
-                  <tr key={record.domain}>
-                    <td><strong>{record.domain}</strong></td>
-                    <td>{record.status}</td>
-                    <td>{record.scanners.join(", ") || "No scanner"}</td>
-                    <td>{record.notes}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-
-          <section id="scans" className="grid cols-3">
-            <div className="card"><h2>Scan History</h2><p>{scan ? `${scan.id} · ${scan.status}` : "No scans yet."}</p></div>
-            <div className="card"><h2>AI Review</h2><p>{scan?.ai_review.message ?? "Qwen is configurable but not required for deterministic scans."}</p></div>
-            <div className="card"><h2>Scanner Runs</h2><p>{scan?.scanner_runs.map((run) => `${run.scanner}: ${run.status}`).join(", ") ?? "No scanner runs yet."}</p></div>
-          </section>
-
-          <section id="assets" className="card">
-            <h2>Assets</h2>
-            <p className="muted">Repository, routes, scanners, target URL, branch, commit, and coverage metadata are captured per scan.</p>
-          </section>
-
-          <section id="reports" className="card">
-            <h2>Reports</h2>
-            <p className="muted">Exports are available from the API as JSON, Markdown, and SARIF. Formal reports avoid sarcastic language.</p>
-          </section>
-
-          <section id="settings" className="card">
-            <h2>Settings</h2>
-            <div className="grid cols-3">
-              <div><GitBranch size={18} /><h3>GitHub</h3><p className="muted">Adapter contract exists. Production App credentials still required.</p></div>
-              <div><AlertTriangle size={18} /><h3>Scan policy</h3><p className="muted">Scope, rate, artifact, AI, and scanner limits are API-enforced.</p></div>
-              <div><Radar size={18} /><h3>Qwen model</h3><p className="muted">Provider, endpoint, model path, context, GPU layers, and timeouts are configurable.</p></div>
-            </div>
-          </section>
+          </div>
         </div>
-      </main>
-    </div>
+      </section>
+
+      <section id="method" className="section">
+        <div className="container">
+          <p className="section-kicker">Method</p>
+          <h2>Deterministic evidence first. Focused reasoning second.</h2>
+          <p className="section-intro">
+            NOPE does not dump a whole repository into an LLM. It maps, scans, normalizes,
+            connects, retrieves, reasons, tests, and records coverage gaps.
+          </p>
+          <div className="method-flow">
+            {[
+              ["Repository", GitBranch],
+              ["Authorized URL", LockKeyhole],
+              ["Scanners", Radar],
+              ["Code graph", Code2],
+              ["Focused RAG", TerminalSquare],
+              ["Qwen", Brain],
+              ["Rescan", CheckCircle2],
+            ].map(([label, Icon], index) => {
+              const MethodIcon = Icon as typeof GitBranch;
+              return (
+                <div className="method-step" key={label as string}>
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <MethodIcon size={22} color="var(--brand-primary)" />
+                  <strong>{label as string}</strong>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section id="coverage" className="section">
+        <div className="container">
+          <p className="section-kicker">Coverage</p>
+          <h2>Not tested is not secure.</h2>
+          <div className="coverage-grid">
+            {coverage.map((item) => (
+              <div className="coverage-panel" key={item}>
+                <span>coverage</span>
+                <h3>{item}</h3>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="local-ai" className="section">
+        <div className="container editorial-grid">
+          <div>
+            <p className="section-kicker">Local AI</p>
+            <h2>Qwen runs through llama.cpp. No Ollama dependency.</h2>
+            <p className="section-intro">
+              The local-AI path is designed for a Qwen3 8B Q4_K_M GGUF mounted read-only
+              into a dedicated `nope-ai` service. The model receives focused evidence,
+              not arbitrary shell access and not whole repositories.
+            </p>
+          </div>
+          <div className="scan-console">
+            <div className="console-header">
+              <span>nope-ai</span>
+              <span>llama.cpp</span>
+            </div>
+            <div className="console-body">
+              {["Read-only model mount", "Bounded context", "Timeout enforced", "Failure-safe scans"].map((item) => (
+                <div className="stage-row" key={item}>
+                  <span>{item}</span>
+                  <span className="status-dot ok" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="github" className="section">
+        <div className="container">
+          <p className="section-kicker">GitHub workflow</p>
+          <h2>Find it. Explain it. Patch it. Prove it did not come back.</h2>
+          <p className="section-intro">
+            GitHub PR automation is intentionally marked partial until production credentials
+            and permissions are configured. The local pipeline already produces findings,
+            evidence, coverage, and exportable reports.
+          </p>
+          <div className="hero-actions">
+            <a className="button primary" href="/app">
+              Open local workspace <Sparkles size={15} />
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }

@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
 from nope_api import __version__
+from nope_api.ai import check_ai_health, explain_finding
 from nope_api.config import get_settings
 from nope_api.ingestion import extract_zip
 from nope_api.models import AuthorizationScope, Project, Scan, ScanMode, ScanRequest
@@ -32,8 +33,9 @@ app.add_middleware(
 
 
 @app.get("/health")
-def health() -> dict:
+async def health() -> dict:
     production_warnings = settings.validate_production_secrets()
+    ai_health = await check_ai_health(settings)
     return {
         "status": "ok" if not production_warnings else "degraded",
         "version": __version__,
@@ -46,6 +48,7 @@ def health() -> dict:
             "model_path": settings.ai_model_path,
             "gpu_layers": settings.ai_gpu_layers,
             "gpu_memory_target_mb": settings.ai_gpu_memory_target_mb,
+            "health": ai_health,
         },
         "warnings": production_warnings,
     }
@@ -195,14 +198,16 @@ def model_settings() -> dict:
 
 @app.post("/api/settings/model/test")
 async def test_model() -> dict:
-    if settings.ai_provider == "none":
-        return {"status": "Not tested", "message": "AI provider is disabled."}
-    import httpx
+    health_result = await check_ai_health(settings)
+    status = "Complete" if health_result["status"] == "ok" else "Failed"
+    if health_result["status"] == "disabled":
+        status = "Not tested"
+    return {"status": status, **health_result}
 
-    try:
-        async with httpx.AsyncClient(timeout=settings.ai_timeout_seconds) as client:
-            response = await client.get(settings.ai_runtime_url.rstrip("/") + "/api/tags")
-            response.raise_for_status()
-        return {"status": "Complete", "message": "AI runtime is reachable."}
-    except Exception as exc:
-        return {"status": "Failed", "message": str(exc)}
+
+@app.post("/api/findings/explain")
+async def explain_finding_endpoint(finding: dict) -> dict:
+    from nope_api.models import Finding
+
+    parsed = Finding(**finding)
+    return await explain_finding(settings, parsed)

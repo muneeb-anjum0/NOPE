@@ -25,6 +25,18 @@ pnpm install
 pnpm dev
 ```
 
+## Frontend Architecture
+
+- `/` is the public landing page.
+- `/app/projects/local/*` contains the local workspace.
+- Global design tokens and component styles live in `apps/web/app/globals.css`.
+- Shared app components live in `apps/web/components`.
+- API fetch helpers and UI data types live in `apps/web/lib`.
+
+## AI Service Development
+
+Use `LOCAL_AI.md` for model path, llama.cpp, CPU/GPU profiles, and troubleshooting. The backend AI adapter lives in `apps/api/nope_api/ai.py`.
+
 ## Tests
 
 ```bash

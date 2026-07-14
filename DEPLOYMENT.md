@@ -8,8 +8,31 @@ The current deployment target is local Docker Compose.
 - API: `http://localhost:8000`
 - API Docs: `http://localhost:8000/docs`
 - MinIO UI: `http://localhost:9001`
+- Qwen debug endpoint: `http://localhost:8081` when an AI profile is enabled
 
 The primary web container is named `NOPE` in Docker Compose.
+
+## AI startup modes
+
+Core mode without AI:
+
+```bash
+docker compose up --build -d
+```
+
+CPU fallback:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.ai-cpu.yml --profile ai-cpu up --build -d
+```
+
+GPU mode:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.ai-gpu.yml --profile ai-gpu up --build -d
+```
+
+For GPU mode, Docker Desktop/WSL2 must have NVIDIA container support available. The GGUF model directory is mounted read-only from `NOPE_MODEL_DIR`.
 
 ## Environment
 

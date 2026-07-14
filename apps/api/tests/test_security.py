@@ -9,6 +9,7 @@ from nope_api.config import Settings
 from nope_api.ingestion import extract_zip
 from nope_api.models import AuthorizationScope
 from nope_api.security import redact, validate_url_scope
+from nope_api.ai import check_ai_health
 
 
 def test_url_scan_requires_authorization():
@@ -52,3 +53,9 @@ def test_private_target_blocked_by_default():
             ),
             Settings(),
         )
+
+
+@pytest.mark.asyncio
+async def test_ai_health_disabled_state():
+    result = await check_ai_health(Settings(ai_provider="none"))
+    assert result["status"] == "disabled"

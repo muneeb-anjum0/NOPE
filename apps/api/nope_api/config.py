@@ -28,8 +28,8 @@ class Settings(BaseSettings):
 
     ai_provider: str = "none"
     ai_runtime_url: str = "http://localhost:11434"
-    ai_model_name: str = "qwen3:8b"
-    ai_model_path: str = ""
+    ai_model_name: str = "qwen3-8b-q4-k-m"
+    ai_model_path: str = "/models/qwen3-8b-q4_k_m.gguf"
     ai_context_length: int = 8192
     ai_max_output_tokens: int = 1024
     ai_temperature: float = 0.1

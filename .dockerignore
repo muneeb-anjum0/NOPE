@@ -10,3 +10,9 @@ __pycache__
 .nope-workspaces
 .env
 *.log
+models
+**/*.gguf
+**/*.safetensors
+**/*.bin
+**/*.pt
+**/*.pth

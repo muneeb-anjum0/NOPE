@@ -1,0 +1,15 @@
+services:
+  nope-api:
+    environment:
+      NOPE_AI_PROVIDER: llama.cpp
+      NOPE_AI_RUNTIME_URL: http://nope-ai:8080
+      NOPE_AI_GPU_LAYERS: "0"
+    depends_on:
+      nope-ai:
+        condition: service_healthy
+
+  nope-ai:
+    profiles:
+      - ai-cpu
+    environment:
+      LLAMA_ARG_N_GPU_LAYERS: "0"

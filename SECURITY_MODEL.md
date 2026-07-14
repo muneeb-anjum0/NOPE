@@ -30,6 +30,16 @@ NOPE treats every uploaded repository and every scanned target as potentially ho
 - GitHub tokens are not stored in plaintext; production GitHub integration must use short-lived installation tokens or encrypted credential storage.
 - AI prompts must avoid full secret values and unnecessary source dumps.
 
+## Local AI service
+
+- `nope-ai` is a reasoning service, not a sandbox.
+- It receives focused evidence snippets, not whole repositories.
+- It has no shell or tool execution API through NOPE.
+- The model directory is mounted read-only.
+- Host secrets and the Docker socket are not mounted.
+- The service runs without privileged mode and with dropped capabilities where practical.
+- Model file paths are configured by deployment settings, not arbitrary user input.
+
 ## Failure safety
 
 - Scanner failure marks scanner coverage as Failed.

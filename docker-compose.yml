@@ -29,6 +29,9 @@ services:
       NOPE_REDIS_URL: redis://nope-redis:6379/0
       NOPE_MINIO_ENDPOINT: http://nope-minio:9000
       NOPE_AI_PROVIDER: none
+      NOPE_AI_RUNTIME_URL: http://nope-ai:8080
+      NOPE_AI_MODEL_NAME: qwen3-8b-q4-k-m
+      NOPE_AI_MODEL_PATH: /models/qwen3-8b-q4_k_m.gguf
     ports:
       - "8000:8000"
     volumes:
@@ -107,6 +110,43 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  nope-ai:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: nope-ai
+    profiles:
+      - ai-cpu
+      - ai-gpu
+    command:
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8080"
+      - "--model"
+      - "/models/${NOPE_QWEN_MODEL_FILE:-qwen3-8b-q4_k_m.gguf}"
+      - "--ctx-size"
+      - "${NOPE_AI_CONTEXT_LENGTH:-8192}"
+      - "--n-gpu-layers"
+      - "${NOPE_AI_GPU_LAYERS:-0}"
+      - "--parallel"
+      - "1"
+    volumes:
+      - type: bind
+        source: ${NOPE_MODEL_DIR:-./models}
+        target: /models
+        read_only: true
+    ports:
+      - "127.0.0.1:8081:8080"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
 
 volumes:
   nope-postgres:

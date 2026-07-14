@@ -11,3 +11,9 @@ __pycache__/
 *.pyc
 *.log
 *.tsbuildinfo
+models/
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.pth
