@@ -617,3 +617,44 @@ Close the remaining canonical Phase 1 persistence gaps without starting Phase 3 
 ### Verification results
 
 Verification commands are recorded in the Phase 1 completion dossier.
+
+## 2026-07-15 Phase 3 Redis Queue and Worker Orchestration
+
+### Objective
+
+Complete the canonical Phase 3 queue/worker phase without advancing into Phase 4.
+
+### Implemented
+
+- Converted scan start endpoints to persist queued scans and enqueue Redis jobs instead of running long scans synchronously in the API request.
+- Added Redis job metadata: job ID, active scan idempotency, attempts, maximum attempts, queued timestamp, run-after timestamp, processing tracking, and bounded retry backoff.
+- Added worker heartbeat, queue status, worker health, cancellation, retry, and scan events endpoints.
+- Added scan-engine progress callbacks and cancellation checkpoints so worker progress is saved to Postgres during execution and survives page/API reloads.
+- Added worker retry/failure handling with redacted error messages and partial/failed state persistence.
+- Added worker reconnect loop and Compose restart policy for Redis outage resilience.
+- Shared repository workspaces through the Docker `nope-workspaces` volume and fixed non-root write permissions in the API image.
+- Expanded queue tests for execution, cancellation, retry/backoff, redaction, and event progress.
+
+### Verification results
+
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests`: passed, 29 tests.
+- Docker images rebuilt:
+  - `nope-nope-api:latest` `903026c0b97a`
+  - `nope-nope-worker:latest` `bda4f232c33b`
+- Docker stack healthy: web, API, worker, Postgres, Redis, MinIO.
+- Real API queue proof:
+  - Queued `scan_4ebe1b771ac7413b` and `scan_c8fbd2708e4044e6` while worker was stopped.
+  - Both API responses returned `queued` before scan execution.
+  - Cancelled `scan_c8fbd2708e4044e6` while queued; worker persisted cancelled state without scanner execution.
+  - Restarted API before worker execution; worker completed `scan_4ebe1b771ac7413b` with 29 findings.
+- Worker restart/stuck processing proof:
+  - Interrupted worker during `scan_6ede29d9d13d4778`, requeued the processing payload, restarted worker, and completed the scan with 29 findings.
+- Retry proof:
+  - Created failed scan `scan_phase3_retry_failed`, called the real retry endpoint, and worker completed it with 29 findings.
+- Redis failure proof:
+  - Stopped Redis; `/api/queue/status` returned `redis:error`.
+  - Rebuilt worker survived the broker outage, logged queue-loop restart, and reported a fresh heartbeat after Redis returned.
+
+### Closure
+
+Phase 3 is complete for local Redis-backed queue and worker orchestration. Later phases still own richer finding correlation, UI polish, dynamic sandboxing, Qwen inference, PDFs, benchmarks, and final documentation.

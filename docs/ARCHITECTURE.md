@@ -68,7 +68,7 @@ Current scan objects are also stored as JSON snapshots so the API contract remai
 
 ## Job flow
 
-The API exposes a synchronous development scan path and the worker exposes the same scan engine for queued execution. Redis/Celery-ready configuration is included, but durable job orchestration is marked partial until production persistence is added.
+The API validates scan requests, persists a queued `Scan`, extracts repository uploads into the shared workspace volume when needed, and enqueues Redis jobs. The worker consumes Redis jobs, runs the same scan engine, checkpoints stage progress back to Postgres, honors cancellation flags between stages, records retry/failure events, and keeps a Redis heartbeat for `/api/worker/health`.
 
 ## Evidence policy
 

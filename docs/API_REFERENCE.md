@@ -12,11 +12,16 @@ Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `
 - `POST /api/scans/url` - start authorized URL scan.
 - `POST /api/scans/repository` - start repository ZIP scan.
 - `POST /api/scans/full` - start combined repository and URL scan.
+- `POST /api/scans/{scan_id}/cancel` - request cancellation for a queued or running scan.
+- `POST /api/scans/{scan_id}/retry` - requeue a failed, partial, completed, or cancelled scan when its workspace is available.
 - `GET /api/scans` - list scans.
 - `GET /api/scans/{scan_id}` - scan detail.
+- `GET /api/scans/{scan_id}/events` - persisted stage/progress and scanner-run event stream for reload-safe polling.
 - `GET /api/scans/{scan_id}/findings` - normalized findings.
 - `GET /api/scans/{scan_id}/coverage` - coverage records.
 - `GET /api/scans/{scan_id}/attack-map` - attack-surface graph.
+- `GET /api/queue/status` - queue depth, processing depth, worker heartbeat, and Redis health.
+- `GET /api/worker/health` - worker-oriented health summary derived from Redis heartbeat state.
 - `GET /api/scans/{scan_id}/report.{format}` - export report as `json`, `md`, or `sarif`.
 - `GET /api/scanners/capabilities` - authenticated scanner health, version, coverage category, and applicability marker metadata.
 - `GET /api/settings/model` - current AI model configuration.

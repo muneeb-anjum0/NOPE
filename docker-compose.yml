@@ -28,7 +28,7 @@ services:
       NOPE_WEB_URL: http://localhost:3000
       NOPE_DATABASE_URL: postgresql+psycopg://nope:nope@nope-postgres:5432/nope
       NOPE_AUTH_DATABASE_URL: postgresql://nope:nope@nope-postgres:5432/nope
-      NOPE_TEMP_ROOT: /tmp/nope-workspaces
+      NOPE_TEMP_ROOT: /app/.nope-workspaces
       NOPE_REDIS_URL: redis://nope-redis:6379/0
       NOPE_MINIO_ENDPOINT: http://nope-minio:9000
       NOPE_AI_PROVIDER: none
@@ -61,11 +61,25 @@ services:
       context: .
       dockerfile: docker/api.Dockerfile
     container_name: nope-worker
+    restart: unless-stopped
     command: ["python", "apps/worker/worker.py"]
     environment:
+      NOPE_ENVIRONMENT: development
+      NOPE_DATABASE_URL: postgresql+psycopg://nope:nope@nope-postgres:5432/nope
+      NOPE_AUTH_DATABASE_URL: postgresql://nope:nope@nope-postgres:5432/nope
       NOPE_REDIS_URL: redis://nope-redis:6379/0
+      NOPE_MINIO_ENDPOINT: http://nope-minio:9000
+      NOPE_TEMP_ROOT: /app/.nope-workspaces
+      NOPE_AI_PROVIDER: none
+      NOPE_AI_RUNTIME_URL: http://nope-ai:8080
+    volumes:
+      - nope-workspaces:/app/.nope-workspaces
     depends_on:
+      nope-postgres:
+        condition: service_healthy
       nope-redis:
+        condition: service_healthy
+      nope-minio:
         condition: service_healthy
 
   nope-postgres:

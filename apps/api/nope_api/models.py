@@ -193,12 +193,13 @@ class Scan(BaseModel):
     id: str = Field(default_factory=lambda: new_id("scan"))
     project_id: str | None = None
     mode: ScanMode
-    status: Literal["queued", "running", "completed", "failed"] = "queued"
+    status: Literal["queued", "preparing", "running", "partial", "completed", "failed", "cancelled"] = "queued"
     verdict: str = "Maybe. Coverage is incomplete."
     score: int = 0
     coverage_percent: int = 0
     target_url: str | None = None
     repository_name: str | None = None
+    repository_workspace_path: str | None = None
     branch: str | None = None
     commit_sha: str | None = None
     started_at: datetime = Field(default_factory=now_utc)

@@ -11,8 +11,8 @@ from nope_api.config import get_settings
 from nope_api.db import migration_status, run_migrations
 from nope_api.ingestion import extract_zip
 from nope_api.models import AuthorizationScope, Project, Scan, ScanMode, ScanRequest
+from nope_api.queue import clear_scan_cancel, enqueue_scan_job, queue_status, request_scan_cancel, scan_events
 from nope_api.reports import render_report
-from nope_api.scan_engine import run_full_scan, run_repository_scan, run_url_only_scan
 from nope_api.scanners import scanner_capabilities, scanner_health
 from nope_api.security import validate_url_scope
 from nope_api.storage import store
@@ -154,6 +154,11 @@ def get_coverage(scan_id: str, authorization: str | None = Header(default=None))
     return _load_scan(scan_id, authorization).coverage
 
 
+@app.get("/api/scans/{scan_id}/events")
+async def get_scan_events(scan_id: str, authorization: str | None = Header(default=None)) -> dict:
+    return await scan_events(_load_scan(scan_id, authorization))
+
+
 @app.get("/api/scans/{scan_id}/attack-map")
 def get_attack_map(scan_id: str, authorization: str | None = Header(default=None)):
     scan = _load_scan(scan_id, authorization)
@@ -185,10 +190,12 @@ async def start_url_scan(request: ScanRequest, authorization: str | None = Heade
         project_id=request.project_id,
         mode=ScanMode.url,
         target_url=str(request.target_url),
+        status="queued",
+        stages=[{"name": "Queued for worker", "status": "queued"}],
     )
     store.save_scan(scan, owner_user_id)
-    scan = await run_url_only_scan(scan, settings)
-    return store.save_scan(scan, owner_user_id)
+    await enqueue_scan_job(settings, {"scan_id": scan.id, "owner_user_id": owner_user_id, "mode": scan.mode.value})
+    return scan
 
 
 @app.post("/api/scans/repository", response_model=Scan)
@@ -205,13 +212,26 @@ async def start_repository_scan(
         project_id=project_id,
         mode=ScanMode.repository,
         repository_name=repository_name,
+        status="preparing",
         branch=branch,
         commit_sha=commit_sha,
     )
     store.save_scan(scan, owner_user_id)
     root = await extract_zip(file, scan.id, settings)
-    scan = await run_repository_scan(scan, root, settings)
-    return store.save_scan(scan, owner_user_id)
+    scan.repository_workspace_path = str(root)
+    scan.status = "queued"
+    scan.stages.append({"name": "Queued for worker", "status": "queued", "message": "Repository extracted and ready."})
+    store.save_scan(scan, owner_user_id)
+    await enqueue_scan_job(
+        settings,
+        {
+            "scan_id": scan.id,
+            "owner_user_id": owner_user_id,
+            "mode": scan.mode.value,
+            "repository_workspace_path": scan.repository_workspace_path,
+        },
+    )
+    return scan
 
 
 @app.post("/api/scans/full", response_model=Scan)
@@ -238,13 +258,74 @@ async def start_full_scan(
         mode=ScanMode.full,
         target_url=target_url,
         repository_name=repository_name,
+        status="preparing",
         branch=branch,
         commit_sha=commit_sha,
     )
     store.save_scan(scan, owner_user_id)
     root = await extract_zip(file, scan.id, settings)
-    scan = await run_full_scan(scan, root, settings)
+    scan.repository_workspace_path = str(root)
+    scan.status = "queued"
+    scan.stages.append({"name": "Queued for worker", "status": "queued", "message": "Repository extracted and URL scope confirmed."})
+    store.save_scan(scan, owner_user_id)
+    await enqueue_scan_job(
+        settings,
+        {
+            "scan_id": scan.id,
+            "owner_user_id": owner_user_id,
+            "mode": scan.mode.value,
+            "repository_workspace_path": scan.repository_workspace_path,
+        },
+    )
+    return scan
+
+
+@app.post("/api/scans/{scan_id}/cancel", response_model=Scan)
+async def cancel_scan(scan_id: str, authorization: str | None = Header(default=None)) -> Scan:
+    owner_user_id = _require_owner_user_id(authorization)
+    scan = _load_scan(scan_id, authorization)
+    await request_scan_cancel(settings, scan_id)
+    if scan.status in {"queued", "preparing"}:
+        scan.status = "cancelled"
+        scan.completed_at = datetime.now(timezone.utc)
+    scan.stages.append({"name": "Cancellation requested", "status": "cancelled"})
     return store.save_scan(scan, owner_user_id)
+
+
+@app.post("/api/scans/{scan_id}/retry", response_model=Scan)
+async def retry_scan(scan_id: str, authorization: str | None = Header(default=None)) -> Scan:
+    owner_user_id = _require_owner_user_id(authorization)
+    scan = _load_scan(scan_id, authorization)
+    if scan.status in {"queued", "preparing", "running"}:
+        raise HTTPException(status_code=409, detail="Scan is already active.")
+    if scan.mode in {ScanMode.repository, ScanMode.full} and not scan.repository_workspace_path:
+        raise HTTPException(status_code=409, detail="Repository workspace is not available for retry.")
+    scan.status = "queued"
+    scan.completed_at = None
+    scan.stages.append({"name": "Retry queued", "status": "queued"})
+    store.save_scan(scan, owner_user_id)
+    await clear_scan_cancel(settings, scan.id)
+    job = {"scan_id": scan.id, "owner_user_id": owner_user_id, "mode": scan.mode.value}
+    if scan.repository_workspace_path:
+        job["repository_workspace_path"] = scan.repository_workspace_path
+    await enqueue_scan_job(settings, job, force=True)
+    return scan
+
+
+@app.get("/api/queue/status")
+async def get_queue_status(authorization: str | None = Header(default=None)) -> dict:
+    _require_owner_user_id(authorization)
+    return await queue_status(settings)
+
+
+@app.get("/api/worker/health")
+async def get_worker_health(authorization: str | None = Header(default=None)) -> dict:
+    _require_owner_user_id(authorization)
+    status = await queue_status(settings)
+    return {
+        "status": "ok" if status.get("redis") == "ok" and status.get("worker_healthy") else "degraded",
+        **status,
+    }
 
 
 @app.get("/api/settings/model")

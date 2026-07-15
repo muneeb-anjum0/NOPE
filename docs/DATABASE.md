@@ -41,7 +41,7 @@ The `scans` table stores both normalized fields and a JSON snapshot of the curre
 
 - Protected API routes require a valid local bearer token by default through `NOPE_REQUIRE_AUTHENTICATED_API=true`.
 - Dashboard-originated calls forward the HttpOnly local session token and are scoped to the authenticated user.
-- Scan execution is still synchronous until a later worker phase adds Redis-backed queued jobs.
+- Scan execution is Redis-backed: API requests persist queued scans, workers checkpoint stage progress to Postgres, and scan/event routes reload progress from durable scan snapshots.
 - Generated report payloads are stored in Postgres.
 - Raw scanner stdout/stderr artifacts are stored in MinIO and linked through `uploaded_artifacts`, `job_artifacts`, and `scanner_runs.raw_artifact_id`.
 - Project creation now creates target/source metadata rows when target URL or repository metadata is supplied.

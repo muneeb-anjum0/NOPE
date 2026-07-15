@@ -29,7 +29,9 @@ RUN curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEA
       -o /usr/local/bin/hadolint \
     && chmod +x /usr/local/bin/hadolint \
     && mkdir -p /tmp/trivy \
-    && chmod 0777 /tmp/trivy
+    && chmod 0777 /tmp/trivy \
+    && mkdir -p /app/.nope-workspaces \
+    && chmod 0777 /app/.nope-workspaces
 
 COPY apps/api/requirements.txt /app/apps/api/requirements.txt
 RUN pip install --no-cache-dir -r /app/apps/api/requirements.txt
