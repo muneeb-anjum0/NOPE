@@ -15,6 +15,7 @@ from nope_api.ingestion import extract_zip
 from nope_api.models import AuthorizationScope, Project, Scan, ScanMode, ScanRequest
 from nope_api.queue import clear_scan_cancel, enqueue_scan_job, queue_status, request_scan_cancel, scan_events
 from nope_api.reports import ReportContext, render_report
+from nope_api.sandbox import sandbox_health
 from nope_api.scanners import scanner_capabilities, scanner_health
 from nope_api.security import validate_url_scope
 from nope_api.storage import store
@@ -61,6 +62,7 @@ async def health() -> dict:
             "gpu_memory_target_mb": settings.effective_qwen_gpu_memory_target_mb,
             "health": ai_health,
         },
+        "sandbox": sandbox_health(settings),
         "warnings": production_warnings,
     }
 
@@ -163,6 +165,12 @@ def list_scans(authorization: str | None = Header(default=None)) -> list[Scan]:
 def scanners_capabilities(authorization: str | None = Header(default=None)) -> list[dict]:
     _require_owner_user_id(authorization)
     return scanner_capabilities()
+
+
+@app.get("/api/sandbox/health")
+def get_sandbox_health(authorization: str | None = Header(default=None)) -> dict:
+    _require_owner_user_id(authorization)
+    return sandbox_health(settings)
 
 
 @app.get("/api/scans/{scan_id}", response_model=Scan)

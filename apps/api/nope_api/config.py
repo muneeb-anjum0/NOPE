@@ -33,6 +33,26 @@ class Settings(BaseSettings):
     allow_localhost_url_targets: bool = False
     temp_root: Path = Field(default_factory=lambda: Path.cwd() / ".nope-workspaces")
 
+    sandbox_enabled: bool = True
+    sandbox_docker_command: str = "docker"
+    sandbox_workspace_volume: str = ""
+    sandbox_node_image: str = "node:24-alpine"
+    sandbox_python_image: str = "python:3.11-slim"
+    sandbox_static_image: str = "node:24-alpine"
+    sandbox_zap_image: str = "ghcr.io/zaproxy/zaproxy:stable"
+    sandbox_timeout_seconds: int = 60
+    sandbox_startup_timeout_seconds: int = 20
+    sandbox_zap_timeout_seconds: int = 180
+    sandbox_memory: str = "512m"
+    sandbox_zap_memory: str = "1024m"
+    sandbox_cpus: float = 1.0
+    sandbox_pids_limit: int = 128
+    sandbox_zap_pids_limit: int = 256
+    sandbox_tmpfs_size: str = "256m"
+    sandbox_log_bytes: int = 64 * 1024
+    sandbox_network_enabled: bool = False
+    sandbox_allow_images: str = "node:,python:,ghcr.io/zaproxy/zaproxy:"
+
     ai_provider: str = "none"
     ai_runtime_url: str = "http://localhost:11434"
     ai_model_name: str = "qwen3-8b-q4-k-m"

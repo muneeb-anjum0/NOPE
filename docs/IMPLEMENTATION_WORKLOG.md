@@ -926,3 +926,57 @@ Complete PDF reporting with real scan data, protected downloads, durable generat
 ### Closure
 
 Phase 9 is complete for local PDF report generation and protected download behavior. PDF reports contain real scan data, persisted generation status, MinIO artifact metadata, redaction, pagination, partial/failed scanner representation, drift/baseline summary, limitations, methodology, and reproducibility metadata.
+
+## 2026-07-15 Phase 10 Sandbox Foundation
+
+### Objective
+
+Add a disposable local Docker sandbox for safe repository workflows and initial dynamic ZAP scans without exposing host secrets, host home, or Docker socket access to the sandbox containers.
+
+### Pre-phase state
+
+- Pre-phase commit: `f84b545`.
+- ZAP was represented in scanner capabilities but marked skipped/not applicable for static repository scans.
+- The security model described a sandbox concept, but no manifest loader, Docker lifecycle, sandbox stage, health endpoint, or tests existed.
+
+### Implemented
+
+- Added `.nope/sandbox.json` manifest loading for Node, Python, static, custom, startup, and ZAP workflow definitions.
+- Added disposable Docker workflow execution with non-root app containers, no privileged mode, dropped capabilities, `no-new-privileges`, read-only repository mount, read-only root filesystem where supported, tmpfs workspace, bounded logs, CPU/memory/PID/tmpfs limits, network disabled by default, command timeouts, and timeout cleanup.
+- Added private-network ZAP flow that starts an isolated application container, runs `ghcr.io/zaproxy/zaproxy:stable` against the internal target, captures bounded evidence, and removes the app container/network.
+- Added scan-engine integration through a `Running sandbox workflows` stage, scanner-run evidence, dynamic-testing coverage updates, and failure findings.
+- Added `/api/sandbox/health` and sandbox details in `/health`.
+- Added Docker CLI support to the API/worker image and mounted the Docker socket only into `nope-worker` so queued scans can orchestrate sibling sandbox containers; sandbox containers themselves still do not receive the socket.
+- Added read-only shared workspace volume mounting for sandbox containers when scans run inside the Compose worker, while preserving direct host bind mounts for local non-container execution.
+- Added a separate bounded ZAP timeout so baseline scans can initialize without weakening normal build/test workflow timeouts.
+- Added `docs/SANDBOX.md` and refreshed API, scanner, architecture, security-model, feature-status, and phase-reconciliation docs.
+
+### Verification results
+
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests/test_phase10_sandbox.py -q`: passed, 9 tests.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests -q`: passed, 69 tests.
+- `python -m compileall apps/api/nope_api apps/api/tests apps/worker`: passed.
+- `pnpm --dir apps/web lint`: passed.
+- `pnpm --dir apps/web typecheck`: passed.
+- `pnpm --dir apps/web build`: passed.
+- `docker compose config --quiet`: passed.
+- `docker compose build nope-api nope-worker nope-web`: passed; rebuilt API image `038ba5c624b2`, worker image `df66c4a46dfa`, and web image `cceb3183045f`.
+- `$env:NOPE_MODEL_HOST_DIR='D:/Desktop/Model'; $env:NOPE_MODEL_FILE='Qwen3-8B-Q4_K_M.gguf'; $env:NOPE_QWEN_GPU_LAYERS='28'; docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml up -d`: passed.
+- `docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml ps`: passed; web, API, AI, Postgres, Redis, and MinIO healthy; worker running.
+- `GET http://localhost:8000/health`: passed; sandbox enabled, Docker CLI available at `/usr/bin/docker`, workspace volume `nope_nope-workspaces`, network default disabled, workflow timeout 60 seconds, ZAP timeout 180 seconds, memory `512m`, ZAP memory `1024m`, pids `128`/`256`, and isolation flags report no sandbox Docker socket, host home, or NOPE secrets.
+- `docker compose exec -T nope-worker sh -lc "id && docker version --format '{{.Client.Version}} {{.Server.Version}}' && test -S /var/run/docker.sock && echo worker-socket-present"`: passed; worker has Docker CLI/server `29.6.1` and the orchestrator socket.
+- Real Docker sandbox successful build workflow: passed; dynamic coverage `Verified`; no sandbox Docker socket, host home, or NOPE secrets reported.
+- Real Docker infinite-loop timeout workflow: failed as expected; timeout cleanup performed.
+- Real Docker host-file attempt: passed; `/var/run/docker.sock` absent, home isolated to `/tmp`, and read-only repository source write denied.
+- Real Docker network attempt: failed as expected under `--network none`.
+- Real Docker memory-abuse workflow with `128m` memory limit: failed as expected with exit code 137.
+- Real Docker failed-command workflow: failed as expected with exit code 42 and produced a sandbox finding.
+- Real Docker ZAP fixture scan: passed against an internal app container, with cleanup performed and no sandbox Docker socket mounted.
+- Real Compose worker sandbox+ZAP smoke from `/app/.nope-workspaces`: passed; final ZAP smoke returned `Verified` coverage and cleanup performed, and final compile smoke used the shared workspace volume read-only. Neither sandbox mounted the Docker socket, host home, or NOPE secrets.
+- `docker ps -a --filter "name=nope-sandbox"` plus `docker network ls --filter "name=nope-sandbox"`: no leftover sandbox containers or networks after cleanup.
+- `docker compose run --rm --no-deps nope-api gitleaks detect --no-git --redact --source /app/apps/api/nope_api`: passed, no leaks found.
+- `nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader,nounits`: `NVIDIA GeForce GTX 1060 with Max-Q Design, 0, 6144` during Phase 10 smoke; Qwen remains configured at 28 GPU layers with a 5000 MB target, and Phase 10 did not exercise inference.
+
+### Closure
+
+Phase 10 is complete for the sandbox foundation: manifest-driven workflows, constrained disposable containers, default network denial, host-secret isolation, timeout/resource enforcement, unsupported repository handling, internal ZAP dynamic scan support, cleanup, scan-stage evidence, health reporting, Docker worker activation, and documentation. Browser automation and authenticated dynamic flows remain later phases.

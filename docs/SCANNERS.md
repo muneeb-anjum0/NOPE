@@ -13,7 +13,7 @@ The API image installs:
 - `checkov` for Terraform, Dockerfile, and CI/CD policy checks.
 - `hadolint` for Dockerfile lint/security checks.
 - `bandit` for Python security analysis.
-- `OWASP ZAP baseline` is represented in the scanner contract, but repository scans mark it skipped/not applicable because ZAP requires a running HTTP target and the dynamic sandbox flow.
+- `OWASP ZAP baseline` is represented in the scanner contract. Static repository scans mark it skipped/not applicable, while Phase 10 sandbox scans can run it against a declared internal target.
 
 These tools run during repository scans when applicable to the uploaded project.
 
@@ -30,7 +30,7 @@ Phase 2 parser support exists for:
 - Checkov JSON
 - Hadolint JSON
 - Bandit JSON
-- OWASP ZAP baseline is not parsed during repository scans because it is not applicable without a dynamic target.
+- OWASP ZAP baseline is not parsed during static repository scans because it is not applicable without a dynamic target. Phase 10 stores the bounded ZAP stdout/stderr evidence as sandbox artifacts.
 
 Parsers produce normalized severity, confidence, category, affected file, line, evidence, remediation, source, and stable fingerprints.
 
@@ -66,3 +66,7 @@ Authenticated users can call `GET /api/scanners/capabilities` to see:
 - Repository fixture scan `scan_phase2_verify_20260715_zap_contract`: status `completed`, 29 findings total.
 - Scanner findings in that smoke: Semgrep 1, Gitleaks 1, OSV-Scanner 5, Trivy 10, Checkov 6, Hadolint 2, Bandit 3, OWASP ZAP baseline 0 skipped/not applicable.
 - MinIO artifacts were written for all seven external scanner raw outputs and linked from persisted scanner runs.
+
+## Dynamic Sandbox Scanners
+
+Repositories can opt into sandbox workflows with `.nope/sandbox.json`. The manifest can declare build/test commands and an optional startup command plus ZAP baseline scan. The worker launches disposable Docker containers with read-only repository mounts, no sandbox Docker socket, no host home, no NOPE service secrets, CPU/memory/PID/tmpfs/log limits, and network disabled by default. When ZAP is enabled, NOPE creates an internal Docker network, starts the app container, scans it from the ZAP container, records bounded evidence, and tears the network down.

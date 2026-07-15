@@ -6,7 +6,7 @@ Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `
 
 ## Core endpoints
 
-- `GET /health` - service health, version, scanner availability, AI runtime status.
+- `GET /health` - service health, version, scanner availability, AI runtime status, and sandbox configuration health.
 - `GET /api/projects` - list projects.
 - `POST /api/projects` - create project.
 - `POST /api/scans/url` - start authorized URL scan.
@@ -31,6 +31,7 @@ Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `
 - `GET /api/scans/{scan_id}/attack-map` - attack-surface graph.
 - `GET /api/queue/status` - queue depth, processing depth, worker heartbeat, and Redis health.
 - `GET /api/worker/health` - worker-oriented health summary derived from Redis heartbeat state.
+- `GET /api/sandbox/health` - sandbox enablement, Docker CLI availability, default network posture, limits, and isolation flags.
 - `GET /api/scans/{scan_id}/report.{format}` - protected report download as `json`, `md`, `sarif`, or `pdf`; PDF generation persists report status and MinIO artifact metadata when object storage is reachable.
 - `GET /api/scans/{scan_id}/reports/{format}/status` - protected report generation status, byte size, SHA-256, and artifact metadata.
 - `GET /api/scanners/capabilities` - authenticated scanner health, version, coverage category, and applicability marker metadata.
@@ -44,5 +45,7 @@ Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `
 - AI output is optional and separately marked.
 - URL scans without authorization confirmation are rejected.
 - Private network targets are rejected unless local sandbox mode is explicitly allowed.
+- Sandbox manifests are optional; repositories without `.nope/sandbox.json` are marked not applicable instead of faked.
+- Sandbox containers run with bounded CPU, memory, process, timeout, tmpfs, and log limits; repository mounts are read-only and network is disabled by default.
 - AI failures do not fail deterministic scans.
 - Project, scan, report, settings, and AI explanation routes are scoped to the authenticated local user.

@@ -6,6 +6,7 @@ from nope_api.attack_surface import build_attack_surface, build_code_graph
 from nope_api.config import Settings
 from nope_api.models import CoverageRecord, CoverageStatus, Scan, ScanMode, ScannerRun, now_utc
 from nope_api.rules_engine import dedupe_findings, run_rules
+from nope_api.sandbox import run_sandbox_assessment
 from nope_api.scanners import scanner_plugins
 from nope_api.scoring import calculate_score, coverage_percent, verdict
 from nope_api.stack_detector import detect_stack
@@ -130,8 +131,20 @@ async def run_repository_scan(
         scan.stages[-1]["status"] = "completed"
     await _checkpoint(scan, progress_callback, cancellation_checker)
 
+    scan.stages.append({"name": "Running sandbox workflows", "status": "running"})
+    await _checkpoint(scan, progress_callback, cancellation_checker)
+    sandbox_runs, sandbox_findings, sandbox_coverage, sandbox_artifacts = run_sandbox_assessment(root, settings)
+    scan.scanner_runs.extend(sandbox_runs)
+    findings.extend(sandbox_findings)
+    scan.stages[-1]["status"] = "completed" if sandbox_runs and sandbox_runs[0].status in {"passed", "skipped"} else "partial"
+    scan.stages[-1]["message"] = sandbox_runs[0].message if sandbox_runs else "Sandbox was not executed."
+    scan.stages[-1]["artifacts"] = sandbox_artifacts
+    if sandbox_runs and sandbox_runs[0].status == "failed":
+        scan.status = "partial"
+    await _checkpoint(scan, progress_callback, cancellation_checker)
+
     scan.findings = dedupe_findings(findings)
-    scan.coverage = merge_coverage(default_coverage(), [], scan.scanner_runs)
+    scan.coverage = merge_coverage(default_coverage(), sandbox_coverage, scan.scanner_runs)
     await _checkpoint(scan, progress_callback, cancellation_checker)
     scan.ai_review = await run_ai_review(settings, scan.findings, root=root, scan=scan)
     if scan.ai_review.status in {"Complete", "Partial"}:

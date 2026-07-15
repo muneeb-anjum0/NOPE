@@ -20,7 +20,12 @@ NOPE treats every uploaded repository and every scanned target as potentially ho
 ## Execution boundaries
 
 - Unknown application code is not executed by the API process.
-- Docker sandbox execution is modeled with non-root, no Docker socket, memory/CPU/process limits, no host secrets, and network disabled by default.
+- Repository sandbox workflows run in disposable Docker containers with non-root users, `no-new-privileges`, dropped capabilities, read-only repository mounts, read-only roots where supported, tmpfs work directories, memory/CPU/PID limits, bounded logs, and command timeouts.
+- Sandbox workflow containers do not receive the Docker socket, host home, NOPE MinIO/Postgres/Redis/Qwen secrets, or privileged mode.
+- Network is disabled by default for repository workflows.
+- ZAP dynamic scans use a private internal Docker network: one constrained application container is started from the declared manifest, one ZAP container scans only that internal target, and both are removed after the run.
+- The ZAP scanner image keeps its writable root filesystem because the upstream image writes runtime files during startup; it still receives dropped capabilities, `no-new-privileges`, private-network-only access, tmpfs work paths, and memory/PID/time limits.
+- The worker is the Docker orchestrator in the local Compose stack. Its Docker socket access is not propagated into sandbox containers.
 - Target application containers and scanner containers are separated in the architecture.
 
 ## Secrets

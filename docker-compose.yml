@@ -31,6 +31,7 @@ services:
       NOPE_TEMP_ROOT: /app/.nope-workspaces
       NOPE_REDIS_URL: redis://nope-redis:6379/0
       NOPE_MINIO_ENDPOINT: http://nope-minio:9000
+      NOPE_SANDBOX_WORKSPACE_VOLUME: nope_nope-workspaces
       NOPE_AI_PROVIDER: none
       NOPE_AI_RUNTIME_URL: http://nope-ai:8080
       NOPE_QWEN_ENDPOINT: http://nope-ai:8080
@@ -72,6 +73,7 @@ services:
       dockerfile: docker/api.Dockerfile
     container_name: nope-worker
     restart: unless-stopped
+    user: root
     command: ["python", "apps/worker/worker.py"]
     environment:
       NOPE_ENVIRONMENT: development
@@ -80,6 +82,7 @@ services:
       NOPE_REDIS_URL: redis://nope-redis:6379/0
       NOPE_MINIO_ENDPOINT: http://nope-minio:9000
       NOPE_TEMP_ROOT: /app/.nope-workspaces
+      NOPE_SANDBOX_WORKSPACE_VOLUME: nope_nope-workspaces
       NOPE_AI_PROVIDER: none
       NOPE_AI_RUNTIME_URL: http://nope-ai:8080
       NOPE_QWEN_ENDPOINT: http://nope-ai:8080
@@ -94,6 +97,7 @@ services:
       NOPE_QWEN_GPU_MEMORY_TARGET_MB: ${NOPE_QWEN_GPU_MEMORY_TARGET_MB:-5000}
     volumes:
       - nope-workspaces:/app/.nope-workspaces
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       nope-postgres:
         condition: service_healthy
