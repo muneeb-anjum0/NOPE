@@ -566,3 +566,54 @@ Final command results for this Phase 0 pass:
 - Phase 0 documentation requirements were implemented.
 - Full verification is not green because Docker/Postgres-dependent commands and security tools were unavailable in the current local state.
 - The dirty Phase 3 queue/worker files remain uncommitted work-in-progress unless explicitly authorized for Phase 3.
+
+## 2026-07-15 Phase 1 Completion Hardening to 100%
+
+### Objective
+
+Close the remaining canonical Phase 1 persistence gaps without starting Phase 3 queue work or later feature phases.
+
+### Pre-phase state
+
+- Branch: `main`.
+- Pre-phase commit SHA: `3bf039c`.
+- Working tree contained pre-existing uncommitted Phase 3 queue/worker WIP:
+  - `apps/api/nope_api/main.py`
+  - `apps/api/nope_api/models.py`
+  - `apps/api/requirements.txt`
+  - `apps/worker/worker.py`
+  - `docker-compose.yml`
+  - `apps/api/nope_api/queue.py`
+  - `apps/api/tests/test_queue.py`
+
+### Implemented
+
+- Added Alembic configuration at `apps/api/alembic.ini`.
+- Added Alembic environment and revisions under `apps/api/alembic`.
+- Alembic revisions wrap the existing SQL migrations so the startup SQL runner remains compatible while explicit `alembic upgrade/current/downgrade` commands are available.
+- Added `alembic` to API dependencies.
+- Extended `PostgresStore` so project creation persists `project_targets` and `repository_sources` when inputs are present.
+- Extended scan saving so repository snapshots are upserted from branch, commit, and upload metadata.
+- Added repository-layer persistence methods for:
+  - `application_settings`
+  - `model_configurations`
+  - `scanner_configurations`
+  - `security_baselines`
+  - `drift_events`
+  - `audit_logs`
+  - explicit project target/source/snapshot creation
+- Added a Phase 1 persistence test covering the required contract entities.
+- Updated `docs/DATABASE.md`, `docs/FEATURE_STATUS.md`, and `docs/PHASE_RECONCILIATION.md`.
+
+### Verification plan
+
+- Compile API, tests, worker, and Alembic files.
+- Run non-Docker unit tests.
+- Run persistence tests if Postgres is reachable.
+- Run Alembic commands if Postgres is reachable and `alembic` is installed.
+- Run frontend lint/typecheck/build to preserve current app behavior.
+- Run Docker config/build/up/ps/logs if Docker Desktop Linux engine is reachable.
+
+### Verification results
+
+Verification commands are recorded in the Phase 1 completion dossier.

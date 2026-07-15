@@ -64,7 +64,118 @@ class PostgresStore:
                 """,
                 (project.id, owner_user_id, project.name, project.repository, project.target_url, project.created_at),
             )
+            if target_url:
+                conn.execute(
+                    """
+                    insert into project_targets (id, project_id, target_url, approved_hosts, excluded_paths)
+                    values (%s, %s, %s, %s, %s)
+                    """,
+                    (new_id("tgt"), project.id, target_url, Jsonb([]), Jsonb([])),
+                )
+            if repository:
+                conn.execute(
+                    """
+                    insert into repository_sources (id, project_id, source_type, repository_name)
+                    values (%s, %s, %s, %s)
+                    """,
+                    (new_id("src"), project.id, "uploaded_zip", repository),
+                )
         return project
+
+    def create_project_target(
+        self,
+        project_id: str,
+        target_url: str,
+        approved_hosts: list[str] | None = None,
+        excluded_paths: list[str] | None = None,
+    ) -> dict[str, Any]:
+        self.migrate()
+        target = {
+            "id": new_id("tgt"),
+            "project_id": project_id,
+            "target_url": target_url,
+            "approved_hosts": approved_hosts or [],
+            "excluded_paths": excluded_paths or [],
+        }
+        with connect(self.settings) as conn:
+            conn.execute(
+                """
+                insert into project_targets (id, project_id, target_url, approved_hosts, excluded_paths)
+                values (%s, %s, %s, %s, %s)
+                """,
+                (
+                    target["id"],
+                    project_id,
+                    target_url,
+                    Jsonb(target["approved_hosts"]),
+                    Jsonb(target["excluded_paths"]),
+                ),
+            )
+        return target
+
+    def create_repository_source(
+        self,
+        project_id: str,
+        source_type: str,
+        repository_name: str | None = None,
+        url: str | None = None,
+    ) -> dict[str, Any]:
+        self.migrate()
+        source = {
+            "id": new_id("src"),
+            "project_id": project_id,
+            "source_type": source_type,
+            "repository_name": repository_name,
+            "url": url,
+        }
+        with connect(self.settings) as conn:
+            conn.execute(
+                """
+                insert into repository_sources (id, project_id, source_type, repository_name, url)
+                values (%s, %s, %s, %s, %s)
+                """,
+                (source["id"], project_id, source_type, repository_name, url),
+            )
+        return source
+
+    def create_repository_snapshot(
+        self,
+        project_id: str,
+        repository_source_id: str | None = None,
+        branch: str | None = None,
+        commit_sha: str | None = None,
+        upload_name: str | None = None,
+        uploaded_artifact_id: str | None = None,
+    ) -> dict[str, Any]:
+        self.migrate()
+        snapshot = {
+            "id": new_id("snap"),
+            "project_id": project_id,
+            "repository_source_id": repository_source_id,
+            "branch": branch,
+            "commit_sha": commit_sha,
+            "upload_name": upload_name,
+            "uploaded_artifact_id": uploaded_artifact_id,
+        }
+        with connect(self.settings) as conn:
+            conn.execute(
+                """
+                insert into repository_snapshots (
+                  id, project_id, repository_source_id, branch, commit_sha, upload_name, uploaded_artifact_id
+                )
+                values (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    snapshot["id"],
+                    project_id,
+                    repository_source_id,
+                    branch,
+                    commit_sha,
+                    upload_name,
+                    uploaded_artifact_id,
+                ),
+            )
+        return snapshot
 
     def save_scan(self, scan: Scan, owner_user_id: str | None = None) -> Scan:
         self.migrate()
@@ -111,6 +222,7 @@ class PostgresStore:
                     Jsonb(data),
                 ),
             )
+            self._upsert_repository_snapshot(conn, scan)
             self._replace_scan_children(conn, scan)
         return scan
 
@@ -145,6 +257,171 @@ class PostgresStore:
                 (scan_id, owner_user_id),
             ).fetchone()
         return row is not None
+
+    def save_application_setting(self, owner_user_id: str | None, key: str, value: dict[str, Any]) -> dict[str, Any]:
+        self.migrate()
+        setting_id = new_id("set")
+        with connect(self.settings) as conn:
+            row = conn.execute(
+                """
+                insert into application_settings (id, owner_user_id, key, value)
+                values (%s, %s, %s, %s)
+                on conflict (owner_user_id, key) do update set
+                  value = excluded.value,
+                  updated_at = now()
+                returning id, owner_user_id, key, value, created_at, updated_at
+                """,
+                (setting_id, owner_user_id, key, Jsonb(value)),
+            ).fetchone()
+        return dict(row)
+
+    def get_application_setting(self, owner_user_id: str | None, key: str) -> dict[str, Any] | None:
+        self.migrate()
+        with connect(self.settings) as conn:
+            row = conn.execute(
+                """
+                select id, owner_user_id, key, value, created_at, updated_at
+                from application_settings
+                where owner_user_id is not distinct from %s and key = %s
+                """,
+                (owner_user_id, key),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def save_model_configuration(
+        self,
+        owner_user_id: str | None,
+        provider: str,
+        model_name: str,
+        runtime_endpoint: str,
+        settings: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self.migrate()
+        config = {
+            "id": new_id("model"),
+            "owner_user_id": owner_user_id,
+            "provider": provider,
+            "model_name": model_name,
+            "runtime_endpoint": runtime_endpoint,
+            "settings": settings or {},
+        }
+        with connect(self.settings) as conn:
+            row = conn.execute(
+                """
+                insert into model_configurations (id, owner_user_id, provider, model_name, runtime_endpoint, settings)
+                values (%s, %s, %s, %s, %s, %s)
+                returning id, owner_user_id, provider, model_name, runtime_endpoint, settings, created_at, updated_at
+                """,
+                (
+                    config["id"],
+                    owner_user_id,
+                    provider,
+                    model_name,
+                    runtime_endpoint,
+                    Jsonb(config["settings"]),
+                ),
+            ).fetchone()
+        return dict(row)
+
+    def save_scanner_configuration(
+        self,
+        owner_user_id: str | None,
+        scanner: str,
+        enabled: bool,
+        timeout_seconds: int | None = None,
+        settings: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self.migrate()
+        config = {
+            "id": new_id("scanner_cfg"),
+            "owner_user_id": owner_user_id,
+            "scanner": scanner,
+            "enabled": enabled,
+            "timeout_seconds": timeout_seconds,
+            "settings": settings or {},
+        }
+        with connect(self.settings) as conn:
+            row = conn.execute(
+                """
+                insert into scanner_configurations (
+                  id, owner_user_id, scanner, enabled, timeout_seconds, settings
+                )
+                values (%s, %s, %s, %s, %s, %s)
+                returning id, owner_user_id, scanner, enabled, timeout_seconds, settings, created_at, updated_at
+                """,
+                (
+                    config["id"],
+                    owner_user_id,
+                    scanner,
+                    enabled,
+                    timeout_seconds,
+                    Jsonb(config["settings"]),
+                ),
+            ).fetchone()
+        return dict(row)
+
+    def create_security_baseline(
+        self,
+        project_id: str,
+        scan_id: str | None,
+        name: str,
+        data: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self.migrate()
+        baseline = {"id": new_id("base"), "project_id": project_id, "scan_id": scan_id, "name": name, "data": data or {}}
+        with connect(self.settings) as conn:
+            row = conn.execute(
+                """
+                insert into security_baselines (id, project_id, scan_id, name, data)
+                values (%s, %s, %s, %s, %s)
+                returning id, project_id, scan_id, name, created_at, data
+                """,
+                (baseline["id"], project_id, scan_id, name, Jsonb(baseline["data"])),
+            ).fetchone()
+        return dict(row)
+
+    def create_drift_event(
+        self,
+        baseline_id: str,
+        scan_id: str,
+        event_type: str,
+        message: str,
+        severity: str | None = None,
+        data: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self.migrate()
+        drift = {"id": new_id("drift"), "data": data or {}}
+        with connect(self.settings) as conn:
+            row = conn.execute(
+                """
+                insert into drift_events (id, baseline_id, scan_id, event_type, severity, message, data)
+                values (%s, %s, %s, %s, %s, %s, %s)
+                returning id, baseline_id, scan_id, event_type, severity, message, created_at, data
+                """,
+                (drift["id"], baseline_id, scan_id, event_type, severity, message, Jsonb(drift["data"])),
+            ).fetchone()
+        return dict(row)
+
+    def record_audit_log(
+        self,
+        action: str,
+        owner_user_id: str | None = None,
+        project_id: str | None = None,
+        scan_id: str | None = None,
+        actor: str | None = None,
+        data: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self.migrate()
+        with connect(self.settings) as conn:
+            row = conn.execute(
+                """
+                insert into audit_logs (owner_user_id, project_id, scan_id, action, actor, data)
+                values (%s, %s, %s, %s, %s, %s)
+                returning id, owner_user_id, project_id, scan_id, action, actor, created_at, data
+                """,
+                (owner_user_id, project_id, scan_id, action, actor, Jsonb(data or {})),
+            ).fetchone()
+        return dict(row)
 
     def get_report(
         self,
@@ -410,6 +687,32 @@ class PostgresStore:
                     ),
                 ),
             )
+
+    def _upsert_repository_snapshot(self, conn, scan: Scan) -> None:
+        if not scan.project_id or not (scan.repository_name or scan.branch or scan.commit_sha):
+            return
+        snapshot_id = f"snap_{scan.id}"
+        conn.execute(
+            """
+            insert into repository_snapshots (
+              id, project_id, branch, commit_sha, upload_name, created_at
+            )
+            values (%s, %s, %s, %s, %s, %s)
+            on conflict (id) do update set
+              project_id = excluded.project_id,
+              branch = excluded.branch,
+              commit_sha = excluded.commit_sha,
+              upload_name = excluded.upload_name
+            """,
+            (
+                snapshot_id,
+                scan.project_id,
+                scan.branch,
+                scan.commit_sha,
+                scan.repository_name,
+                scan.started_at,
+            ),
+        )
 
     def _store_scanner_artifact(self, scan_id: str, run) -> dict | None:
         if not run.raw_stdout and not run.raw_stderr:

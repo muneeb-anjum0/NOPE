@@ -108,3 +108,70 @@ def test_scanner_raw_output_artifact_is_recorded(monkeypatch):
     saved = store.save_scan(scan, None)
     assert saved.scanner_runs[0].raw_artifact_id == f"art_{suffix}"
     assert saved.scanner_runs[0].raw_artifact_url.startswith("minio://")
+
+
+def test_phase1_contract_entities_are_persisted_through_store():
+    suffix = uuid4().hex[:8]
+    owner = f"user_phase1_{suffix}"
+    store = PostgresStore()
+    with connect(store.settings) as conn:
+        conn.execute(
+            "insert into local_users (id, email, password_hash) values (%s, %s, %s)",
+            (owner, f"{owner}@example.com", "pbkdf2_sha256$00$00"),
+        )
+
+    project = store.create_project(
+        f"Phase 1 Contract {suffix}",
+        "repo.zip",
+        "https://app.example.com",
+        owner,
+    )
+    scan = Scan(
+        id=f"scan_phase1_contract_{suffix}",
+        project_id=project.id,
+        mode=ScanMode.repository,
+        status="completed",
+        repository_name="repo.zip",
+        branch="main",
+        commit_sha=f"deadbeef{suffix}",
+    )
+    store.save_scan(scan, owner)
+
+    setting = store.save_application_setting(owner, "retention", {"days": 30})
+    assert setting["value"]["days"] == 30
+    assert PostgresStore().get_application_setting(owner, "retention")["value"]["days"] == 30
+
+    model_config = store.save_model_configuration(
+        owner,
+        "llama.cpp",
+        "qwen3-8b-q4-k-m",
+        "http://nope-ai:8080",
+        {"context": 4096},
+    )
+    scanner_config = store.save_scanner_configuration(owner, "Semgrep", True, 120, {"ruleset": "nope"})
+    baseline = store.create_security_baseline(project.id, scan.id, "Phase 1 baseline", {"commit": scan.commit_sha})
+    drift = store.create_drift_event(baseline["id"], scan.id, "coverage_recorded", "Coverage stored.", "info")
+    audit = store.record_audit_log("phase1.persistence.verified", owner, project.id, scan.id, "test")
+
+    with connect(store.settings) as conn:
+        target_count = conn.execute(
+            "select count(*) as count from project_targets where project_id = %s",
+            (project.id,),
+        ).fetchone()["count"]
+        source_count = conn.execute(
+            "select count(*) as count from repository_sources where project_id = %s",
+            (project.id,),
+        ).fetchone()["count"]
+        snapshot_count = conn.execute(
+            "select count(*) as count from repository_snapshots where project_id = %s and commit_sha = %s",
+            (project.id, scan.commit_sha),
+        ).fetchone()["count"]
+
+    assert target_count == 1
+    assert source_count == 1
+    assert snapshot_count == 1
+    assert model_config["settings"]["context"] == 4096
+    assert scanner_config["timeout_seconds"] == 120
+    assert baseline["data"]["commit"] == scan.commit_sha
+    assert drift["event_type"] == "coverage_recorded"
+    assert audit["action"] == "phase1.persistence.verified"
