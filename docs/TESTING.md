@@ -43,7 +43,25 @@ pnpm --dir apps/web test
 pnpm --dir apps/web build
 ```
 
-The current frontend test command is a CI-compatible TypeScript no-emit check. Browser E2E visual polish remains Phase 15.
+The current frontend test command is a CI-compatible TypeScript no-emit check.
+
+## Phase 15 UI Viewports
+
+Phase 15 uses the in-app browser runtime against a production `next start` build and verifies these routes at `1440`, `1280`, `1024`, `768`, `390`, and `360` pixel widths:
+
+- `/`
+- `/login`
+- `/app`
+- `/app/projects/local`
+- `/app/projects/local/findings`
+- `/app/projects/local/attack-map`
+- `/app/projects/local/coverage`
+- `/app/projects/local/scans`
+- `/app/projects/local/assets`
+- `/app/projects/local/reports`
+- `/app/projects/local/settings`
+
+The check asserts the compiled graphite stylesheet is loaded, the active app route is present, document-level horizontal overflow is absent, and visible rendered elements are not offscreen outside intentional scroll containers.
 
 ## Docker
 

@@ -14,7 +14,7 @@ export function AppShell({ children, userEmail }: Readonly<{ children: React.Rea
             <span className="mono muted">main</span>
             <span className="mono muted">{userEmail}</span>
           </div>
-          <div className="hero-actions" style={{ marginTop: 0 }}>
+          <div className="topbar-actions">
             <button className="button ghost" type="button" aria-label="Open command palette">
               <Command size={15} /> Command
             </button>

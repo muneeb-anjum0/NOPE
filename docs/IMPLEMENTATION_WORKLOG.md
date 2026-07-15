@@ -1180,3 +1180,53 @@ Verify the complete local-first pipeline from login and project creation through
 ### Closure
 
 - Phase 14 is complete for the full local end-to-end pipeline proof, explicit full-scan URL stages, honest partial status on scanner failures, persisted baselines and drift from a modified second scan, JSON/PDF reports after full worker execution, failure-path coverage, Docker image refresh, live queue/worker/API/web/AI health, and under-5 GB VRAM validation.
+
+## 2026-07-16 Phase 15 UI and Responsive Polish
+
+### Objective
+
+Complete the canonical Phase 15 frontend pass: one dark graphite theme, complete public landing page, separate dashboard under `/app`, LineSidebar-style app navigation, polished route surfaces, dense findings UI, motion/reduced-motion states, and required viewport verification.
+
+### Pre-phase state
+
+- Pre-phase commit: `dcd186d`.
+- The app already had a routed dashboard and dark design system, but Phase 15-specific landing sections, dashboard widgets, mobile polish, route verification, and documentation were not complete.
+- The local Qwen profile was already configured for `NOPE_QWEN_GPU_LAYERS=28` and `NOPE_QWEN_GPU_MEMORY_TARGET_MB=5000`.
+
+### Implemented
+
+- Completed the public landing page with navigation, hero, animated scan demo, product methodology, why-NOPE section, rules-first AI explanation, local Qwen section, attack-map showcase, evidence showcase, coverage, CTA, and footer.
+- Expanded the dashboard overview with verdict, score, severity counts, coverage, drift, latest findings, scan pipeline, scanner status, Qwen status, and untested areas.
+- Tightened the app shell topbar, route-aware LineSidebar behavior, keyboard/focus states, mobile sidebar adaptation, and responsive app content constraints.
+- Polished dense findings filters, table/detail containment, custom controls, tab states, hover/press/focus transitions, loading/progress surfaces, and reduced-motion handling.
+- Converted mobile attack-map showcase content from horizontal absolute overflow to a stacked mobile layout.
+- Added grid/min-width constraints so dense tables and filters scroll inside panels without stretching mobile headers.
+- Updated web types to expose stack metadata used by the dashboard.
+- Updated feature, reconciliation, testing, and worklog documentation.
+
+### Verification results
+
+- `pnpm --dir apps/web lint`: passed.
+- `pnpm --dir apps/web typecheck`: passed.
+- `pnpm --dir apps/web test`: passed.
+- `pnpm --dir apps/web build`: passed.
+- Browser viewport matrix against production `next start` on `http://localhost:3002`: passed, 66 route/viewport checks, covering `/`, `/login`, `/app`, and all app routes at 1440, 1280, 1024, 768, 390, and 360 widths with compiled CSS loaded, no document horizontal overflow, and no offscreen rendered elements.
+- Screenshot capture through the in-app browser runtime was unavailable, but DOM/style/viewport checks completed after confirming the stale-server CSS issue and restarting from the fresh build.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests -q`: passed, 84 tests.
+- `python -m compileall apps/api/nope_api apps/api/tests apps/worker`: passed.
+- `docker compose config --quiet`: passed.
+- `git diff --check`: passed.
+- `docker compose build nope-api nope-worker nope-web`: passed; rebuilt web image `nope-nope-web@sha256:4dadc30f2418`.
+- `docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml up -d`: passed with 28 GPU layers and 5000 MB target.
+- `Invoke-RestMethod http://localhost:8000/health`: passed; database migrations current, scanners installed, Qwen runtime reachable, GPU layers `28`, GPU memory target `5000`.
+- `Invoke-WebRequest http://localhost:3000 -UseBasicParsing`: passed with HTTP `200`.
+- Authenticated `/api/queue/status` and `/api/worker/health`: passed; Redis `ok`, queue depth `0`, processing depth `0`, worker heartbeat present, worker healthy.
+- `docker compose ps nope-web`: `NOPE` healthy on port 3000.
+- Direct llama.cpp `/completion` smoke: passed.
+- `docker exec nope-ai nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader,nounits`: `NVIDIA GeForce GTX 1060 with Max-Q Design, 4485, 6144`; the 28-layer CPU+GPU split remained under the 5 GB VRAM cap.
+- `docker inspect nope-ai --format '{{json .HostConfig.DeviceRequests}}'`: NVIDIA GPU device request present.
+- `docker compose run --rm --no-deps nope-api gitleaks detect --no-git --redact --source /app/apps/api/nope_api`: passed, no leaks found.
+
+### Closure
+
+Phase 15 is complete for the canonical UI and responsive scope: one graphite theme, no competing light/default UI, complete landing, separate dashboard, route-aware sidebar, polished app routes, dense findings experience, motion/reduced-motion support, mobile adaptation, required viewport verification, Docker image refresh, and under-5 GB Qwen VRAM validation.

@@ -2,8 +2,10 @@ import {
   ArrowRight,
   Brain,
   Code2,
+  FileText,
   GitBranch,
   LockKeyhole,
+  Network,
   Radar,
   ShieldAlert,
   Sparkles,
@@ -48,6 +50,13 @@ const methodSteps = [
   ["Code graph", Code2, "Connect routes to", "data and sinks."],
   ["Focused RAG", TerminalSquare, "Retrieve only the", "evidence that matters."],
   ["Qwen", Brain, "Reason locally over", "bounded context."],
+];
+
+const evidenceLines = [
+  ["01", "Scanner source", "Semgrep, Gitleaks, Trivy, Bandit, ZAP, sandbox, and NOPE rules stay separated in the finding record."],
+  ["02", "Code context", "Evidence links back to file, route, line, snippet, scanner run, and raw artifact authorization."],
+  ["03", "Drift memory", "Baselines preserve what changed between a trusted scan and the next modified scan."],
+  ["04", "AI boundary", "Qwen explains and challenges focused evidence without becoming the primary source of truth."],
 ];
 
 export default function LandingPage() {
@@ -199,6 +208,75 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <section id="attack-map" className="section">
+        <div className="container">
+          <p className="section-kicker">Attack Map showcase</p>
+          <h2>Routes, files, data access, and risk hints stay connected.</h2>
+          <div className="showcase-grid">
+            <div className="attack-canvas" aria-label="Static attack map showcase">
+              {[
+                ["entry", "ANY /api/invoices/:id", "entry point", "24px", "28px"],
+                ["file", "app/api/invoices/[id]/route.ts", "handler file", "268px", "116px"],
+                ["db", "prisma.invoice.findUnique", "database", "514px", "208px"],
+                ["risk", "Missing ownership check", "authorization risk", "186px", "300px"],
+              ].map(([id, label, kind, left, top]) => (
+                <div className="attack-node" key={id} style={{ left, top }}>
+                  <span className="mono muted">{kind}</span>
+                  <strong style={{ display: "block", marginTop: 8 }}>{label}</strong>
+                  {id === "risk" ? <p style={{ color: "var(--high)" }}>Risk: high</p> : null}
+                </div>
+              ))}
+            </div>
+            <div className="scan-console compact">
+              <div className="console-header">
+                <span>graph evidence</span>
+                <Network size={14} />
+              </div>
+              <div className="console-body">
+                {["entry point handled by file", "file retrieves data from prisma", "file may reach missing ownership check", "finding detail shows real edges only"].map((item) => (
+                  <div className="stage-row" key={item}>
+                    <span>{item}</span>
+                    <span className="status-dot ok" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="evidence" className="section">
+        <div className="container">
+          <p className="section-kicker">Evidence showcase</p>
+          <h2>Every scary sentence should have a source.</h2>
+          <div className="showcase-grid">
+            <div className="evidence-stack">
+              {evidenceLines.map(([index, title, body]) => (
+                <div className="evidence-line" key={title}>
+                  <span>{index}</span>
+                  <strong>{title}</strong>
+                  <p>{body}</p>
+                </div>
+              ))}
+            </div>
+            <div className="scan-console compact">
+              <div className="console-header">
+                <span>report chain</span>
+                <FileText size={14} />
+              </div>
+              <div className="console-body">
+                {["JSON for automation", "Markdown for engineers", "SARIF for scanners", "PDF for review"].map((item) => (
+                  <div className="stage-row" key={item}>
+                    <span>{item}</span>
+                    <span className="mono muted">export</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="local-ai" className="section">
         <div className="container editorial-grid">
           <div>
@@ -243,6 +321,14 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      <footer className="landing-footer">
+        <div className="container landing-footer-inner">
+          <strong>NOPE.</strong>
+          <span>Rules first. Local AI second. Evidence always.</span>
+          <a href="/login">Open dashboard</a>
+        </div>
+      </footer>
     </main>
   );
 }
