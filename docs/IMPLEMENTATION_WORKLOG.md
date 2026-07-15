@@ -44,6 +44,13 @@
 - `pnpm --dir apps/web typecheck`: passed.
 - `pnpm --dir apps/web lint`: passed after adding ESLint flat config.
 - `pnpm --dir apps/web build`: passed.
+- `docker compose config --quiet`: passed.
+- `docker compose build nope-api nope-worker nope-web`: passed.
+- `docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml up -d`: passed.
+- `GET http://localhost:8000/health`: passed; Qwen healthy at 28 GPU layers.
+- Live findings API smoke against `scan_phase7_smoke`: filtered `GET /api/scans/{scan_id}/findings?severity=high&scanner=Semgrep&page_size=5` returned one finding; `GET /api/scans/{scan_id}/findings/{finding_id}` returned Overview/Evidence/Code/Code Flow/Fix/Tests/History tabs.
+- `nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader,nounits`: `NVIDIA GeForce GTX 1060 with Max-Q Design, 4041, 6144`.
+- `docker compose run --rm --no-deps nope-api gitleaks detect --no-git --redact --source /app/apps/api/nope_api`: passed, no leaks found.
 - API smoke test: `GET http://127.0.0.1:8000/health` returned status `ok`.
 - Repository scan smoke test: uploaded vulnerable fixture ZIP to `/api/scans/repository`; scan completed and produced real NOPE-rule findings.
 - Built web smoke test: `GET http://127.0.0.1:3000` returned HTTP 200.
@@ -792,3 +799,39 @@ Implement focused graph-aware retrieval for Qwen without sending whole repositor
 ### Closure
 
 Phase 6 is complete for focused graph-aware RAG without embeddings. Whole repositories are not sent to Qwen; selected chunks carry provenance, retrieval reasons, trust boundaries, limits, redaction, and prompt-injection controls.
+
+## 2026-07-15 Phase 7 Findings Filters, Detail, Evidence, Code Flow
+
+### Objective
+
+Complete server-backed findings filtering and detail views with protected evidence, real source snippets, real code-flow data, and stable URL state.
+
+### Pre-phase state
+
+- Pre-phase commit: `8ce88900cf0912e90ef3a27e92fdf401e08c83ef`.
+- Findings page rendered the full scan findings array without server filters, pagination, or stable shared filter URLs.
+- Backend exposed only `/api/scans/{scan_id}/findings` as a raw list.
+
+### Implemented
+
+- Added `apps/api/nope_api/findings.py` for filtering, sorting, pagination, detail payloads, source snippets, code-flow extraction, history payloads, and raw artifact lookup.
+- Replaced the findings route with a server-backed query envelope supporting severity, confidence, status, scanner, rule, CWE, OWASP, file, route, first-seen, new, fixed, reintroduced, suppressed, AI-reviewed, verified, fix-available, query, sort, direction, page, and page size.
+- Added authenticated finding detail route with Overview, Evidence, Code, Code Flow, Fix, Tests, and History payloads.
+- Added authenticated raw artifact route that verifies scan ownership and redacts secret-like values.
+- Added suppression endpoint for finding lifecycle updates.
+- Rebuilt the findings page with URL-backed filters, pagination, stable selected finding, tabbed detail, code snippets with line numbers/highlights, evidence cards, real graph edge display, fix/test/history tabs, and Qwen actions.
+- Updated shared frontend types and table behavior.
+
+### Verification results
+
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests/test_phase7_findings.py -q`: passed, 6 tests.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests/test_phase7_findings.py apps/api/tests/test_phase4_findings.py -q`: passed, 13 tests.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests -q`: passed, 53 tests.
+- `python -m compileall apps/api/nope_api apps/api/tests apps/worker`: passed.
+- `pnpm --dir apps/web lint`: passed.
+- `pnpm --dir apps/web typecheck`: passed.
+- `pnpm --dir apps/web build`: passed.
+
+### Closure
+
+Phase 7 is complete for server-backed filters, URL-stable findings UI, protected evidence/detail access, code snippets, real code-flow display, suppression lifecycle action, and large-list pagination.

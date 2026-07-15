@@ -7,13 +7,67 @@ export type Finding = {
   title: string;
   description?: string;
   category: string;
+  cwe?: string | null;
+  owasp?: string | null;
   affected_file?: string | null;
   affected_route?: string | null;
+  start_line?: number | null;
+  end_line?: number | null;
+  symbol?: string | null;
+  package?: string | null;
+  cve?: string | null;
+  raw_artifact_id?: string | null;
+  nope_rule_id?: string | null;
+  original_rule_id?: string | null;
   confidence: string;
   scanner_sources: string[];
   status: string;
+  verification_state?: string;
+  ai_review_state?: string;
+  first_seen?: string;
+  last_seen?: string;
+  recurrence_count?: number;
+  baseline_state?: string;
+  fix_available?: boolean;
+  verified?: boolean;
+  test_guidance?: string | null;
   remediation: string;
   evidence?: Array<{ source: string; file?: string | null; line?: number | null; snippet?: string | null; message: string }>;
+};
+
+export type FindingsResult = {
+  scan_id: string;
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+  sort: string;
+  direction: "asc" | "desc";
+  filters: Record<string, unknown>;
+  items: Finding[];
+};
+
+export type FindingDetail = {
+  finding: Finding;
+  evidence: Array<Record<string, unknown>>;
+  source?: {
+    file: string;
+    start_line: number;
+    end_line: number;
+    language: string;
+    code: string;
+    highlighted_lines: number[];
+    available: boolean;
+    message: string;
+  } | null;
+  code_flow: {
+    available: boolean;
+    nodes: Array<{ id: string; label: string; kind: string; file?: string | null; risk?: Severity | null }>;
+    edges: Array<{ source: string; target: string; relationship: string }>;
+    message: string;
+  };
+  history: Array<{ event: string; at: string; data: Record<string, unknown> }>;
+  tabs: string[];
 };
 
 export type CoverageRecord = {

@@ -1,7 +1,22 @@
 import { severityClass } from "@/lib/nope-data";
 import type { Finding } from "@/lib/types";
 
-export function FindingTable({ findings }: { findings: Finding[] }) {
+export function FindingTable({
+  findings,
+  scanId,
+  selectedId,
+  search,
+}: {
+  findings: Finding[];
+  scanId?: string;
+  selectedId?: string;
+  search?: URLSearchParams;
+}) {
+  const hrefFor = (finding: Finding) => {
+    const params = new URLSearchParams(search?.toString());
+    params.set("finding", finding.id);
+    return `/app/projects/local/findings?${params.toString()}`;
+  };
   return (
     <div className="app-panel">
       <div className="panel-title">
@@ -25,17 +40,17 @@ export function FindingTable({ findings }: { findings: Finding[] }) {
             </tr>
           ) : (
             findings.map((finding) => (
-              <tr className="interactive-row" key={finding.id}>
+              <tr className={`interactive-row${finding.id === selectedId ? " selected-row" : ""}`} key={finding.id}>
                 <td>
                   <span className={severityClass(finding.severity)}>{finding.severity}</span>
                 </td>
                 <td>
-                  <strong>{finding.title}</strong>
+                  {scanId ? <a href={hrefFor(finding)}><strong>{finding.title}</strong></a> : <strong>{finding.title}</strong>}
                   <br />
                   <span className="muted">{finding.category} / {finding.confidence}</span>
                 </td>
                 <td className="mono">{finding.affected_file ?? finding.affected_route ?? "n/a"}</td>
-                <td>{finding.scanner_sources.join(" + ")}</td>
+                <td>{finding.scanner_sources.join(" + ") || finding.raw_artifact_id || "Evidence"}</td>
                 <td>{finding.status}</td>
               </tr>
             ))

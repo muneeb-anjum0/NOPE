@@ -17,7 +17,10 @@ Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `
 - `GET /api/scans` - list scans.
 - `GET /api/scans/{scan_id}` - scan detail.
 - `GET /api/scans/{scan_id}/events` - persisted stage/progress and scanner-run event stream for reload-safe polling.
-- `GET /api/scans/{scan_id}/findings` - normalized findings.
+- `GET /api/scans/{scan_id}/findings` - server-backed findings query with filters, sorting, and pagination. Supported query parameters include `severity`, `confidence`, `status`, `scanner`, `rule`, `cwe`, `owasp`, `file`, `route`, `first_seen`, `new`, `fixed`, `reintroduced`, `suppressed`, `ai_reviewed`, `verified`, `fix_available`, `query`, `sort`, `direction`, `page`, and `page_size`.
+- `GET /api/scans/{scan_id}/findings/{finding_id}` - protected finding detail with evidence, source snippet, code flow, fix/test guidance, and history.
+- `POST /api/scans/{scan_id}/findings/{finding_id}/suppress` - suppress a finding with reason, scope, and optional expiry.
+- `GET /api/scans/{scan_id}/artifacts/{artifact_id}` - protected raw scanner artifact payload for artifacts owned by the scan.
 - `GET /api/scans/{scan_id}/coverage` - coverage records.
 - `GET /api/scans/{scan_id}/attack-map` - attack-surface graph.
 - `GET /api/queue/status` - queue depth, processing depth, worker heartbeat, and Redis health.

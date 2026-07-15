@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { AIHealth, ModelSettings, Scan } from "@/lib/types";
+import type { AIHealth, FindingDetail, FindingsResult, ModelSettings, Scan } from "@/lib/types";
 
 export async function getScans(): Promise<Scan[]> {
   try {
@@ -12,6 +12,23 @@ export async function getScans(): Promise<Scan[]> {
 export async function getLatestScan(): Promise<Scan | null> {
   const scans = await getScans();
   return scans[0] ?? null;
+}
+
+export async function getFindings(scanId: string, searchParams?: URLSearchParams): Promise<FindingsResult | null> {
+  try {
+    const query = searchParams?.toString();
+    return await api<FindingsResult>(`/api/scans/${scanId}/findings${query ? `?${query}` : ""}`);
+  } catch {
+    return null;
+  }
+}
+
+export async function getFindingDetail(scanId: string, findingId: string): Promise<FindingDetail | null> {
+  try {
+    return await api<FindingDetail>(`/api/scans/${scanId}/findings/${findingId}`);
+  } catch {
+    return null;
+  }
 }
 
 export async function getModelSettings(): Promise<ModelSettings | null> {

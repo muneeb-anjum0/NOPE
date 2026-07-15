@@ -9,6 +9,7 @@ from nope_api.ai import check_ai_health, explain_finding, finding_action
 from nope_api.auth import create_or_login, delete_session, get_user_for_token, init_auth_db
 from nope_api.config import get_settings
 from nope_api.db import migration_status, run_migrations
+from nope_api.findings import finding_detail, parse_finding_query, query_findings, raw_artifact
 from nope_api.ingestion import extract_zip
 from nope_api.models import AuthorizationScope, Project, Scan, ScanMode, ScanRequest
 from nope_api.queue import clear_scan_cancel, enqueue_scan_job, queue_status, request_scan_cancel, scan_events
@@ -145,8 +146,94 @@ def get_scan(scan_id: str, authorization: str | None = Header(default=None)) -> 
 
 
 @app.get("/api/scans/{scan_id}/findings")
-def get_findings(scan_id: str, authorization: str | None = Header(default=None)):
-    return _load_scan(scan_id, authorization).findings
+def get_findings(
+    scan_id: str,
+    authorization: str | None = Header(default=None),
+    severity: str | None = None,
+    confidence: str | None = None,
+    status: str | None = None,
+    scanner: str | None = None,
+    rule: str | None = None,
+    cwe: str | None = None,
+    owasp: str | None = None,
+    file: str | None = None,
+    route: str | None = None,
+    first_seen: str | None = None,
+    new: str | None = None,
+    fixed: str | None = None,
+    reintroduced: str | None = None,
+    suppressed: str | None = None,
+    ai_reviewed: str | None = None,
+    verified: str | None = None,
+    fix_available: str | None = None,
+    query: str | None = None,
+    page: int = 1,
+    page_size: int = 25,
+    sort: str = "severity",
+    direction: str = "asc",
+):
+    scan = _load_scan(scan_id, authorization)
+    parsed = parse_finding_query(
+        severity=severity,
+        confidence=confidence,
+        status=status,
+        scanner=scanner,
+        rule=rule,
+        cwe=cwe,
+        owasp=owasp,
+        file=file,
+        route=route,
+        first_seen=first_seen,
+        new=new,
+        fixed=fixed,
+        reintroduced=reintroduced,
+        suppressed=suppressed,
+        ai_reviewed=ai_reviewed,
+        verified=verified,
+        fix_available=fix_available,
+        query=query,
+        page=page,
+        page_size=page_size,
+        sort=sort,
+        direction=direction,
+    )
+    return query_findings(scan, parsed)
+
+
+@app.get("/api/scans/{scan_id}/findings/{finding_id}")
+def get_finding_detail(scan_id: str, finding_id: str, authorization: str | None = Header(default=None)):
+    detail = finding_detail(_load_scan(scan_id, authorization), finding_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Finding not found.")
+    return detail
+
+
+@app.post("/api/scans/{scan_id}/findings/{finding_id}/suppress", response_model=Scan)
+def suppress_finding(scan_id: str, finding_id: str, payload: dict, authorization: str | None = Header(default=None)) -> Scan:
+    owner_user_id = _require_owner_user_id(authorization)
+    scan = _load_scan(scan_id, authorization)
+    finding = next((item for item in scan.findings if item.id == finding_id), None)
+    if not finding:
+        raise HTTPException(status_code=404, detail="Finding not found.")
+    from nope_api.models import Suppression
+
+    expiry = payload.get("expiry")
+    finding.suppression = Suppression(
+        reason=str(payload.get("reason") or "Suppressed from findings detail."),
+        user=str(payload.get("user") or owner_user_id or "local-user"),
+        expiry=datetime.fromisoformat(expiry) if expiry else None,
+        scope=str(payload.get("scope") or "finding"),
+    )
+    finding.status = "suppressed"
+    return store.save_scan(scan, owner_user_id)
+
+
+@app.get("/api/scans/{scan_id}/artifacts/{artifact_id}")
+def get_raw_artifact(scan_id: str, artifact_id: str, authorization: str | None = Header(default=None)):
+    artifact = raw_artifact(_load_scan(scan_id, authorization), artifact_id)
+    if not artifact:
+        raise HTTPException(status_code=404, detail="Artifact not found.")
+    return artifact
 
 
 @app.get("/api/scans/{scan_id}/coverage")
