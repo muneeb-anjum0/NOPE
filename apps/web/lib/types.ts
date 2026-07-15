@@ -70,6 +70,39 @@ export type FindingDetail = {
   tabs: string[];
 };
 
+export type SecurityBaseline = {
+  id: string;
+  project_id?: string | null;
+  scan_id?: string | null;
+  name: string;
+  created_at: string;
+  data: Record<string, unknown>;
+};
+
+export type ScanComparison = {
+  reference_scan_id?: string | null;
+  current_scan_id: string;
+  baseline_id?: string | null;
+  new: Finding[];
+  fixed: Array<Record<string, unknown>>;
+  reintroduced: Finding[];
+  unchanged: Finding[];
+  severity_changes: Array<Record<string, unknown>>;
+  confidence_changes: Array<Record<string, unknown>>;
+  coverage_difference: Array<Record<string, unknown>>;
+  scanner_difference: Array<Record<string, unknown>>;
+  stack_difference: Array<Record<string, unknown>>;
+  drift_events: Array<{ type: string; severity?: string | null; message: string }>;
+  incremental_scope: {
+    mode?: string;
+    changed_files?: string[];
+    relevant_scanners?: string[];
+    requires_full_scan?: boolean;
+    note?: string;
+  };
+  summary: Record<string, number>;
+};
+
 export type CoverageRecord = {
   domain: string;
   status: "Verified" | "Partial" | "Not tested" | "Failed" | "Not applicable";
@@ -79,6 +112,7 @@ export type CoverageRecord = {
 
 export type Scan = {
   id: string;
+  project_id?: string | null;
   status: string;
   mode: "url" | "repository" | "full";
   verdict: string;

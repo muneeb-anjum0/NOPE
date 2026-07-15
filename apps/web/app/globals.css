@@ -1133,6 +1133,32 @@ textarea:focus-visible {
   align-items: center;
 }
 
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.metric-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.025);
+  padding: 10px;
+}
+
+.metric-card span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.metric-card strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 22px;
+}
+
 .mobile-nav-toggle {
   display: none;
 }
@@ -1272,7 +1298,8 @@ textarea:focus-visible {
 
   .filter-bar,
   .detail-grid,
-  .flow-edge {
+  .flow-edge,
+  .metric-grid {
     grid-template-columns: 1fr;
   }
 }

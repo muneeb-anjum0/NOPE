@@ -21,6 +21,12 @@ Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `
 - `GET /api/scans/{scan_id}/findings/{finding_id}` - protected finding detail with evidence, source snippet, code flow, fix/test guidance, and history.
 - `POST /api/scans/{scan_id}/findings/{finding_id}/suppress` - suppress a finding with reason, scope, and optional expiry.
 - `GET /api/scans/{scan_id}/artifacts/{artifact_id}` - protected raw scanner artifact payload for artifacts owned by the scan.
+- `POST /api/scans/{scan_id}/baseline` - create a security baseline snapshot from a completed scan.
+- `GET /api/baselines` - list owner-scoped baselines, optionally filtered by `project_id`.
+- `GET /api/baselines/{baseline_id}` - get one owner-scoped baseline.
+- `GET /api/scans/{scan_id}/compare` - compare a scan to `against_scan_id`, `baseline_id`, or the previous project scan.
+- `POST /api/scans/{scan_id}/drift` - compare and persist drift events for the scan.
+- `GET /api/scans/{scan_id}/drift` - list persisted drift events for the scan.
 - `GET /api/scans/{scan_id}/coverage` - coverage records.
 - `GET /api/scans/{scan_id}/attack-map` - attack-surface graph.
 - `GET /api/queue/status` - queue depth, processing depth, worker heartbeat, and Redis health.

@@ -835,3 +835,48 @@ Complete server-backed findings filtering and detail views with protected eviden
 ### Closure
 
 Phase 7 is complete for server-backed filters, URL-stable findings UI, protected evidence/detail access, code snippets, real code-flow display, suppression lifecycle action, and large-list pagination.
+
+## 2026-07-15 Phase 8 History, Baselines, Drift
+
+### Objective
+
+Implement persistent security baselines, scan-to-scan and scan-to-baseline comparison, drift classification, and a conservative incremental-scope foundation without replacing full scans.
+
+### Pre-phase state
+
+- Pre-phase commit: `95b2ddf1d3cf487ee97e09ece927a7ba91a54b53`.
+- `security_baselines` and `drift_events` tables existed from Phase 1.
+- Phase 4 lifecycle history could mark recurrence/reintroduced findings.
+- No comparison engine, drift API, or UI summary existed.
+
+### Implemented
+
+- Added `apps/api/nope_api/drift.py` for baseline snapshots, scan comparisons, drift events, coverage/scanner/stack differences, domain-specific drift signals, and conservative incremental scope.
+- Baseline snapshots record scan ID, commit SHA, repository snapshot, target, scanner versions, rule versions, model version, quantization, RAG version, timestamp, coverage, findings, routes, dependencies, and stack.
+- Added owner-scoped baseline storage getters/listing and drift-event listing.
+- Added API routes for baseline creation/list/get, scan comparison, drift persistence, and drift event listing.
+- Comparison detects new, fixed, unchanged, reintroduced, severity changes, confidence changes, coverage difference, scanner difference, stack difference, new/removed routes, new dependency, new CVE, new secret, RLS policy change, weaker CORS, weaker headers, new tracker, new public asset, and scanner coverage regression.
+- Incremental scope reports changed files, affected graph nodes, relevant scanners, finding categories, and an explicit note that incremental replacement is advisory until Phase 14.
+- Scans page now displays latest-vs-previous drift metrics, recent drift events, saved baselines, and incremental scope notes.
+
+### Verification results
+
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests/test_phase8_drift.py -q`: passed, 4 tests.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests/test_phase8_drift.py apps/api/tests/test_phase7_findings.py -q`: passed, 10 tests.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests -q`: passed, 57 tests.
+- `python -m compileall apps/api/nope_api apps/api/tests apps/worker`: passed.
+- `pnpm --dir apps/web lint`: passed.
+- `pnpm --dir apps/web typecheck`: passed.
+- `pnpm --dir apps/web build`: passed.
+- `docker compose config --quiet`: passed.
+- `docker compose build nope-api nope-worker nope-web`: passed; rebuilt `nope-nope-api`, `nope-nope-worker`, and `nope-nope-web`.
+- `$env:NOPE_MODEL_HOST_DIR='D:/Desktop/Model'; $env:NOPE_MODEL_FILE='Qwen3-8B-Q4_K_M.gguf'; $env:NOPE_QWEN_GPU_LAYERS='28'; docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml up -d`: passed after supplying the verified host GGUF path.
+- `docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml ps`: passed; web, API, AI, Postgres, Redis, and MinIO healthy; worker running.
+- `GET http://localhost:8000/health`: passed; API reports Qwen healthy at 28 GPU layers and `gpu_memory_target_mb: 5000`.
+- `nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader,nounits`: `NVIDIA GeForce GTX 1060 with Max-Q Design, 4041, 6144`.
+- Live Phase 8 API smoke against running Docker stack: passed; login, baseline creation, baseline comparison, drift persistence, and drift listing returned 200 with summary `new=1`, `fixed=1`, `severity_changes=1`, `coverage_drift=1`, `scanner_drift=1`, and 7 persisted drift events.
+- `docker compose run --rm --no-deps nope-api gitleaks detect --no-git --redact --source /app/apps/api/nope_api`: passed, no leaks found.
+
+### Closure
+
+Phase 8 is complete for baseline metadata, scan comparisons, persisted drift events, drift UI summary, stable fingerprints, reintroduced/fixed/new detection, coverage regression visibility, and conservative incremental-scope reporting. Full scan replacement remains explicitly deferred until Phase 14 verification.

@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { AIHealth, FindingDetail, FindingsResult, ModelSettings, Scan } from "@/lib/types";
+import type { AIHealth, FindingDetail, FindingsResult, ModelSettings, Scan, ScanComparison, SecurityBaseline } from "@/lib/types";
 
 export async function getScans(): Promise<Scan[]> {
   try {
@@ -26,6 +26,24 @@ export async function getFindings(scanId: string, searchParams?: URLSearchParams
 export async function getFindingDetail(scanId: string, findingId: string): Promise<FindingDetail | null> {
   try {
     return await api<FindingDetail>(`/api/scans/${scanId}/findings/${findingId}`);
+  } catch {
+    return null;
+  }
+}
+
+export async function getBaselines(projectId?: string | null): Promise<SecurityBaseline[]> {
+  try {
+    const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
+    return await api<SecurityBaseline[]>(`/api/baselines${query}`);
+  } catch {
+    return [];
+  }
+}
+
+export async function getScanComparison(scanId: string, againstScanId?: string): Promise<ScanComparison | null> {
+  try {
+    const query = againstScanId ? `?against_scan_id=${encodeURIComponent(againstScanId)}` : "";
+    return await api<ScanComparison>(`/api/scans/${scanId}/compare${query}`);
   } catch {
     return null;
   }

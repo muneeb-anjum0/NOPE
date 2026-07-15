@@ -9,6 +9,7 @@ from nope_api.ai import check_ai_health, explain_finding, finding_action
 from nope_api.auth import create_or_login, delete_session, get_user_for_token, init_auth_db
 from nope_api.config import get_settings
 from nope_api.db import migration_status, run_migrations
+from nope_api.drift import BaselineSnapshot, baseline_snapshot, compare_scans
 from nope_api.findings import finding_detail, parse_finding_query, query_findings, raw_artifact
 from nope_api.ingestion import extract_zip
 from nope_api.models import AuthorizationScope, Project, Scan, ScanMode, ScanRequest
@@ -117,6 +118,30 @@ def _load_scan(scan_id: str, authorization: str | None) -> Scan:
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found.")
     return scan
+
+
+def _comparison_reference(
+    current: Scan,
+    owner_user_id: str | None,
+    authorization: str | None,
+    against_scan_id: str | None,
+    baseline_id: str | None,
+) -> Scan | BaselineSnapshot:
+    if baseline_id:
+        baseline = store.get_security_baseline(baseline_id, owner_user_id)
+        if not baseline:
+            raise HTTPException(status_code=404, detail="Baseline not found.")
+        return BaselineSnapshot(**baseline["data"])
+    if against_scan_id:
+        return _load_scan(against_scan_id, authorization)
+    candidates = [
+        scan
+        for scan in store.list_scans(owner_user_id)
+        if scan.id != current.id and (not current.project_id or scan.project_id == current.project_id)
+    ]
+    if not candidates:
+        raise HTTPException(status_code=409, detail="No previous scan or baseline is available for comparison.")
+    return candidates[0]
 
 
 @app.post("/api/projects", response_model=Project)
@@ -239,6 +264,79 @@ def get_raw_artifact(scan_id: str, artifact_id: str, authorization: str | None =
 @app.get("/api/scans/{scan_id}/coverage")
 def get_coverage(scan_id: str, authorization: str | None = Header(default=None)):
     return _load_scan(scan_id, authorization).coverage
+
+
+@app.post("/api/scans/{scan_id}/baseline")
+def create_scan_baseline(scan_id: str, payload: dict | None = None, authorization: str | None = Header(default=None)):
+    owner_user_id = _require_owner_user_id(authorization)
+    scan = _load_scan(scan_id, authorization)
+    snapshot = baseline_snapshot(scan)
+    baseline = store.create_security_baseline(
+        scan.project_id,
+        scan.id,
+        str((payload or {}).get("name") or f"Baseline for {scan.id}"),
+        snapshot.model_dump(mode="json"),
+    )
+    return baseline
+
+
+@app.get("/api/baselines")
+def list_baselines(project_id: str | None = None, authorization: str | None = Header(default=None)):
+    return store.list_security_baselines(_require_owner_user_id(authorization), project_id)
+
+
+@app.get("/api/baselines/{baseline_id}")
+def get_baseline(baseline_id: str, authorization: str | None = Header(default=None)):
+    baseline = store.get_security_baseline(baseline_id, _require_owner_user_id(authorization))
+    if not baseline:
+        raise HTTPException(status_code=404, detail="Baseline not found.")
+    return baseline
+
+
+@app.get("/api/scans/{scan_id}/compare")
+def compare_scan(
+    scan_id: str,
+    against_scan_id: str | None = None,
+    baseline_id: str | None = None,
+    authorization: str | None = Header(default=None),
+):
+    owner_user_id = _require_owner_user_id(authorization)
+    current = _load_scan(scan_id, authorization)
+    reference = _comparison_reference(current, owner_user_id, authorization, against_scan_id, baseline_id)
+    return compare_scans(current, reference, baseline_id=baseline_id)
+
+
+@app.post("/api/scans/{scan_id}/drift")
+def record_scan_drift(
+    scan_id: str,
+    against_scan_id: str | None = None,
+    baseline_id: str | None = None,
+    authorization: str | None = Header(default=None),
+):
+    owner_user_id = _require_owner_user_id(authorization)
+    current = _load_scan(scan_id, authorization)
+    reference = _comparison_reference(current, owner_user_id, authorization, against_scan_id, baseline_id)
+    comparison = compare_scans(current, reference, baseline_id=baseline_id)
+    persisted = []
+    for event in comparison.drift_events:
+        persisted.append(
+            store.create_drift_event(
+                baseline_id,
+                current.id,
+                event.type,
+                event.message,
+                event.severity,
+                event.model_dump(mode="json"),
+            )
+        )
+    return {"comparison": comparison, "persisted_events": persisted}
+
+
+@app.get("/api/scans/{scan_id}/drift")
+def list_scan_drift(scan_id: str, authorization: str | None = Header(default=None)):
+    owner_user_id = _require_owner_user_id(authorization)
+    _load_scan(scan_id, authorization)
+    return store.list_drift_events(scan_id, owner_user_id)
 
 
 @app.get("/api/scans/{scan_id}/events")

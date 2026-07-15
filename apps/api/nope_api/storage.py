@@ -392,7 +392,7 @@ class PostgresStore:
 
     def create_security_baseline(
         self,
-        project_id: str,
+        project_id: str | None,
         scan_id: str | None,
         name: str,
         data: dict[str, Any] | None = None,
@@ -410,9 +410,49 @@ class PostgresStore:
             ).fetchone()
         return dict(row)
 
+    def get_security_baseline(self, baseline_id: str, owner_user_id: str | None = None) -> dict[str, Any] | None:
+        self.migrate()
+        query = """
+            select security_baselines.id, security_baselines.project_id, security_baselines.scan_id,
+                   security_baselines.name, security_baselines.created_at, security_baselines.data
+            from security_baselines
+            left join scans on scans.id = security_baselines.scan_id
+            left join projects on projects.id = security_baselines.project_id
+            where security_baselines.id = %s
+        """
+        params: tuple[Any, ...] = (baseline_id,)
+        if owner_user_id:
+            query += " and (scans.owner_user_id = %s or projects.owner_user_id = %s)"
+            params = (baseline_id, owner_user_id, owner_user_id)
+        with connect(self.settings) as conn:
+            row = conn.execute(query, params).fetchone()
+        return dict(row) if row else None
+
+    def list_security_baselines(self, owner_user_id: str | None = None, project_id: str | None = None) -> list[dict[str, Any]]:
+        self.migrate()
+        query = """
+            select security_baselines.id, security_baselines.project_id, security_baselines.scan_id,
+                   security_baselines.name, security_baselines.created_at, security_baselines.data
+            from security_baselines
+            left join scans on scans.id = security_baselines.scan_id
+            left join projects on projects.id = security_baselines.project_id
+            where 1 = 1
+        """
+        params: list[Any] = []
+        if owner_user_id:
+            query += " and (scans.owner_user_id = %s or projects.owner_user_id = %s)"
+            params.extend([owner_user_id, owner_user_id])
+        if project_id:
+            query += " and security_baselines.project_id = %s"
+            params.append(project_id)
+        query += " order by security_baselines.created_at desc"
+        with connect(self.settings) as conn:
+            rows = conn.execute(query, tuple(params)).fetchall()
+        return [dict(row) for row in rows]
+
     def create_drift_event(
         self,
-        baseline_id: str,
+        baseline_id: str | None,
         scan_id: str,
         event_type: str,
         message: str,
@@ -431,6 +471,24 @@ class PostgresStore:
                 (drift["id"], baseline_id, scan_id, event_type, severity, message, Jsonb(drift["data"])),
             ).fetchone()
         return dict(row)
+
+    def list_drift_events(self, scan_id: str, owner_user_id: str | None = None) -> list[dict[str, Any]]:
+        self.migrate()
+        query = """
+            select drift_events.id, drift_events.baseline_id, drift_events.scan_id, drift_events.event_type,
+                   drift_events.severity, drift_events.message, drift_events.created_at, drift_events.data
+            from drift_events
+            join scans on scans.id = drift_events.scan_id
+            where drift_events.scan_id = %s
+        """
+        params: tuple[Any, ...] = (scan_id,)
+        if owner_user_id:
+            query += " and scans.owner_user_id = %s"
+            params = (scan_id, owner_user_id)
+        query += " order by drift_events.created_at desc"
+        with connect(self.settings) as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [dict(row) for row in rows]
 
     def record_audit_log(
         self,
