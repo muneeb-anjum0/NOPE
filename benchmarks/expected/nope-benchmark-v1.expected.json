@@ -1,0 +1,154 @@
+{
+  "benchmark_id": "nope-benchmark-v1",
+  "version": 1,
+  "expected_findings": [
+    {
+      "id": "hardcoded-secret",
+      "category": "Secrets",
+      "file": "src/config/secrets.ts",
+      "match": { "any": ["secret", "NOPE-SEC-001", "hardcoded"] }
+    },
+    {
+      "id": "frontend-secret",
+      "category": "Secrets",
+      "file": "src/app/client-secrets.tsx",
+      "match": { "any": ["secret", "NOPE-SEC-001", "hardcoded"] }
+    },
+    {
+      "id": "idor",
+      "category": "Authorization",
+      "file": "src/api/invoice-by-id.ts",
+      "match": { "any": ["owner scope", "NOPE-AUTHZ-001"] }
+    },
+    {
+      "id": "missing-tenant-scope",
+      "category": "Authorization",
+      "file": "src/api/invoices.ts",
+      "match": { "any": ["tenant", "NOPE-AUTHZ-002", "authorization"] }
+    },
+    {
+      "id": "frontend-only-authorization",
+      "category": "Authorization",
+      "file": "src/app/admin.tsx",
+      "match": { "any": ["localStorage", "NOPE-AUTHZ-002", "role"] }
+    },
+    {
+      "id": "insecure-cors",
+      "category": "CORS",
+      "file": "next.config.js",
+      "known_false_negative": true,
+      "match": { "any": ["cors", "NOPE-CORS-001", "wildcard"] }
+    },
+    {
+      "id": "unsafe-supabase-rls",
+      "category": "Supabase",
+      "file": "supabase/policies.sql",
+      "known_false_negative": true,
+      "match": { "any": ["rls", "policy", "using true"] }
+    },
+    {
+      "id": "ai-cost-abuse",
+      "category": "AI abuse",
+      "file": "src/api/ai.ts",
+      "match": { "any": ["ai", "NOPE-AI-001", "cost"] }
+    },
+    {
+      "id": "command-injection",
+      "category": "Static analysis",
+      "file": "scripts/render.py",
+      "known_false_negative": true,
+      "match": { "any": ["subprocess", "shell", "B602", "B605"] }
+    },
+    {
+      "id": "vulnerable-dependency",
+      "category": "Dependencies",
+      "file": "package-lock.json",
+      "known_false_negative": true,
+      "match": { "any": ["lodash", "express", "CVE", "GHSA"] }
+    },
+    {
+      "id": "sql-injection",
+      "category": "Injection",
+      "file": "src/api/search.ts",
+      "known_false_negative": true,
+      "match": { "any": ["sql", "injection"] }
+    },
+    {
+      "id": "nosql-injection",
+      "category": "Injection",
+      "file": "src/api/search.ts",
+      "known_false_negative": true,
+      "match": { "any": ["nosql", "injection"] }
+    },
+    {
+      "id": "xss",
+      "category": "Injection",
+      "file": "src/app/comment.tsx",
+      "known_false_negative": true,
+      "match": { "any": ["xss"] }
+    },
+    {
+      "id": "unsafe-html",
+      "category": "Injection",
+      "file": "src/app/comment.tsx",
+      "known_false_negative": true,
+      "match": { "any": ["html"] }
+    },
+    {
+      "id": "ssrf",
+      "category": "Injection",
+      "file": "src/api/fetch-url.ts",
+      "known_false_negative": true,
+      "match": { "any": ["ssrf"] }
+    },
+    {
+      "id": "path-traversal",
+      "category": "Injection",
+      "file": "src/api/files.ts",
+      "known_false_negative": true,
+      "match": { "any": ["path"] }
+    },
+    {
+      "id": "file-upload",
+      "category": "Injection",
+      "file": "src/api/upload.ts",
+      "known_false_negative": true,
+      "match": { "any": ["upload"] }
+    },
+    {
+      "id": "missing-rate-limit",
+      "category": "Rate limiting",
+      "file": "src/api/login.ts",
+      "known_false_negative": true,
+      "match": { "any": ["rate"] }
+    },
+    {
+      "id": "debug-endpoint",
+      "category": "Staging",
+      "file": "src/api/debug.ts",
+      "known_false_negative": true,
+      "match": { "any": ["debug"] }
+    },
+    {
+      "id": "public-source-map",
+      "category": "Privacy",
+      "file": "public/app.js.map",
+      "known_false_negative": true,
+      "match": { "any": ["source map", "sourcemap"] }
+    },
+    {
+      "id": "public-storage-bucket",
+      "category": "Supabase",
+      "file": "supabase/storage.sql",
+      "known_false_negative": true,
+      "match": { "any": ["bucket", "public"] }
+    },
+    {
+      "id": "tracker-before-consent",
+      "category": "Privacy",
+      "file": "src/app/tracker.tsx",
+      "known_false_negative": true,
+      "match": { "any": ["tracker", "consent"] }
+    }
+  ]
+}

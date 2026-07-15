@@ -48,6 +48,7 @@ RUN pip install --no-cache-dir -r /app/apps/api/requirements.txt
 COPY apps/api /app/apps/api
 COPY apps/worker /app/apps/worker
 COPY security-packs /app/security-packs
+COPY benchmarks /app/benchmarks
 
 ENV PYTHONPATH=/app/apps/api
 USER nope

@@ -1030,3 +1030,52 @@ Complete persistent owner-scoped system/project settings and local GitHub contra
 ### Closure
 
 Phase 11 is complete for local settings persistence, validation, encrypted sensitive storage, redacted secret responses, settings ownership, settings UI, GitHub local contracts, callback route shape, credential state, branch/repository selection contracts, and honest blocked private GitHub access. Real GitHub token exchange and private repository listing remain blocked by missing verified GitHub credentials.
+
+## 2026-07-16 Phase 12 Benchmarks and Fixtures
+
+### Objective
+
+Add reproducible benchmarks and vulnerable fixtures with versioned expected output, scanner-only and scanner-plus-Qwen modes, machine-readable metrics, resource timing, and visible failures.
+
+### Pre-phase state
+
+- Pre-phase commit: `5c28997`.
+- Existing fixtures covered only a small vulnerable Next app and scanner parser inputs.
+- `FEATURE_STATUS.md` and `PHASE_RECONCILIATION.md` marked Benchmarks as partially complete.
+- No benchmark command, expected output file, or scanner-only versus Qwen comparison existed.
+
+### Implemented
+
+- Added a versioned benchmark fixture at `benchmarks/fixtures/nope-benchmark-v1`.
+- Added fixture manifest coverage for every required Phase 12 category.
+- Added versioned expected output at `benchmarks/expected/nope-benchmark-v1.expected.json`.
+- Added `python -m nope_api.benchmarks` with scanner-only and scanner-plus-Qwen modes.
+- Added JSON metrics for expected findings, actual findings, true positives, false positives, known false negatives, scanner source, Qwen contribution, scan duration, resource use, and fix verification.
+- Added tests for fixture category coverage, expected-output versioning, comparison accounting, and result schema.
+- Added `docs/BENCHMARKS.md` and updated status/reconciliation docs.
+
+### Verification results
+
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests/test_phase12_benchmarks.py -q`: passed, 4 tests.
+- `python -m compileall apps/api/nope_api apps/api/tests apps/worker`: passed.
+- `$env:PYTHONPATH='apps/api'; python -m nope_api.benchmarks --mode scanner-only --output .nope-benchmark-results/scanner-only.local.json`: passed locally; host scanner CLIs were unavailable and recorded as visible scanner-run failures, with no unexpected false negatives.
+- `$env:PYTHONPATH='apps/api'; python -m nope_api.benchmarks --mode scanner-plus-qwen --output .nope-benchmark-results/scanner-plus-qwen.local.json`: passed locally; host AI provider was disabled and recorded as `Not tested`.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests -q`: passed, 76 tests.
+- `pnpm --dir apps/web lint`: passed.
+- `pnpm --dir apps/web typecheck`: passed.
+- `pnpm --dir apps/web build`: passed.
+- `docker compose config --quiet`: passed.
+- `docker compose build nope-api nope-worker nope-web`: passed; final rebuilt images include `nope-nope-api@sha256:9cccee15b7b1`, `nope-nope-worker@sha256:c3c698d9730c`, and `nope-nope-web@sha256:05a37327fbe7`.
+- `docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml up -d`: passed; API and worker refreshed from the Phase 12 images.
+- `docker compose run --rm --no-deps nope-api python -m nope_api.benchmarks --mode scanner-only --output /tmp/nope-benchmark-scanner-only.json`: passed; 30 actual findings, 8 true positives, 0 unexpected false negatives, 14 known false negatives, scanner sources from NOPE rules, Semgrep, OSV-Scanner, Trivy, and Bandit.
+- `docker compose run --rm --no-deps -e NOPE_AI_PROVIDER=llama.cpp -e NOPE_QWEN_ENDPOINT=http://nope-ai:8080 -e NOPE_AI_RUNTIME_URL=http://nope-ai:8080 -e NOPE_QWEN_GPU_LAYERS=28 -e NOPE_QWEN_GPU_MEMORY_TARGET_MB=5000 nope-api python -m nope_api.benchmarks --mode scanner-plus-qwen`: passed; 30 actual findings, 8 true positives, 0 unexpected false negatives, 14 known false negatives, Qwen contribution `Complete`.
+- `docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml ps`: passed; web, API, AI, Postgres, Redis, and MinIO healthy; worker running.
+- `Invoke-RestMethod http://localhost:8000/health`: passed; scanners installed, Qwen reachable, GPU layers `28`, GPU memory target `5000`.
+- `docker compose run --rm --no-deps nope-api gitleaks detect --no-git --redact --source /app/apps/api/nope_api`: passed, no leaks found.
+- `docker compose run --rm --no-deps nope-api gitleaks detect --no-git --redact --source /app/benchmarks`: passed, no leaks found.
+- Full `/app` Gitleaks scan reported pre-existing vulnerable test/runtime workspace fixture findings; Phase 12 benchmark fixture was not among them.
+- `nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader,nounits`: `NVIDIA GeForce GTX 1060 with Max-Q Design, 4485, 6144`; GPU profile remained below the 5 GB VRAM cap.
+
+### Closure
+
+Phase 12 is complete for reproducible benchmark fixtures, versioned expected output, scanner-only and scanner-plus-Qwen commands, machine-readable comparison metrics, resource timing, explicit known false negatives, and documentation. Future scanner-quality phases can reduce known false negatives, but Phase 12 now makes the benchmark gaps visible and comparable.

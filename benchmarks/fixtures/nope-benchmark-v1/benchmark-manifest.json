@@ -1,0 +1,28 @@
+{
+  "benchmark_id": "nope-benchmark-v1",
+  "version": 1,
+  "categories": [
+    { "id": "hardcoded-secret", "file": "src/config/secrets.ts", "description": "Server-side hardcoded secret assignment." },
+    { "id": "frontend-secret", "file": "src/app/client-secrets.tsx", "description": "Public frontend bundle contains a secret-like value." },
+    { "id": "sql-injection", "file": "src/api/search.ts", "description": "SQL query built from request input." },
+    { "id": "nosql-injection", "file": "src/api/search.ts", "description": "Mongo query trusts request JSON directly." },
+    { "id": "command-injection", "file": "scripts/render.py", "description": "Shell command uses caller-controlled value." },
+    { "id": "xss", "file": "src/app/comment.tsx", "description": "User-controlled HTML is rendered into the page." },
+    { "id": "unsafe-html", "file": "src/app/comment.tsx", "description": "dangerouslySetInnerHTML uses untrusted content." },
+    { "id": "ssrf", "file": "src/api/fetch-url.ts", "description": "Server fetches arbitrary request URL." },
+    { "id": "path-traversal", "file": "src/api/files.ts", "description": "File path is built from request path input." },
+    { "id": "file-upload", "file": "src/api/upload.ts", "description": "Upload accepts arbitrary file names and writes directly." },
+    { "id": "idor", "file": "src/api/invoice-by-id.ts", "description": "Invoice is loaded by ID without owner scope." },
+    { "id": "missing-tenant-scope", "file": "src/api/invoices.ts", "description": "Tenant ID is trusted from request body." },
+    { "id": "frontend-only-authorization", "file": "src/app/admin.tsx", "description": "Authorization uses localStorage role only." },
+    { "id": "insecure-cors", "file": "next.config.js", "description": "CORS allows wildcard origins." },
+    { "id": "missing-rate-limit", "file": "src/api/login.ts", "description": "Login route has no rate limiter." },
+    { "id": "ai-cost-abuse", "file": "src/api/ai.ts", "description": "AI completion call lacks token and budget controls." },
+    { "id": "vulnerable-dependency", "file": "package-lock.json", "description": "Fixture contains intentionally old vulnerable dependency versions." },
+    { "id": "debug-endpoint", "file": "src/api/debug.ts", "description": "Debug endpoint exposes environment details." },
+    { "id": "public-source-map", "file": "public/app.js.map", "description": "Public sourcemap exposes source content." },
+    { "id": "unsafe-supabase-rls", "file": "supabase/policies.sql", "description": "RLS policy allows all users." },
+    { "id": "public-storage-bucket", "file": "supabase/storage.sql", "description": "Storage bucket is public." },
+    { "id": "tracker-before-consent", "file": "src/app/tracker.tsx", "description": "Tracker loads before consent is checked." }
+  ]
+}
