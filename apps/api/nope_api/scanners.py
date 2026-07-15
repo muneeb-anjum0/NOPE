@@ -562,6 +562,40 @@ class BanditPlugin(ScannerPlugin):
         return findings
 
 
+class ZapBaselinePlugin(ScannerPlugin):
+    name = "OWASP ZAP baseline"
+    command = "zap-baseline.py"
+    coverage_categories = ["Dynamic testing"]
+
+    def detect_applicability(self, root: Path) -> bool:
+        return False
+
+    def health_check(self) -> tuple[bool, str]:
+        return False, "Not applicable to repository scans; requires a running HTTP target in the dynamic sandbox phase."
+
+    def version(self) -> str:
+        return "not applicable to repository scans"
+
+    def build_command(self, root: Path) -> list[str]:
+        return []
+
+    def execute(self, root: Path, settings: Settings) -> tuple[ScannerRun, list[Finding]]:
+        started = now_utc()
+        return (
+            ScannerRun(
+                scanner=self.name,
+                version=self.version(),
+                status="skipped",
+                coverage_categories=self.coverage_categories,
+                started_at=started,
+                completed_at=now_utc(),
+                message="Not applicable to repository scans; requires a running HTTP target in the dynamic sandbox phase.",
+                command=[],
+            ),
+            [],
+        )
+
+
 def scanner_plugins() -> list[ScannerPlugin]:
     return [
         SemgrepPlugin(),
@@ -571,6 +605,7 @@ def scanner_plugins() -> list[ScannerPlugin]:
         CheckovPlugin(),
         HadolintPlugin(),
         BanditPlugin(),
+        ZapBaselinePlugin(),
     ]
 
 

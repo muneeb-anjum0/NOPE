@@ -9,6 +9,7 @@ from nope_api.scanners import (
     ScannerPlugin,
     SemgrepPlugin,
     TrivyPlugin,
+    ZapBaselinePlugin,
     scanner_capabilities,
 )
 
@@ -127,3 +128,13 @@ def test_scanner_capabilities_include_versions_and_coverage():
     assert "installed" in semgrep
     assert "version" in semgrep
     assert "Secrets" in semgrep["coverage_categories"]
+
+
+def test_zap_baseline_is_explicitly_not_applicable_to_repository_scans(tmp_path):
+    run, findings = ZapBaselinePlugin().execute(tmp_path, Settings())
+
+    assert run.status == "skipped"
+    assert run.scanner == "OWASP ZAP baseline"
+    assert "Not applicable to repository scans" in run.message
+    assert run.coverage_categories == ["Dynamic testing"]
+    assert findings == []

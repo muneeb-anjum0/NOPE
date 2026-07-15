@@ -13,6 +13,7 @@ The API image installs:
 - `checkov` for Terraform, Dockerfile, and CI/CD policy checks.
 - `hadolint` for Dockerfile lint/security checks.
 - `bandit` for Python security analysis.
+- `OWASP ZAP baseline` is represented in the scanner contract, but repository scans mark it skipped/not applicable because ZAP requires a running HTTP target and the dynamic sandbox flow.
 
 These tools run during repository scans when applicable to the uploaded project.
 
@@ -29,6 +30,7 @@ Phase 2 parser support exists for:
 - Checkov JSON
 - Hadolint JSON
 - Bandit JSON
+- OWASP ZAP baseline is not parsed during repository scans because it is not applicable without a dynamic target.
 
 Parsers produce normalized severity, confidence, category, affected file, line, evidence, remediation, source, and stable fingerprints.
 
@@ -61,6 +63,6 @@ Authenticated users can call `GET /api/scanners/capabilities` to see:
 ## Verified Smoke
 
 - Docker API image: Semgrep `1.169.0`, Gitleaks `8.28.0`, OSV-Scanner `2.2.3`, Trivy `0.72.0`, Checkov `3.3.8`, Hadolint `2.14.0`, Bandit `1.9.4`.
-- Repository ZIP scan `scan_e1b6a69758a848bd`: status `completed`, 29 findings total.
-- Scanner findings in that smoke: Semgrep 1, Gitleaks 1, OSV-Scanner 5, Trivy 10, Checkov 6, Hadolint 2, Bandit 3.
+- Repository fixture scan `scan_phase2_verify_20260715_zap_contract`: status `completed`, 29 findings total.
+- Scanner findings in that smoke: Semgrep 1, Gitleaks 1, OSV-Scanner 5, Trivy 10, Checkov 6, Hadolint 2, Bandit 3, OWASP ZAP baseline 0 skipped/not applicable.
 - MinIO artifacts were written for all seven external scanner raw outputs and linked from persisted scanner runs.
