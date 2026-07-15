@@ -658,3 +658,36 @@ Complete the canonical Phase 3 queue/worker phase without advancing into Phase 4
 ### Closure
 
 Phase 3 is complete for local Redis-backed queue and worker orchestration. Later phases still own richer finding correlation, UI polish, dynamic sandboxing, Qwen inference, PDFs, benchmarks, and final documentation.
+
+## 2026-07-15 Phase 4 Normalization, Deduplication, Correlation
+
+### Objective
+
+Complete canonical backend finding normalization, deduplication, correlation, lifecycle, suppression expiry, and recurrence without starting Phase 5 Qwen work.
+
+### Implemented
+
+- Expanded the canonical finding model with scanner/run/rule metadata, original severity/confidence, source-location fields, route/endpoint, package/CVE, raw artifact, attack/impact, lifecycle, AI review, recurrence, baseline, and suppression fields.
+- Added lifecycle enums and suppression model fields.
+- Updated NOPE rules, external scanner parsers, and URL scanner findings to populate canonical metadata.
+- Replaced exact-fingerprint-only dedupe with correlation keys for duplicate secrets, CVE/package dependencies, file/line matches, rule/symbol, route/root cause, code-flow fingerprint, and scanner/source location.
+- Preserved all unique evidence when duplicates merge.
+- Promoted normalized severity/confidence during merge while retaining original scanner severity/confidence fields.
+- Enriched findings before persistence so scan snapshots, normalized finding rows, evidence rows, source rows, and history rows include lifecycle/recurrence changes.
+- Added automatic suppression expiry reopen and reintroduced recurrence detection based on prior finding history.
+
+### Verification results
+
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests`: passed, 36 tests.
+- `python -m compileall apps/api/nope_api apps/api/tests apps/worker`: passed.
+- Docker images rebuilt:
+  - `nope-nope-api:latest` `e48f0d44740f`
+  - `nope-nope-worker:latest` `ba5d2472e0a4`
+- Docker stack healthy: web, API, worker, Postgres, Redis, MinIO.
+- Real worker scan `scan_4a6bedf526e1440d` completed with 25 deduped findings. This is lower than the previous 29 raw scanner/custom findings because Phase 4 now merges duplicate evidence.
+- Returned canonical finding JSON included `scanner`, `original_rule_id`, `original_severity`, `start_line`, `end_line`, `verification_state`, `ai_review_state`, `recurrence_count`, and `baseline_state`.
+- Phase 4 tests verify duplicate secret, duplicate CVE/package, Semgrep plus custom rule, static plus dynamic route evidence, suppression expiry, reintroduced recurrence, severity mapping, and confidence mapping.
+
+### Closure
+
+Phase 4 is complete for backend canonical finding normalization, deduplication, correlation, lifecycle persistence, suppression expiry, and recurrence. Phase 5 Qwen/llama.cpp remains untouched; the user requirement to keep GPU VRAM under 5 GB is reserved for that phase.

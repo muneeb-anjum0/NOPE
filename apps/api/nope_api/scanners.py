@@ -43,6 +43,10 @@ def _severity(value: object, default: Severity = Severity.medium) -> Severity:
     return default
 
 
+def _original_text(value: object) -> str | None:
+    return str(value) if value is not None else None
+
+
 def _confidence(value: object, default: Confidence = Confidence.medium) -> Confidence:
     normalized = str(value or "").lower()
     if normalized in {"confirmed", "high"}:
@@ -63,25 +67,50 @@ def _finding(
     category: str,
     file: str | None = None,
     line: int | None = None,
+    end_line: int | None = None,
     rule_id: str | None = None,
     remediation: str | None = None,
     confidence: Confidence = Confidence.medium,
+    original_severity: object = None,
+    original_confidence: object = None,
+    package: str | None = None,
+    cve: str | None = None,
+    route: str | None = None,
+    endpoint: str | None = None,
+    symbol: str | None = None,
 ) -> Finding:
     fp = _fingerprint(scanner, rule_id, title, file, line)
     evidence = Evidence(
         source=scanner,
         file=file,
         line=line,
+        end_line=end_line or line,
+        route=route,
+        endpoint=endpoint,
+        symbol=symbol,
+        package=package,
+        cve=cve,
         message=f"{rule_id + ': ' if rule_id else ''}{description}",
     )
     return Finding(
         fingerprint=fp,
+        scanner=scanner,
+        original_rule_id=rule_id,
         title=title,
         description=description,
         severity=severity,
+        original_severity=_original_text(original_severity),
         confidence=confidence,
+        original_confidence=_original_text(original_confidence),
         category=category,
         affected_file=file,
+        start_line=line,
+        end_line=end_line or line,
+        affected_route=route,
+        endpoint=endpoint,
+        symbol=symbol,
+        package=package,
+        cve=cve,
         scanner_sources=[scanner],
         evidence=[evidence],
         remediation=remediation or "Review the scanner evidence and apply the scanner-recommended fix.",
@@ -281,6 +310,7 @@ class SemgrepPlugin(ScannerPlugin):
                     title=message,
                     description=message,
                     severity=_severity(extra.get("severity"), Severity.medium),
+                    original_severity=extra.get("severity"),
                     confidence=Confidence.high,
                     category="Static analysis",
                     file=file,
@@ -328,6 +358,7 @@ class GitleaksPlugin(ScannerPlugin):
                     title=f"Secret detected: {rule_id}",
                     description=description,
                     severity=Severity.high,
+                    original_severity="HIGH",
                     confidence=Confidence.high,
                     category="Secrets",
                     file=file,
@@ -369,9 +400,12 @@ class OsvScannerPlugin(ScannerPlugin):
                             title=f"{package_name}: {vuln_id}",
                             description=summary,
                             severity=Severity.high,
+                            original_severity="HIGH",
                             confidence=Confidence.high,
                             category="Dependencies",
                             file=file,
+                            package=package_name,
+                            cve=vuln_id,
                             remediation="Upgrade the affected package to a fixed version or remove the vulnerable dependency.",
                         )
                     )
@@ -411,9 +445,12 @@ class TrivyPlugin(ScannerPlugin):
                         title=f"{package}: {vuln_id}",
                         description=str(item.get("Title") or item.get("Description") or "Vulnerable dependency detected."),
                         severity=_severity(item.get("Severity"), Severity.high),
+                        original_severity=item.get("Severity"),
                         confidence=Confidence.high,
                         category="Dependencies",
                         file=file,
+                        package=package,
+                        cve=vuln_id,
                         remediation=str(item.get("FixedVersion") or "Upgrade the affected package to a fixed version."),
                     )
                 )
@@ -428,6 +465,7 @@ class TrivyPlugin(ScannerPlugin):
                         title=f"Secret detected: {rule_id}",
                         description=str(item.get("Title") or "Secret detected by Trivy."),
                         severity=_severity(item.get("Severity"), Severity.high),
+                        original_severity=item.get("Severity"),
                         confidence=Confidence.high,
                         category="Secrets",
                         file=file,
@@ -445,6 +483,7 @@ class TrivyPlugin(ScannerPlugin):
                         title=str(item.get("Title") or rule_id),
                         description=str(item.get("Description") or item.get("Message") or "Infrastructure misconfiguration detected."),
                         severity=_severity(item.get("Severity"), Severity.medium),
+                        original_severity=item.get("Severity"),
                         confidence=Confidence.medium,
                         category="CI/CD",
                         file=file,
@@ -485,6 +524,7 @@ class CheckovPlugin(ScannerPlugin):
                     title=str(item.get("check_name") or rule_id),
                     description=str(item.get("check_name") or "Infrastructure policy check failed."),
                     severity=Severity.medium,
+                    original_severity=item.get("severity") or "MEDIUM",
                     confidence=Confidence.medium,
                     category="CI/CD",
                     file=file,
@@ -516,6 +556,7 @@ class HadolintPlugin(ScannerPlugin):
                     title=str(item.get("message") or rule_id),
                     description=str(item.get("message") or "Dockerfile lint issue detected."),
                     severity=_severity(item.get("level"), Severity.low),
+                    original_severity=item.get("level"),
                     confidence=Confidence.medium,
                     category="Containers",
                     file=_relative(root, item.get("file")),
@@ -552,7 +593,9 @@ class BanditPlugin(ScannerPlugin):
                     title=title,
                     description=str(item.get("issue_text") or title),
                     severity=_severity(item.get("issue_severity"), Severity.medium),
+                    original_severity=item.get("issue_severity"),
                     confidence=_confidence(item.get("issue_confidence"), Confidence.medium),
+                    original_confidence=item.get("issue_confidence"),
                     category="Static analysis",
                     file=_relative(root, item.get("filename")),
                     line=item.get("line_number") if isinstance(item.get("line_number"), int) else None,

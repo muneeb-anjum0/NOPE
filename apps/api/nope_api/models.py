@@ -27,6 +27,35 @@ class Confidence(str, Enum):
     high = "high"
     medium = "medium"
     low = "low"
+    uncertain = "uncertain"
+
+
+class FindingStatus(str, Enum):
+    new = "new"
+    confirmed = "confirmed"
+    fixing = "fixing"
+    fixed = "fixed"
+    verified = "verified"
+    false_positive = "false_positive"
+    accepted_risk = "accepted_risk"
+    suppressed = "suppressed"
+    reopened = "reopened"
+    reintroduced = "reintroduced"
+
+
+class BaselineState(str, Enum):
+    new = "new"
+    existing = "existing"
+    fixed = "fixed"
+    reintroduced = "reintroduced"
+
+
+class Suppression(BaseModel):
+    reason: str
+    user: str
+    date: datetime = Field(default_factory=now_utc)
+    expiry: datetime | None = None
+    scope: str = "finding"
 
 
 class ScanMode(str, Enum):
@@ -116,30 +145,60 @@ class Evidence(BaseModel):
     source: str
     file: str | None = None
     line: int | None = None
+    end_line: int | None = None
     route: str | None = None
+    endpoint: str | None = None
+    symbol: str | None = None
+    package: str | None = None
+    cve: str | None = None
+    raw_artifact_id: str | None = None
     snippet: str | None = None
     message: str
 
 
 class Finding(BaseModel):
     id: str = Field(default_factory=lambda: new_id("fnd"))
+    project_id: str | None = None
+    scan_id: str | None = None
+    scanner_run_id: str | None = None
+    scanner: str | None = None
+    original_rule_id: str | None = None
+    nope_rule_id: str | None = None
     fingerprint: str
     title: str
     description: str
     severity: Severity
+    original_severity: str | None = None
     confidence: Confidence
+    original_confidence: str | None = None
     category: str
     cwe: str | None = None
     owasp: str | None = None
     affected_file: str | None = None
+    start_line: int | None = None
+    end_line: int | None = None
+    symbol: str | None = None
     affected_route: str | None = None
+    endpoint: str | None = None
+    package: str | None = None
+    cve: str | None = None
+    raw_artifact_id: str | None = None
+    code_flow_fingerprint: str | None = None
     scanner_sources: list[str] = Field(default_factory=list)
     evidence: list[Evidence] = Field(default_factory=list)
+    attack_scenario: str | None = None
+    impact: str | None = None
     remediation: str
     test_guidance: str | None = None
-    status: str = "open"
+    status: str = FindingStatus.new.value
+    verification_state: str = "unverified"
+    ai_review_state: str = "not_reviewed"
     first_seen: datetime = Field(default_factory=now_utc)
     last_seen: datetime = Field(default_factory=now_utc)
+    recurrence_count: int = 1
+    baseline_state: BaselineState = BaselineState.new
+    suppression: Suppression | None = None
+    suppression_expired_at: datetime | None = None
     fix_available: bool = False
     verified: bool = False
 

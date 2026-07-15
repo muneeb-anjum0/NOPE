@@ -8,7 +8,7 @@ from psycopg.types.json import Jsonb
 from nope_api.artifacts import put_json_artifact
 from nope_api.config import get_settings
 from nope_api.db import connect, run_migrations
-from nope_api.models import Project, Scan, new_id
+from nope_api.models import BaselineState, FindingStatus, Project, Scan, now_utc, new_id
 from nope_api.reports import render_report
 
 
@@ -179,8 +179,9 @@ class PostgresStore:
 
     def save_scan(self, scan: Scan, owner_user_id: str | None = None) -> Scan:
         self.migrate()
-        data = scan.model_dump(mode="json")
         with connect(self.settings) as conn:
+            self._prepare_finding_lifecycle(conn, scan)
+            data = scan.model_dump(mode="json")
             conn.execute(
                 """
                 insert into scans (
@@ -225,6 +226,35 @@ class PostgresStore:
             self._upsert_repository_snapshot(conn, scan)
             self._replace_scan_children(conn, scan)
         return scan
+
+    def _prepare_finding_lifecycle(self, conn, scan: Scan) -> None:
+        now = now_utc()
+        for finding in scan.findings:
+            finding.project_id = scan.project_id
+            finding.scan_id = scan.id
+            if finding.status == "open":
+                finding.status = FindingStatus.new.value
+            if finding.suppression and finding.suppression.expiry and finding.suppression.expiry <= now:
+                finding.suppression_expired_at = now
+                finding.suppression = None
+                finding.status = FindingStatus.reopened.value
+            elif finding.suppression:
+                finding.status = FindingStatus.suppressed.value
+
+            params: list[Any] = [finding.fingerprint, scan.id]
+            query = "select scan_id, event from finding_history where fingerprint = %s and scan_id <> %s"
+            if scan.project_id:
+                query += " and scan_id in (select id from scans where project_id = %s)"
+                params.append(scan.project_id)
+            rows = conn.execute(query, tuple(params)).fetchall()
+            if rows:
+                finding.recurrence_count = max(finding.recurrence_count, len({row["scan_id"] for row in rows}) + 1)
+                if finding.baseline_state == BaselineState.new:
+                    finding.baseline_state = BaselineState.existing
+                if any(row["event"] in {"fixed", "verified"} for row in rows):
+                    finding.status = FindingStatus.reintroduced.value
+                    finding.baseline_state = BaselineState.reintroduced
+            finding.last_seen = now
 
     def get_scan(self, scan_id: str, owner_user_id: str | None = None) -> Scan | None:
         self.migrate()
@@ -613,7 +643,20 @@ class PostgresStore:
                 insert into finding_history (finding_id, fingerprint, scan_id, event, data)
                 values (%s, %s, %s, %s, %s)
                 """,
-                (finding.id, finding.fingerprint, scan.id, "observed", Jsonb({"status": finding.status})),
+                (
+                    finding.id,
+                    finding.fingerprint,
+                    scan.id,
+                    finding.status if finding.status != FindingStatus.new.value else "observed",
+                    Jsonb(
+                        {
+                            "status": finding.status,
+                            "recurrence_count": finding.recurrence_count,
+                            "baseline_state": finding.baseline_state.value,
+                            "suppression_expired_at": finding.suppression_expired_at.isoformat() if finding.suppression_expired_at else None,
+                        }
+                    ),
+                ),
             )
             for source in finding.scanner_sources:
                 conn.execute(

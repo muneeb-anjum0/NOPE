@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from nope_api.models import Confidence, Evidence, Finding, Severity
+from nope_api.models import Confidence, Evidence, Finding, FindingStatus, Severity, now_utc
 from nope_api.security import redact
 
 
@@ -64,20 +64,28 @@ def run_rules(root: Path) -> list[Finding]:
                     findings.append(
                         Finding(
                             fingerprint=fingerprint(rule["id"], rel, line_no, snippet),
+                            scanner="NOPE rules",
+                            original_rule_id=rule["id"],
+                            nope_rule_id=rule["id"],
                             title=rule["title"],
                             description=rule["description"],
                             severity=Severity(rule["severity"]),
+                            original_severity=str(rule["severity"]),
                             confidence=Confidence(rule["confidence"]),
+                            original_confidence=str(rule["confidence"]),
                             category=rule["category"],
                             cwe=rule.get("cwe"),
                             owasp=rule.get("owasp"),
                             affected_file=rel,
+                            start_line=line_no,
+                            end_line=line_no,
                             scanner_sources=["NOPE rules"],
                             evidence=[
                                 Evidence(
                                     source=rule["id"],
                                     file=rel,
                                     line=line_no,
+                                    end_line=line_no,
                                     snippet=redact(snippet),
                                     message=f"Matched NOPE rule {rule['id']}.",
                                 )
@@ -90,13 +98,138 @@ def run_rules(root: Path) -> list[Finding]:
     return findings
 
 
+SEVERITY_RANK = {
+    Severity.critical: 5,
+    Severity.high: 4,
+    Severity.medium: 3,
+    Severity.low: 2,
+    Severity.info: 1,
+}
+
+CONFIDENCE_RANK = {
+    Confidence.confirmed: 5,
+    Confidence.high: 4,
+    Confidence.medium: 3,
+    Confidence.low: 2,
+    Confidence.uncertain: 1,
+}
+
+
+def _norm(value: object) -> str:
+    return str(value or "").strip().lower()
+
+
+def _source_location(finding: Finding) -> tuple[str, int | None]:
+    line = finding.start_line or (finding.evidence[0].line if finding.evidence else None)
+    return (_norm(finding.affected_file), line)
+
+
+def correlation_key(finding: Finding) -> str:
+    if finding.code_flow_fingerprint:
+        return f"codeflow:{_norm(finding.code_flow_fingerprint)}"
+    if finding.cve and finding.package:
+        return f"dependency:{_norm(finding.package)}:{_norm(finding.cve)}"
+    if finding.category.lower() == "secrets":
+        file, line = _source_location(finding)
+        if file and line:
+            return f"secret:{file}:{line}"
+    file, line = _source_location(finding)
+    if finding.original_rule_id and finding.symbol:
+        return f"rule-symbol:{_norm(finding.original_rule_id)}:{_norm(finding.symbol)}"
+    if finding.affected_route and finding.title:
+        return f"route:{_norm(finding.affected_route)}:{_norm(finding.title)}"
+    if file and line:
+        return f"location:{file}:{line}"
+    if finding.scanner and finding.original_rule_id and file:
+        return f"scanner-location:{_norm(finding.scanner)}:{_norm(finding.original_rule_id)}:{file}:{line or ''}"
+    return f"fingerprint:{finding.fingerprint}"
+
+
+def _merge_evidence(existing: list[Evidence], incoming: list[Evidence]) -> list[Evidence]:
+    seen = {
+        (
+            item.source,
+            item.file,
+            item.line,
+            item.route,
+            item.endpoint,
+            item.symbol,
+            item.package,
+            item.cve,
+            item.message,
+        )
+        for item in existing
+    }
+    merged = list(existing)
+    for item in incoming:
+        key = (
+            item.source,
+            item.file,
+            item.line,
+            item.route,
+            item.endpoint,
+            item.symbol,
+            item.package,
+            item.cve,
+            item.message,
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(item)
+    return merged
+
+
+def _merge_finding(existing: Finding, incoming: Finding) -> Finding:
+    if SEVERITY_RANK[incoming.severity] > SEVERITY_RANK[existing.severity]:
+        existing.severity = incoming.severity
+    if CONFIDENCE_RANK[incoming.confidence] > CONFIDENCE_RANK[existing.confidence]:
+        existing.confidence = incoming.confidence
+    existing.scanner_sources = sorted(set(existing.scanner_sources + incoming.scanner_sources))
+    if incoming.scanner and incoming.scanner not in existing.scanner_sources:
+        existing.scanner_sources.append(incoming.scanner)
+        existing.scanner_sources = sorted(set(existing.scanner_sources))
+    existing.evidence = _merge_evidence(existing.evidence, incoming.evidence)
+    existing.last_seen = max(existing.last_seen, incoming.last_seen)
+    existing.recurrence_count = max(existing.recurrence_count, incoming.recurrence_count, 1)
+    existing.raw_artifact_id = existing.raw_artifact_id or incoming.raw_artifact_id
+    existing.scanner_run_id = existing.scanner_run_id or incoming.scanner_run_id
+    existing.original_rule_id = existing.original_rule_id or incoming.original_rule_id
+    existing.nope_rule_id = existing.nope_rule_id or incoming.nope_rule_id
+    existing.original_severity = existing.original_severity or incoming.original_severity
+    existing.original_confidence = existing.original_confidence or incoming.original_confidence
+    existing.cwe = existing.cwe or incoming.cwe
+    existing.owasp = existing.owasp or incoming.owasp
+    existing.package = existing.package or incoming.package
+    existing.cve = existing.cve or incoming.cve
+    existing.symbol = existing.symbol or incoming.symbol
+    existing.endpoint = existing.endpoint or incoming.endpoint
+    existing.affected_route = existing.affected_route or incoming.affected_route
+    existing.attack_scenario = existing.attack_scenario or incoming.attack_scenario
+    existing.impact = existing.impact or incoming.impact
+    if existing.status == "open":
+        existing.status = FindingStatus.new.value
+    if incoming.status not in {"open", FindingStatus.new.value} and existing.status == FindingStatus.new.value:
+        existing.status = incoming.status
+    return existing
+
+
 def dedupe_findings(findings: list[Finding]) -> list[Finding]:
     merged: dict[str, Finding] = {}
     for finding in findings:
-        existing = merged.get(finding.fingerprint)
+        if finding.status == "open":
+            finding.status = FindingStatus.new.value
+        finding.last_seen = now_utc()
+        if finding.start_line is None and finding.evidence:
+            finding.start_line = finding.evidence[0].line
+        if finding.end_line is None:
+            finding.end_line = finding.start_line
+        if finding.scanner and finding.scanner not in finding.scanner_sources:
+            finding.scanner_sources.append(finding.scanner)
+        key = correlation_key(finding)
+        existing = merged.get(key)
         if not existing:
-            merged[finding.fingerprint] = finding
+            merged[key] = finding
             continue
-        existing.scanner_sources = sorted(set(existing.scanner_sources + finding.scanner_sources))
-        existing.evidence.extend(finding.evidence)
+        _merge_finding(existing, finding)
     return list(merged.values())

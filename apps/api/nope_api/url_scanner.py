@@ -14,6 +14,10 @@ SECURITY_HEADERS = {
 }
 
 
+def _url_evidence(url: str, message: str) -> Evidence:
+    return Evidence(source="NOPE URL scanner", route=url, endpoint=url, message=message)
+
+
 async def scan_url(url: str) -> tuple[list[Finding], list[ScannerRun], list[CoverageRecord]]:
     started = now_utc()
     findings: list[Finding] = []
@@ -29,6 +33,8 @@ async def scan_url(url: str) -> tuple[list[Finding], list[ScannerRun], list[Cove
                 findings.append(
                     Finding(
                         fingerprint=f"url-open-redirect-{parsed.hostname}",
+                        scanner="NOPE URL scanner",
+                        original_rule_id="url-open-redirect",
                         title="Target redirects outside approved host",
                         description="The target returned a redirect to a different host. NOPE did not follow it because it is outside the approved scope.",
                         severity=Severity.medium,
@@ -36,8 +42,9 @@ async def scan_url(url: str) -> tuple[list[Finding], list[ScannerRun], list[Cove
                         category="URL scope",
                         cwe="CWE-601",
                         affected_route=url,
+                        endpoint=url,
                         scanner_sources=["NOPE URL scanner"],
-                        evidence=[Evidence(source="NOPE URL scanner", route=url, message=f"Redirect location: {response.headers.get('location')}")],
+                        evidence=[_url_evidence(url, f"Redirect location: {response.headers.get('location')}")],
                         remediation="Restrict redirects to approved hosts or validate redirect destinations server-side.",
                     )
                 )
@@ -47,14 +54,17 @@ async def scan_url(url: str) -> tuple[list[Finding], list[ScannerRun], list[Cove
                     findings.append(
                         Finding(
                             fingerprint=f"url-header-{parsed.hostname}-{header}",
+                            scanner="NOPE URL scanner",
+                            original_rule_id=f"missing-header:{header}",
                             title=title,
                             description=f"The response did not include `{header}`.",
                             severity=Severity.low if header != "content-security-policy" else Severity.medium,
                             confidence=Confidence.high,
                             category="Security headers",
                             affected_route=url,
+                            endpoint=url,
                             scanner_sources=["NOPE URL scanner"],
-                            evidence=[Evidence(source="NOPE URL scanner", route=url, message=f"Missing header: {header}")],
+                            evidence=[_url_evidence(url, f"Missing header: {header}")],
                             remediation=f"Configure the application or edge proxy to emit `{header}` with a safe policy.",
                         )
                     )
@@ -62,6 +72,8 @@ async def scan_url(url: str) -> tuple[list[Finding], list[ScannerRun], list[Cove
                 findings.append(
                     Finding(
                         fingerprint=f"url-cors-{parsed.hostname}",
+                        scanner="NOPE URL scanner",
+                        original_rule_id="wildcard-cors",
                         title="Wildcard CORS allowed on target",
                         description="The target returned `Access-Control-Allow-Origin: *`.",
                         severity=Severity.medium,
@@ -69,8 +81,9 @@ async def scan_url(url: str) -> tuple[list[Finding], list[ScannerRun], list[Cove
                         category="CORS",
                         cwe="CWE-942",
                         affected_route=url,
+                        endpoint=url,
                         scanner_sources=["NOPE URL scanner"],
-                        evidence=[Evidence(source="NOPE URL scanner", route=url, message="Access-Control-Allow-Origin: *")],
+                        evidence=[_url_evidence(url, "Access-Control-Allow-Origin: *")],
                         remediation="Restrict CORS to known origins and avoid wildcards for sensitive APIs.",
                     )
                 )
@@ -79,14 +92,17 @@ async def scan_url(url: str) -> tuple[list[Finding], list[ScannerRun], list[Cove
                     findings.append(
                         Finding(
                             fingerprint=f"url-cookie-{parsed.hostname}-{cookie.name}",
+                            scanner="NOPE URL scanner",
+                            original_rule_id="cookie-security-flags",
                             title="Cookie missing security flags",
                             description="A cookie appears to be missing Secure or HttpOnly protection.",
                             severity=Severity.medium,
                             confidence=Confidence.medium,
                             category="Cookies",
                             affected_route=url,
+                            endpoint=url,
                             scanner_sources=["NOPE URL scanner"],
-                            evidence=[Evidence(source="NOPE URL scanner", route=url, message=f"Cookie {cookie.name} missing Secure or HttpOnly.")],
+                            evidence=[_url_evidence(url, f"Cookie {cookie.name} missing Secure or HttpOnly.")],
                             remediation="Set Secure, HttpOnly, SameSite, and narrow domain/path flags for sensitive cookies.",
                         )
                     )
@@ -98,14 +114,17 @@ async def scan_url(url: str) -> tuple[list[Finding], list[ScannerRun], list[Cove
                     findings.append(
                         Finding(
                             fingerprint=f"url-exposed-{parsed.hostname}-{path}",
+                            scanner="NOPE URL scanner",
+                            original_rule_id="exposed-sensitive-path",
                             title=f"Potentially exposed path: {path}",
                             description="A commonly sensitive path returned HTTP 200.",
                             severity=Severity.high if path in {"/.env", "/.git/config"} else Severity.medium,
                             confidence=Confidence.medium,
                             category="Staging and exposure",
                             affected_route=urljoin(url, path),
+                            endpoint=urljoin(url, path),
                             scanner_sources=["NOPE URL scanner"],
-                            evidence=[Evidence(source="NOPE URL scanner", route=urljoin(url, path), message=f"HTTP {probe.status_code}")],
+                            evidence=[_url_evidence(urljoin(url, path), f"HTTP {probe.status_code}")],
                             remediation="Remove public access to sensitive files, debug endpoints, and API documentation unless intentionally public.",
                         )
                     )
