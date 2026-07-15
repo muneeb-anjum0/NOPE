@@ -129,6 +129,57 @@ export type Scan = {
   ai_review: { status: string; provider: string; model?: string | null; message: string };
 };
 
+export type Project = {
+  id: string;
+  name: string;
+  repository?: string | null;
+  target_url?: string | null;
+  created_at?: string;
+};
+
+export type SystemSettings = {
+  qwen_endpoint: string;
+  runtime: "llama.cpp" | "disabled" | string;
+  context: number;
+  gpu_layers: number;
+  timeout: number;
+  output_limit: number;
+  concurrency: number;
+  scanner_enabled: Record<string, boolean>;
+  scanner_timeout: number;
+  default_scan_mode: "url" | "repository" | "full";
+  retention_days: number;
+  report_defaults: string[];
+  artifact_limit_mb: number;
+  sandbox_limits: Record<string, unknown>;
+};
+
+export type ProjectSettings = {
+  project_id: string;
+  target_url?: string | null;
+  approved_hosts: string[];
+  excluded_paths: string[];
+  scanner_overrides: Record<string, boolean>;
+  scan_depth: "quick" | "full" | "deep";
+  test_identities: Array<{ label: string; username?: string | null; notes?: string | null }>;
+  test_identities_configured: boolean;
+  baseline_id?: string | null;
+  repository_metadata: Record<string, unknown>;
+  authorization_confirmed: boolean;
+  rag_limits: Record<string, number>;
+};
+
+export type GitHubStatus = {
+  provider: "github" | string;
+  status: string;
+  credential_state: Record<string, boolean>;
+  callback_url?: string | null;
+  selected_repository?: string | null;
+  selected_branch?: string | null;
+  message: string;
+  repositories: Array<Record<string, unknown>>;
+};
+
 export type ModelSettings = {
   provider: string;
   model_name: string;

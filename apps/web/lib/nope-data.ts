@@ -1,9 +1,29 @@
 import { api } from "@/lib/api";
-import type { AIHealth, FindingDetail, FindingsResult, ModelSettings, Scan, ScanComparison, SecurityBaseline } from "@/lib/types";
+import type {
+  AIHealth,
+  FindingDetail,
+  FindingsResult,
+  GitHubStatus,
+  ModelSettings,
+  Project,
+  ProjectSettings,
+  Scan,
+  ScanComparison,
+  SecurityBaseline,
+  SystemSettings,
+} from "@/lib/types";
 
 export async function getScans(): Promise<Scan[]> {
   try {
     return await api<Scan[]>("/api/scans");
+  } catch {
+    return [];
+  }
+}
+
+export async function getProjects(): Promise<Project[]> {
+  try {
+    return await api<Project[]>("/api/projects");
   } catch {
     return [];
   }
@@ -52,6 +72,30 @@ export async function getScanComparison(scanId: string, againstScanId?: string):
 export async function getModelSettings(): Promise<ModelSettings | null> {
   try {
     return await api<ModelSettings>("/api/settings/model");
+  } catch {
+    return null;
+  }
+}
+
+export async function getSystemSettings(): Promise<SystemSettings | null> {
+  try {
+    return await api<SystemSettings>("/api/settings/system");
+  } catch {
+    return null;
+  }
+}
+
+export async function getProjectSettings(projectId: string): Promise<ProjectSettings | null> {
+  try {
+    return await api<ProjectSettings>(`/api/projects/${projectId}/settings`);
+  } catch {
+    return null;
+  }
+}
+
+export async function getGitHubStatus(): Promise<GitHubStatus | null> {
+  try {
+    return await api<GitHubStatus>("/api/github/status");
   } catch {
     return null;
   }

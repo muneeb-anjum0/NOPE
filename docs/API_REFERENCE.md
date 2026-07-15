@@ -32,6 +32,14 @@ Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `
 - `GET /api/queue/status` - queue depth, processing depth, worker heartbeat, and Redis health.
 - `GET /api/worker/health` - worker-oriented health summary derived from Redis heartbeat state.
 - `GET /api/sandbox/health` - sandbox enablement, Docker CLI availability, default network posture, limits, and isolation flags.
+- `GET /api/settings/system` - owner-scoped persisted system settings for Qwen, scanners, retention, reports, artifact limits, and sandbox limits.
+- `PUT /api/settings/system` - validate and save owner-scoped system settings.
+- `GET /api/projects/{project_id}/settings` - owner-scoped project scan settings with sensitive test identity values redacted.
+- `PUT /api/projects/{project_id}/settings` - validate and save project settings; test identity secrets are encrypted and never returned.
+- `GET /api/github/status` - local GitHub credential/contract state, blocked honestly when credentials are absent or unverified.
+- `PUT /api/github/settings` - save GitHub App/OAuth contract settings; OAuth/private-key/webhook secrets are encrypted and never returned.
+- `GET /api/github/repositories` - returns no repositories while private GitHub access is blocked; never fakes private access.
+- `GET /api/github/callback` - callback route placeholder that returns blocked state until real credentials are supplied and verified.
 - `GET /api/scans/{scan_id}/report.{format}` - protected report download as `json`, `md`, `sarif`, or `pdf`; PDF generation persists report status and MinIO artifact metadata when object storage is reachable.
 - `GET /api/scans/{scan_id}/reports/{format}/status` - protected report generation status, byte size, SHA-256, and artifact metadata.
 - `GET /api/scanners/capabilities` - authenticated scanner health, version, coverage category, and applicability marker metadata.
@@ -48,4 +56,5 @@ Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `
 - Sandbox manifests are optional; repositories without `.nope/sandbox.json` are marked not applicable instead of faked.
 - Sandbox containers run with bounded CPU, memory, process, timeout, tmpfs, and log limits; repository mounts are read-only and network is disabled by default.
 - AI failures do not fail deterministic scans.
-- Project, scan, report, settings, and AI explanation routes are scoped to the authenticated local user.
+- Project, scan, report, settings, GitHub contract, and AI explanation routes are scoped to the authenticated local user.
+- Sensitive settings are encrypted at rest and are not returned after save.

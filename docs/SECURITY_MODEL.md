@@ -32,7 +32,9 @@ NOPE treats every uploaded repository and every scanned target as potentially ho
 
 - Logs are redacted with aggressive secret patterns.
 - Findings display masked secret evidence, not full values.
+- Test identity secrets, GitHub OAuth secrets, GitHub private keys, and webhook secrets are encrypted before persistence and are not returned after save.
 - GitHub tokens are not stored in plaintext; production GitHub integration must use short-lived installation tokens or encrypted credential storage.
+- GitHub repository listing remains blocked until real credentials are supplied and verified; NOPE does not fake private repositories.
 - AI prompts must avoid full secret values and unnecessary source dumps.
 
 ## Local AI service

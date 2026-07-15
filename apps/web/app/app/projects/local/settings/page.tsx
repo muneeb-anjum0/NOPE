@@ -1,8 +1,90 @@
-import { getAIHealth, getModelSettings } from "@/lib/nope-data";
+import { revalidatePath } from "next/cache";
+import { SettingsForms } from "@/components/settings-forms";
+import { api } from "@/lib/api";
+import { getAIHealth, getGitHubStatus, getModelSettings, getProjectSettings, getProjects, getSystemSettings } from "@/lib/nope-data";
 
 export default async function SettingsPage() {
   const model = await getModelSettings();
   const aiHealth = await getAIHealth();
+  const system = await getSystemSettings();
+  const projects = await getProjects();
+  const project = projects[0] ?? null;
+  const projectSettings = project ? await getProjectSettings(project.id) : null;
+  const github = await getGitHubStatus();
+
+  async function saveSystem(formData: FormData) {
+    "use server";
+    await api("/api/settings/system", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        qwen_endpoint: String(formData.get("qwen_endpoint") ?? ""),
+        runtime: String(formData.get("runtime") ?? "llama.cpp"),
+        context: Number(formData.get("context") ?? 4096),
+        gpu_layers: Number(formData.get("gpu_layers") ?? 28),
+        timeout: Number(formData.get("timeout") ?? 180),
+        output_limit: Number(formData.get("output_limit") ?? 1024),
+        concurrency: Number(formData.get("concurrency") ?? 1),
+        scanner_enabled: {},
+        scanner_timeout: Number(formData.get("scanner_timeout") ?? 180),
+        default_scan_mode: String(formData.get("default_scan_mode") ?? "full"),
+        retention_days: Number(formData.get("retention_days") ?? 30),
+        report_defaults: String(formData.get("report_defaults") ?? "json,md,sarif,pdf").split(",").map((item) => item.trim()).filter(Boolean),
+        artifact_limit_mb: Number(formData.get("artifact_limit_mb") ?? 512),
+        sandbox_limits: {},
+      }),
+    });
+    revalidatePath("/app/projects/local/settings");
+  }
+
+  async function saveProject(formData: FormData) {
+    "use server";
+    const projectId = String(formData.get("project_id") ?? "");
+    if (!projectId) {
+      return;
+    }
+    const password = String(formData.get("test_identity_password") ?? "");
+    const identityLabel = String(formData.get("test_identity_label") ?? "");
+    const identityUsername = String(formData.get("test_identity_username") ?? "");
+    await api(`/api/projects/${projectId}/settings`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        project_id: projectId,
+        target_url: String(formData.get("target_url") ?? "") || null,
+        approved_hosts: String(formData.get("approved_hosts") ?? "").split(",").map((item) => item.trim()).filter(Boolean),
+        excluded_paths: String(formData.get("excluded_paths") ?? "").split(",").map((item) => item.trim()).filter(Boolean),
+        scanner_overrides: {},
+        scan_depth: String(formData.get("scan_depth") ?? "full"),
+        test_identities: identityLabel || identityUsername || password ? [{ label: identityLabel || "Local test identity", username: identityUsername || null, password: password || null }] : [],
+        baseline_id: null,
+        repository_metadata: {},
+        authorization_confirmed: formData.get("authorization_confirmed") === "on",
+        rag_limits: {},
+      }),
+    });
+    revalidatePath("/app/projects/local/settings");
+  }
+
+  async function saveGitHub(formData: FormData) {
+    "use server";
+    await api("/api/github/settings", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        app_id: String(formData.get("app_id") ?? "") || null,
+        client_id: String(formData.get("client_id") ?? "") || null,
+        client_secret: String(formData.get("client_secret") ?? "") || null,
+        private_key: String(formData.get("private_key") ?? "") || null,
+        webhook_secret: String(formData.get("webhook_secret") ?? "") || null,
+        callback_url: String(formData.get("callback_url") ?? "") || null,
+        selected_repository: String(formData.get("selected_repository") ?? "") || null,
+        selected_branch: String(formData.get("selected_branch") ?? "") || null,
+      }),
+    });
+    revalidatePath("/app/projects/local/settings");
+  }
+
   const sections = [
     {
       title: "Workspace",
@@ -19,7 +101,7 @@ export default async function SettingsPage() {
       rows: [
         ["URL scope", "Private and localhost targets remain blocked unless explicitly allowed.", "Strict"],
         ["Repository input", "Zip uploads are extracted into NOPE workspaces for analysis.", "Scoped"],
-        ["Dynamic tests", "Runtime checks are recorded as coverage gaps until configured.", "Partial"],
+        ["Dynamic tests", "Sandbox manifests can run constrained workflows and internal ZAP.", "Sandbox"],
       ],
     },
     {
@@ -35,6 +117,15 @@ export default async function SettingsPage() {
         ["Latency", aiHealth?.latency_ms ? `${aiHealth.latency_ms} ms` : aiHealth?.status ?? "unverified", "Health"],
         ["Concurrency", `${model?.parallel ?? 0} parallel / batch ${model?.batch_size ?? 0}`, "Bounded"],
         ["RAG limits", `${model?.rag?.maximum_files ?? 0} files / ${model?.rag?.maximum_tokens ?? 0} tokens`, "Focused"],
+      ],
+    },
+    {
+      title: "GitHub",
+      summary: "Local contracts without fake private repository access.",
+      rows: [
+        ["Credential state", github?.status ?? "blocked_missing_credentials", "Blocked"],
+        ["Callback", github?.callback_url ?? "not configured", "Route"],
+        ["Repository", github?.selected_repository ?? "not selected", "Contract"],
       ],
     },
     {
@@ -79,6 +170,15 @@ export default async function SettingsPage() {
           </details>
         ))}
       </div>
+      <SettingsForms
+        system={system}
+        project={project}
+        projectSettings={projectSettings}
+        github={github}
+        saveSystem={saveSystem}
+        saveProject={saveProject}
+        saveGitHub={saveGitHub}
+      />
     </>
   );
 }

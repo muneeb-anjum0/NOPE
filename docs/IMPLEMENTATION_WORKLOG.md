@@ -980,3 +980,53 @@ Add a disposable local Docker sandbox for safe repository workflows and initial 
 ### Closure
 
 Phase 10 is complete for the sandbox foundation: manifest-driven workflows, constrained disposable containers, default network denial, host-secret isolation, timeout/resource enforcement, unsupported repository handling, internal ZAP dynamic scan support, cleanup, scan-stage evidence, health reporting, Docker worker activation, and documentation. Browser automation and authenticated dynamic flows remain later phases.
+
+## 2026-07-16 Phase 11 Settings and GitHub Contracts
+
+### Objective
+
+Complete persistent owner-scoped system/project settings and local GitHub contract handling with validation, encrypted sensitive values, redacted responses, settings UI, and honest blocked state for private GitHub access.
+
+### Pre-phase state
+
+- Pre-phase commit: `4219b9b`.
+- Phase 1 schema included `application_settings`, `model_configurations`, `scanner_configurations`, and GitHub contract tables.
+- The settings page displayed environment-derived values only.
+- GitHub private access was documented as blocked, but no route/UI contract existed.
+
+### Implemented
+
+- Added typed settings contracts for system settings, project settings, test identities, GitHub settings, and GitHub status.
+- Added owner-scoped system settings API for Qwen endpoint/runtime/context/GPU layers/timeout/output/concurrency, scanner enabled state, scanner timeout, default scan mode, retention, report defaults, artifact limits, and sandbox limits.
+- Added owner-scoped project settings API for target URL, approved hosts, excluded paths, scanner overrides, scan depth, test identities, baseline, repository metadata, authorization confirmation, and RAG limits.
+- Added encrypted secret envelopes for test identity passwords, GitHub OAuth client secret, GitHub private key, and webhook secret.
+- Ensured sensitive settings are not returned after save; responses expose only configured/credential state.
+- Added owner/project authorization checks and audit rows for settings updates.
+- Added GitHub status/settings/repository/callback routes with a blocked adapter contract and no fake repositories.
+- Added GitHub contract persistence through `github_connections.data` plus `application_settings`.
+- Added settings forms for system, project, and GitHub contract settings in the dashboard.
+- Added an explicit blocked GitHub adapter interface for local status, repository listing, and callback behavior.
+- Added `cryptography` as an explicit backend dependency for Fernet encryption.
+- Updated API, database, security-model, feature-status, and phase-reconciliation documentation.
+
+### Verification results
+
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests/test_phase11_settings_github.py -q`: passed, 3 tests.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests/test_phase11_settings_github.py apps/api/tests/test_api_auth.py -q`: passed, 5 tests.
+- `python -m compileall apps/api/nope_api apps/api/tests apps/worker`: passed.
+- `pnpm --dir apps/web lint`: passed.
+- `pnpm --dir apps/web typecheck`: passed.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests -q`: passed, 72 tests.
+- `pnpm --dir apps/web build`: passed.
+- `docker compose config --quiet`: passed.
+- `git diff --check`: passed.
+- `docker compose build nope-api nope-worker nope-web`: passed; images `nope-nope-api@sha256:7ca795bb081f`, `nope-nope-worker@sha256:8a016f6d7d14`, `nope-nope-web@sha256:05a37327fbe7`.
+- `docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml up -d`: passed with all services healthy.
+- `Invoke-RestMethod http://localhost:8000/health`: passed; database migrations current, scanner tools installed, Qwen runtime reachable, GPU layers `28`, GPU target `5000`.
+- Live Phase 11 API smoke: passed; system settings persisted into `/api/settings/model`, project secrets were redacted, cross-user project settings returned `404`, GitHub returned `blocked_external_credentials_not_verified`, repository list was empty, and callback returned `409`.
+- `docker compose run --rm --no-deps nope-api gitleaks detect --no-git --redact --source /app/apps/api/nope_api`: passed, no leaks found.
+- `nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader,nounits`: `NVIDIA GeForce GTX 1060 with Max-Q Design, 4473, 6144`; 28 GPU layers remained under the 5 GB VRAM cap.
+
+### Closure
+
+Phase 11 is complete for local settings persistence, validation, encrypted sensitive storage, redacted secret responses, settings ownership, settings UI, GitHub local contracts, callback route shape, credential state, branch/repository selection contracts, and honest blocked private GitHub access. Real GitHub token exchange and private repository listing remain blocked by missing verified GitHub credentials.

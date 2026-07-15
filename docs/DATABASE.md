@@ -30,10 +30,10 @@ The initial migration creates tables for:
 - Scans: `scans`, `scan_stages`, `scanner_runs`, `scan_coverage`
 - Findings: `findings`, `finding_evidence`, `finding_sources`, `finding_history`
 - Reports: `reports`, including generated body, SHA-256 hash, byte size, media type, generation status metadata, and generation timestamp
-- Settings: `model_configurations`, `scanner_configurations`, `application_settings`
+- Settings: `model_configurations`, `scanner_configurations`, `application_settings`; Phase 11 stores owner-scoped system/project settings in `application_settings` and encrypted sensitive envelopes inside JSONB values.
 - History/drift foundation: `security_baselines`, `drift_events`
 - Artifacts/logging: `uploaded_artifacts`, `job_artifacts`, `audit_logs`
-- GitHub contracts: `github_connections`, `github_installations`, `github_repository_references`
+- GitHub contracts: `github_connections`, `github_installations`, `github_repository_references`; Phase 11 stores encrypted local GitHub contract credentials in `github_connections.data` and keeps real private access blocked until credentials are verified.
 
 The `scans` table stores both normalized fields and a JSON snapshot of the current API scan model. This keeps the dashboard/API stable while later phases deepen the normalized schema.
 
@@ -47,3 +47,4 @@ The `scans` table stores both normalized fields and a JSON snapshot of the curre
 - Project creation now creates target/source metadata rows when target URL or repository metadata is supplied.
 - Scan saves upsert repository snapshot rows when repository branch, commit, or upload metadata is present.
 - Application setting, model configuration, scanner configuration, baseline, drift-event, and audit-log rows have repository-layer persistence methods and Phase 1 tests.
+- Phase 11 settings routes persist owner-scoped system/project settings, record audit rows, encrypt test identity and GitHub secret material with `NOPE_ENCRYPTION_KEY`, and return only credential/configured state after save.

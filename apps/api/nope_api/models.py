@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 
 def now_utc() -> datetime:
@@ -272,3 +272,104 @@ class Scan(BaseModel):
     coverage: list[CoverageRecord] = Field(default_factory=list)
     ai_review: AIReview = Field(default_factory=AIReview)
     report_formats: list[str] = Field(default_factory=lambda: ["json", "md", "sarif", "pdf"])
+
+
+class SystemSettings(BaseModel):
+    qwen_endpoint: str = "http://nope-ai:8080"
+    runtime: str = "llama.cpp"
+    context: int = Field(default=4096, ge=512, le=32768)
+    gpu_layers: int = Field(default=28, ge=0, le=128)
+    timeout: int = Field(default=180, ge=5, le=1800)
+    output_limit: int = Field(default=1024, ge=64, le=8192)
+    concurrency: int = Field(default=1, ge=1, le=8)
+    scanner_enabled: dict[str, bool] = Field(default_factory=dict)
+    scanner_timeout: int = Field(default=180, ge=5, le=3600)
+    default_scan_mode: ScanMode = ScanMode.full
+    retention_days: int = Field(default=30, ge=1, le=3650)
+    report_defaults: list[str] = Field(default_factory=lambda: ["json", "md", "sarif", "pdf"])
+    artifact_limit_mb: int = Field(default=512, ge=1, le=10240)
+    sandbox_limits: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("qwen_endpoint")
+    @classmethod
+    def validate_qwen_endpoint(cls, value: str) -> str:
+        if not value.startswith(("http://", "https://")):
+            raise ValueError("qwen_endpoint must start with http:// or https://")
+        return value.rstrip("/")
+
+    @field_validator("runtime")
+    @classmethod
+    def validate_runtime(cls, value: str) -> str:
+        if value not in {"llama.cpp", "disabled"}:
+            raise ValueError("runtime must be llama.cpp or disabled")
+        return value
+
+    @field_validator("report_defaults")
+    @classmethod
+    def validate_report_defaults(cls, value: list[str]) -> list[str]:
+        allowed = {"json", "md", "sarif", "pdf"}
+        cleaned = []
+        for item in value:
+            if item not in allowed:
+                raise ValueError(f"Unsupported report format: {item}")
+            if item not in cleaned:
+                cleaned.append(item)
+        return cleaned
+
+
+class TestIdentity(BaseModel):
+    label: str
+    username: str | None = None
+    password: str | None = None
+    notes: str | None = None
+
+
+class ProjectSettings(BaseModel):
+    project_id: str
+    target_url: str | None = None
+    approved_hosts: list[str] = Field(default_factory=list)
+    excluded_paths: list[str] = Field(default_factory=list)
+    scanner_overrides: dict[str, bool] = Field(default_factory=dict)
+    scan_depth: Literal["quick", "full", "deep"] = "full"
+    test_identities: list[TestIdentity] = Field(default_factory=list)
+    test_identities_configured: bool = False
+    baseline_id: str | None = None
+    repository_metadata: dict[str, Any] = Field(default_factory=dict)
+    authorization_confirmed: bool = False
+    rag_limits: dict[str, int] = Field(default_factory=dict)
+
+    @field_validator("target_url")
+    @classmethod
+    def validate_target_url(cls, value: str | None) -> str | None:
+        if value and not value.startswith(("http://", "https://")):
+            raise ValueError("target_url must start with http:// or https://")
+        return value
+
+
+class GitHubSettings(BaseModel):
+    app_id: str | None = None
+    client_id: str | None = None
+    client_secret: str | None = None
+    private_key: str | None = None
+    webhook_secret: str | None = None
+    callback_url: str | None = None
+    selected_repository: str | None = None
+    selected_branch: str | None = None
+
+    @field_validator("callback_url")
+    @classmethod
+    def validate_callback_url(cls, value: str | None) -> str | None:
+        if value and not value.startswith(("http://", "https://")):
+            raise ValueError("callback_url must start with http:// or https://")
+        return value
+
+
+class GitHubStatus(BaseModel):
+    provider: str = "github"
+    status: str = "blocked_missing_credentials"
+    credential_state: dict[str, bool] = Field(default_factory=dict)
+    callback_url: str | None = None
+    selected_repository: str | None = None
+    selected_branch: str | None = None
+    message: str = "GitHub private repository access is blocked until credentials are supplied and verified."
+    repositories: list[dict[str, Any]] = Field(default_factory=list)

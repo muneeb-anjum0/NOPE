@@ -290,6 +290,17 @@ class PostgresStore:
             ).fetchone()
         return row is not None
 
+    def user_owns_project(self, project_id: str, owner_user_id: str | None) -> bool:
+        self.migrate()
+        query = "select 1 from projects where id = %s"
+        params: tuple[Any, ...] = (project_id,)
+        if owner_user_id:
+            query += " and owner_user_id = %s"
+            params = (project_id, owner_user_id)
+        with connect(self.settings) as conn:
+            row = conn.execute(query, params).fetchone()
+        return row is not None
+
     def save_application_setting(self, owner_user_id: str | None, key: str, value: dict[str, Any]) -> dict[str, Any]:
         self.migrate()
         setting_id = new_id("set")
@@ -319,6 +330,72 @@ class PostgresStore:
                 (owner_user_id, key),
             ).fetchone()
         return dict(row) if row else None
+
+    def save_github_contract(self, owner_user_id: str, data: dict[str, Any], status: str) -> dict[str, Any]:
+        self.migrate()
+        with connect(self.settings) as conn:
+            existing = conn.execute(
+                """
+                select id from github_connections
+                where owner_user_id = %s and provider = 'github'
+                order by created_at desc
+                limit 1
+                """,
+                (owner_user_id,),
+            ).fetchone()
+            if existing:
+                row = conn.execute(
+                    """
+                    update github_connections
+                    set status = %s, data = %s, updated_at = now()
+                    where id = %s and owner_user_id = %s
+                    returning id, owner_user_id, provider, status, created_at, updated_at, data
+                    """,
+                    (status, Jsonb(data), existing["id"], owner_user_id),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    """
+                    insert into github_connections (id, owner_user_id, provider, status, data)
+                    values (%s, %s, 'github', %s, %s)
+                    returning id, owner_user_id, provider, status, created_at, updated_at, data
+                    """,
+                    (new_id("ghc"), owner_user_id, status, Jsonb(data)),
+                ).fetchone()
+        return dict(row)
+
+    def get_github_contract(self, owner_user_id: str) -> dict[str, Any] | None:
+        self.migrate()
+        with connect(self.settings) as conn:
+            row = conn.execute(
+                """
+                select id, owner_user_id, provider, status, created_at, updated_at, data
+                from github_connections
+                where owner_user_id = %s and provider = 'github'
+                order by created_at desc
+                limit 1
+                """,
+                (owner_user_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def list_github_repository_references(self, owner_user_id: str) -> list[dict[str, Any]]:
+        self.migrate()
+        with connect(self.settings) as conn:
+            rows = conn.execute(
+                """
+                select github_repository_references.id, github_repository_references.full_name,
+                       github_repository_references.default_branch, github_repository_references.private,
+                       github_repository_references.created_at, github_repository_references.data
+                from github_repository_references
+                join github_installations on github_installations.id = github_repository_references.installation_id
+                join github_connections on github_connections.id = github_installations.connection_id
+                where github_connections.owner_user_id = %s
+                order by github_repository_references.created_at desc
+                """,
+                (owner_user_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def save_model_configuration(
         self,

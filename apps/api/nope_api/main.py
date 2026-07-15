@@ -11,16 +11,28 @@ from nope_api.config import get_settings
 from nope_api.db import migration_status, run_migrations
 from nope_api.drift import BaselineSnapshot, baseline_snapshot, compare_scans
 from nope_api.findings import finding_detail, parse_finding_query, query_findings, raw_artifact
+from nope_api.github import BlockedGitHubAdapter
 from nope_api.ingestion import extract_zip
-from nope_api.models import AuthorizationScope, Project, Scan, ScanMode, ScanRequest
+from nope_api.models import AuthorizationScope, GitHubSettings, Project, ProjectSettings, Scan, ScanMode, ScanRequest, SystemSettings
 from nope_api.queue import clear_scan_cancel, enqueue_scan_job, queue_status, request_scan_cancel, scan_events
 from nope_api.reports import ReportContext, render_report
 from nope_api.sandbox import sandbox_health
 from nope_api.scanners import scanner_capabilities, scanner_health
 from nope_api.security import validate_url_scope
+from nope_api.settings_contracts import (
+    GITHUB_SETTINGS_KEY,
+    SYSTEM_SETTINGS_KEY,
+    default_system_settings,
+    github_status_from_payload,
+    prepare_github_payload,
+    prepare_project_settings_payload,
+    project_settings_key,
+    sanitize_project_settings_payload,
+)
 from nope_api.storage import store
 
 settings = get_settings()
+github_adapter = BlockedGitHubAdapter(store)
 
 app = FastAPI(
     title="NOPE API",
@@ -122,6 +134,13 @@ def _load_scan(scan_id: str, authorization: str | None) -> Scan:
     return scan
 
 
+def _system_settings_for(owner_user_id: str | None) -> SystemSettings:
+    saved = store.get_application_setting(owner_user_id, SYSTEM_SETTINGS_KEY)
+    if saved:
+        return SystemSettings(**saved["value"])
+    return default_system_settings(settings)
+
+
 def _comparison_reference(
     current: Scan,
     owner_user_id: str | None,
@@ -171,6 +190,82 @@ def scanners_capabilities(authorization: str | None = Header(default=None)) -> l
 def get_sandbox_health(authorization: str | None = Header(default=None)) -> dict:
     _require_owner_user_id(authorization)
     return sandbox_health(settings)
+
+
+@app.get("/api/settings/system", response_model=SystemSettings)
+def get_system_settings(authorization: str | None = Header(default=None)) -> SystemSettings:
+    owner_user_id = _require_owner_user_id(authorization)
+    return _system_settings_for(owner_user_id)
+
+
+@app.put("/api/settings/system", response_model=SystemSettings)
+def put_system_settings(payload: SystemSettings, authorization: str | None = Header(default=None)) -> SystemSettings:
+    owner_user_id = _require_owner_user_id(authorization)
+    saved = store.save_application_setting(owner_user_id, SYSTEM_SETTINGS_KEY, payload.model_dump(mode="json"))
+    store.record_audit_log("settings.system.updated", owner_user_id, data={"key": SYSTEM_SETTINGS_KEY})
+    return SystemSettings(**saved["value"])
+
+
+@app.get("/api/projects/{project_id}/settings", response_model=ProjectSettings, response_model_exclude_none=True)
+def get_project_settings(project_id: str, authorization: str | None = Header(default=None)) -> ProjectSettings:
+    owner_user_id = _require_owner_user_id(authorization)
+    if not store.user_owns_project(project_id, owner_user_id):
+        raise HTTPException(status_code=404, detail="Project not found.")
+    saved = store.get_application_setting(owner_user_id, project_settings_key(project_id))
+    if not saved:
+        return ProjectSettings(project_id=project_id)
+    return ProjectSettings(**sanitize_project_settings_payload(saved["value"]))
+
+
+@app.put("/api/projects/{project_id}/settings", response_model=ProjectSettings, response_model_exclude_none=True)
+def put_project_settings(project_id: str, payload: ProjectSettings, authorization: str | None = Header(default=None)) -> ProjectSettings:
+    owner_user_id = _require_owner_user_id(authorization)
+    if payload.project_id != project_id:
+        raise HTTPException(status_code=400, detail="Project setting payload must match the route project_id.")
+    if not store.user_owns_project(project_id, owner_user_id):
+        raise HTTPException(status_code=404, detail="Project not found.")
+    key = project_settings_key(project_id)
+    existing = store.get_application_setting(owner_user_id, key)
+    value = prepare_project_settings_payload(settings, payload, existing["value"] if existing else None)
+    saved = store.save_application_setting(owner_user_id, key, value)
+    store.record_audit_log("settings.project.updated", owner_user_id, project_id=project_id, data={"key": key})
+    return ProjectSettings(**sanitize_project_settings_payload(saved["value"]))
+
+
+@app.get("/api/github/status")
+def get_github_status(authorization: str | None = Header(default=None)):
+    owner_user_id = _require_owner_user_id(authorization)
+    if not owner_user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated.")
+    return github_adapter.status(owner_user_id)
+
+
+@app.put("/api/github/settings")
+def put_github_settings(payload: GitHubSettings, authorization: str | None = Header(default=None)):
+    owner_user_id = _require_owner_user_id(authorization)
+    if not owner_user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated.")
+    existing = store.get_github_contract(owner_user_id)
+    value = prepare_github_payload(settings, payload, existing["data"] if existing else None)
+    status = github_status_from_payload(value).status
+    store.save_github_contract(owner_user_id, value, status)
+    store.save_application_setting(owner_user_id, GITHUB_SETTINGS_KEY, value)
+    store.record_audit_log("github.contract.updated", owner_user_id, data={"status": status})
+    return github_status_from_payload(value)
+
+
+@app.get("/api/github/repositories")
+def list_github_repositories(authorization: str | None = Header(default=None)):
+    owner_user_id = _require_owner_user_id(authorization)
+    if not owner_user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated.")
+    return github_adapter.list_repositories(owner_user_id)
+
+
+@app.get("/api/github/callback")
+def github_callback(authorization: str | None = Header(default=None)):
+    _require_owner_user_id(authorization)
+    raise HTTPException(status_code=409, detail=github_adapter.callback_blocked_detail())
 
 
 @app.get("/api/scans/{scan_id}", response_model=Scan)
@@ -551,23 +646,24 @@ async def get_worker_health(authorization: str | None = Header(default=None)) ->
 
 @app.get("/api/settings/model")
 def model_settings(authorization: str | None = Header(default=None)) -> dict:
-    _require_owner_user_id(authorization)
+    owner_user_id = _require_owner_user_id(authorization)
+    persisted = _system_settings_for(owner_user_id)
     return {
-        "provider": settings.ai_provider,
+        "provider": settings.ai_provider if persisted.runtime != "disabled" else "none",
         "model_name": settings.ai_model_name,
         "model_file_path": settings.qwen_model_path,
-        "runtime_endpoint": settings.qwen_runtime_url,
-        "context_length": settings.effective_qwen_context_size,
-        "maximum_output_tokens": settings.effective_qwen_max_output_tokens,
+        "runtime_endpoint": persisted.qwen_endpoint,
+        "context_length": persisted.context,
+        "maximum_output_tokens": persisted.output_limit,
         "temperature": settings.ai_temperature,
         "top_p": settings.ai_top_p,
-        "gpu_layer_count": settings.effective_qwen_gpu_layers,
+        "gpu_layer_count": persisted.gpu_layers,
         "maximum_gpu_memory_target_mb": settings.effective_qwen_gpu_memory_target_mb,
         "batch_size": settings.qwen_batch_size,
         "threads": settings.qwen_threads,
         "parallel": settings.qwen_parallel,
-        "request_timeout": settings.effective_qwen_timeout_seconds,
-        "maximum_concurrent_ai_tasks": settings.ai_max_concurrent_tasks,
+        "request_timeout": persisted.timeout,
+        "maximum_concurrent_ai_tasks": persisted.concurrency,
         "maximum_analysis_iterations": settings.ai_max_iterations,
         "maximum_tool_calls": settings.ai_max_tool_calls,
         "maximum_retrieved_chunks": settings.ai_max_retrieved_chunks,
