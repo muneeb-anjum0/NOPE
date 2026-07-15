@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { API_BASE } from "@/lib/api";
 
 function redirectWithError(request: Request, message: string) {
@@ -6,7 +7,10 @@ function redirectWithError(request: Request, message: string) {
 }
 
 async function forwardScan(request: Request, path: string, init: RequestInit) {
-  const response = await fetch(`${API_BASE}${path}`, init);
+  const headers = new Headers(init.headers);
+  const token = (await cookies()).get("nope_session")?.value;
+  if (token) headers.set("authorization", `Bearer ${token}`);
+  const response = await fetch(`${API_BASE}${path}`, { ...init, headers });
   if (!response.ok) {
     const detail = await response.text();
     return redirectWithError(request, detail || `Scan request failed with ${response.status}.`);

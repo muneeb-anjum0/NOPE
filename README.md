@@ -13,6 +13,7 @@ NOPE is a working local MVP, not a finished production platform. The current bui
 - A routed dark app workspace under `/app/projects/local`.
 - A React Bits LineSidebar-style dashboard navigation shell.
 - Local Postgres-backed account creation, login, sessions, and logout.
+- Migration-backed Postgres persistence for projects, scans, stages, scanner runs, findings, evidence, coverage, and report metadata.
 - FastAPI orchestration API.
 - Next.js dashboard.
 - ZIP repository ingestion with Zip Slip protections.
@@ -86,8 +87,7 @@ flowchart LR
   end
 
   subgraph Stores["Local Stores"]
-    Memory["Development Store<br/>projects, scans, findings"]:::store
-    Postgres["Postgres<br/>local auth sessions<br/>planned scan persistence"]:::store
+    Postgres["Postgres<br/>auth, projects, scans,<br/>findings, coverage, reports"]:::store
     MinIO["MinIO<br/>planned artifacts/reports"]:::partial
     Redis["Redis<br/>planned queued jobs"]:::partial
   end
@@ -124,7 +124,6 @@ flowchart LR
   Findings --> Reports
   Coverage --> Reports
   Reports --> UI
-  API --> Memory
   API --> Postgres
   API -.next phase.-> MinIO
   API -.next phase.-> Redis
@@ -272,6 +271,7 @@ Known verification caveats:
 - `API_REFERENCE.md` - API endpoint reference.
 - `DESIGN_SYSTEM.md` - graphite design tokens, typography, motion, components, and responsive rules.
 - `LOCAL_AI.md` - llama.cpp/Qwen setup, CPU/GPU modes, security notes, and troubleshooting.
+- `DATABASE.md` - Phase 1 Postgres schema and migration notes.
 
 ## README maintenance
 

@@ -8,11 +8,11 @@ This matrix was rebuilt during Phase 0 on 2026-07-15 from repository evidence, l
 | --- | --- | --- | --- | --- | --- | --- |
 | Local authentication | Complete | Local accounts/sessions are stored in Postgres and dashboard routes require a session. | `apps/api/nope_api/auth.py`, `apps/api/nope_api/main.py`, `apps/web/lib/auth.ts`, `apps/web/app/login/page.tsx` | Password reset, org auth, CSRF hardening, production identity provider. | Login smoke tests, Docker health, `GET /api/auth/me`. | None for local mode. |
 | User persistence | Complete | `local_users` table is created and reused across logins. | `apps/api/nope_api/auth.py` | Migrate from startup DDL to Alembic-managed schema in Phase 1. | Local login through web/API. | None. |
-| Project persistence | Partially complete | Projects are stored only in process memory. | `apps/api/nope_api/storage.py`, `apps/api/nope_api/main.py` | Add Postgres project tables, ownership checks, project targets, repository sources. | API code audit. | None. |
-| Scan persistence | Partially complete | Scans are saved in `InMemoryStore`; restarting API loses scan records. | `apps/api/nope_api/storage.py`, `apps/api/nope_api/models.py` | Persist scans, stages, scanner runs, coverage, findings, reports. | API code audit and smoke scan. | None. |
-| Finding persistence | Partially complete | Findings live inside in-memory `Scan` objects. | `apps/api/nope_api/models.py`, `apps/api/nope_api/storage.py` | Add normalized finding/evidence/source/history tables. | API code audit. | None. |
-| Scanner-run persistence | Partially complete | Scanner runs live inside in-memory scans. | `apps/api/nope_api/models.py`, `apps/api/nope_api/scan_engine.py` | Persist scanner versions, status, messages, raw artifacts, durations. | API code audit. | None. |
-| Scan-stage persistence | Partially complete | Stages are mutable dictionaries inside in-memory scans. | `apps/api/nope_api/models.py`, `apps/api/nope_api/scan_engine.py` | Add stage rows, timing, error storage, cancellation status. | API code audit. | None. |
+| Project persistence | Complete | Projects persist in Postgres with owner column and supporting target/source/snapshot tables. | `apps/api/nope_api/storage.py`, `apps/api/migrations/0001_initial.sql` | Enforce auth on every direct API path in a later hardening phase. | Persistence tests and Docker migration smoke. | None. |
+| Scan persistence | Complete | Scans persist in Postgres JSON snapshots and normalized scan rows; API restart does not lose scans. | `apps/api/nope_api/storage.py`, `apps/api/migrations/0001_initial.sql` | Phase 2 will make scan execution asynchronous. | API restart smoke verified `scan_6c5090b8fe1c474d` after restart. | None. |
+| Finding persistence | Complete | Findings, evidence, scanner sources, and history rows are written for persisted scans. | `apps/api/nope_api/storage.py`, `apps/api/migrations/0001_initial.sql` | Suppression workflow remains unimplemented. | Persistence tests and table-count smoke. | None. |
+| Scanner-run persistence | Complete | Scanner runs persist with version, status, coverage categories, messages, counts, and JSON data. | `apps/api/nope_api/storage.py`, `apps/api/migrations/0001_initial.sql` | Raw scanner artifact storage awaits real scanner phase. | Docker table-count smoke. | None. |
+| Scan-stage persistence | Complete | Scan stages persist as ordered rows with name/status/data. | `apps/api/nope_api/storage.py`, `apps/api/migrations/0001_initial.sql` | Detailed timings/errors will deepen in queue phase. | Docker table-count smoke. | None. |
 | Redis queue | Not implemented | Redis service exists, but the API executes scans synchronously and worker does not consume jobs. | `docker-compose.yml`, `apps/worker/worker.py`, `apps/api/nope_api/main.py` | Add queue library, enqueue scan jobs, worker consumption, persisted state transitions. | Code audit and Docker inspection. | None. |
 | Worker consumption | Not implemented | Worker prints a readiness message only. | `apps/worker/worker.py` | Implement worker job loop, retries, heartbeats, cancellation and progress. | Code audit. | None. |
 | Retry behavior | Not implemented | No retry endpoint or job retry model exists. | `apps/api/nope_api/main.py`, `apps/worker/worker.py` | Add retry state/attempts and API endpoint. | Code audit. | None. |
@@ -32,7 +32,7 @@ This matrix was rebuilt during Phase 0 on 2026-07-15 from repository evidence, l
 | Focused RAG | Partially complete | Lexical context builder selects finding evidence snippets for AI calls. | `apps/api/nope_api/ai.py` | Chunk repository evidence, metadata limits, prompt-injection controls, optional vector index. | Code audit; AI disabled path verified. | None. |
 | Qwen runtime | Partially complete | `nope-ai` Compose service/profile exists; model file now confirmed at `D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf`. | `docker-compose.yml`, `docker-compose.ai-cpu.yml`, `docker-compose.ai-gpu.yml`, `LOCAL_AI.md` | Update env names/path, mount actual model, run CPU/GPU container, measure VRAM. | Model file check and `nvidia-smi`. | Local model exists; Docker AI profile not verified. |
 | Qwen inference | Not implemented | Backend has `/completion` call path, but no live llama.cpp inference has been verified. | `apps/api/nope_api/ai.py`, `apps/api/nope_api/main.py` | Start llama.cpp, call health/completion, connect scan review. | Current health shows provider `none`. | Requires AI profile startup; model file available. |
-| Reports JSON/Markdown/SARIF | Complete | Report endpoint renders JSON, Markdown and SARIF-like exports from real scan data. | `apps/api/nope_api/reports.py`, `apps/api/nope_api/main.py`, `apps/web/app/app/projects/local/reports/page.tsx` | Authorization, storage metadata, richer methodology fields. | Build and API route audit. | None. |
+| Reports JSON/Markdown/SARIF | Complete | Report endpoint renders JSON, Markdown and SARIF-like exports from real scan data; report metadata persists per scan/format. | `apps/api/nope_api/reports.py`, `apps/api/nope_api/main.py`, `apps/api/nope_api/storage.py` | Authorization hardening, storage payloads, richer methodology fields. | Build, API route audit, table-count smoke. | None. |
 | PDF reports | Not implemented | No PDF generator or route exists. | `apps/api/nope_api/reports.py` | Add PDF generation, storage, authorization, pagination. | Code audit. | None. |
 | Findings filters | Not implemented | Findings page displays table/detail but no real filters/search. | `apps/web/app/app/projects/local/findings/page.tsx`, `apps/web/components/finding-table.tsx` | Severity/confidence/scanner/status/CWE/stack/file filters and query APIs. | UI code audit. | None. |
 | Finding evidence views | Partially complete | Table exposes evidence source count and detail panel shows remediation. | `apps/web/components/finding-table.tsx`, `apps/web/app/app/projects/local/findings/page.tsx` | Full evidence tabs, code snippets, exact line citations, raw scanner refs. | UI build. | None. |
@@ -56,3 +56,34 @@ This matrix was rebuilt during Phase 0 on 2026-07-15 from repository evidence, l
 | Resource controls | Partially complete | Archive/file/time/AI limits are configured; scanner subprocess timeout exists. | `apps/api/nope_api/config.py`, `apps/api/nope_api/ingestion.py`, `apps/api/nope_api/scanners.py` | Queue limits, concurrency, artifact limits, per-project settings. | Tests and code audit. | None. |
 | Observability | Partially complete | Scan IDs/stages/scanner statuses exist in scan response; Docker logs available. | `apps/api/nope_api/models.py`, `apps/api/nope_api/scan_engine.py` | Structured logs, request IDs, job IDs, metrics, worker heartbeat. | Smoke scan and logs. | None. |
 | Accessibility/responsive UI | Partially complete | Keyboard sidebar, responsive CSS and reduced motion exist. | `apps/web/app/globals.css`, `apps/web/components/line-sidebar.tsx` | Formal axe/Playwright audit, dialogs/forms/table improvements. | Web build and code audit. | None. |
+
+## Phase 1 In Progress
+
+Phase 1 objective: replace the in-memory project/scan/finding/report state with migration-backed PostgreSQL persistence while preserving the current API behavior and local authentication.
+
+Phase 1 acceptance targets:
+
+- Migrations create durable tables for users/sessions, projects, targets, repository sources/snapshots, scans, stages, scanner runs, findings, evidence, sources, history, coverage, reports, model/scanner/settings, baselines, drift events, artifacts, audit logs, and GitHub contract entities.
+- The normal scan path persists project, scan, finding, coverage, stage, scanner-run, and report metadata to Postgres.
+- API restart does not lose scans.
+- Local auth remains functional.
+- Existing tests continue to pass, with new persistence tests added.
+
+## Phase 1 Result
+
+Phase 1 status: Complete for local persistence scope.
+
+Verification evidence:
+
+- Added SQL migration runner and initial migration.
+- Added durable tables for local auth, projects, targets, repository sources/snapshots, scans, stages, scanner runs, findings, evidence, sources, history, coverage, reports, settings, baselines, drift events, artifacts, audit logs, and GitHub contract entities.
+- Replaced `InMemoryStore` with `PostgresStore`.
+- Added persistence tests; backend test count is now 13.
+- Verified a ZIP scan through the web route persisted and remained readable after `nope-api` restart.
+- Verified normalized table rows exist for scans, stages, scanner runs, findings, coverage, reports, and schema migrations.
+
+Remaining limitations:
+
+- Direct API endpoints still allow local unauthenticated development access; authenticated dashboard calls are user-scoped.
+- Phase 2 still needs Redis-backed queued scan execution.
+- MinIO artifact payload storage is not implemented yet.

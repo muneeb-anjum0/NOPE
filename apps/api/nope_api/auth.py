@@ -3,38 +3,16 @@ import os
 import secrets
 from datetime import datetime, timedelta, timezone
 
-import psycopg
-from psycopg.rows import dict_row
-
 from nope_api.config import Settings
+from nope_api.db import connect, run_migrations
 
 
 def _connect(settings: Settings):
-    return psycopg.connect(settings.auth_database_url, row_factory=dict_row)
+    return connect(settings)
 
 
 def init_auth_db(settings: Settings) -> None:
-    with _connect(settings) as conn:
-        conn.execute(
-            """
-            create table if not exists local_users (
-              id text primary key,
-              email text unique not null,
-              password_hash text not null,
-              created_at timestamptz not null default now()
-            )
-            """
-        )
-        conn.execute(
-            """
-            create table if not exists local_sessions (
-              token text primary key,
-              user_id text not null references local_users(id) on delete cascade,
-              created_at timestamptz not null default now(),
-              expires_at timestamptz not null
-            )
-            """
-        )
+    run_migrations(settings)
 
 
 def _hash_password(password: str, salt: bytes | None = None) -> str:

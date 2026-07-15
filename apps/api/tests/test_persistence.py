@@ -1,0 +1,55 @@
+from uuid import uuid4
+
+from nope_api.config import Settings
+from nope_api.db import run_migrations
+from nope_api.models import Finding, Project, Scan, ScanMode, Severity, Confidence
+from nope_api.storage import PostgresStore
+
+
+def test_migrations_apply_to_local_postgres():
+    settings = Settings(auth_database_url="postgresql://nope:nope@localhost:5432/nope")
+    applied = run_migrations(settings)
+    assert isinstance(applied, list)
+
+
+def test_postgres_store_persists_scan_and_children():
+    owner = None
+    suffix = uuid4().hex[:8]
+    store = PostgresStore()
+    project = store.create_project(f"Persistence {suffix}", "repo.zip", None, owner)
+    scan = Scan(
+        id=f"scan_test_{suffix}",
+        project_id=project.id,
+        mode=ScanMode.repository,
+        status="completed",
+        verdict="Maybe. Coverage is incomplete.",
+        repository_name="repo.zip",
+        findings=[
+            Finding(
+                fingerprint=f"fp_{suffix}",
+                title="Persisted finding",
+                description="The finding should survive a store reload.",
+                severity=Severity.high,
+                confidence=Confidence.medium,
+                category="Authorization",
+                remediation="Persist the finding and its evidence.",
+                scanner_sources=["test"],
+            )
+        ],
+        stages=[{"name": "Persisting", "status": "completed"}],
+    )
+    store.save_scan(scan, owner)
+
+    reloaded = PostgresStore().get_scan(scan.id, owner)
+    assert reloaded is not None
+    assert reloaded.id == scan.id
+    assert reloaded.findings[0].title == "Persisted finding"
+    assert reloaded.stages[0]["name"] == "Persisting"
+
+
+def test_user_scoped_scan_lookup_blocks_other_user():
+    suffix = uuid4().hex[:8]
+    store = PostgresStore()
+    scan = Scan(id=f"scan_owner_{suffix}", mode=ScanMode.repository)
+    store.save_scan(scan, None)
+    assert store.get_scan(scan.id, "user_does_not_own_this") is None

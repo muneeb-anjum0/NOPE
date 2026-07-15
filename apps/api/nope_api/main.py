@@ -8,6 +8,7 @@ from nope_api import __version__
 from nope_api.ai import check_ai_health, explain_finding
 from nope_api.auth import create_or_login, delete_session, get_user_for_token, init_auth_db
 from nope_api.config import get_settings
+from nope_api.db import run_migrations
 from nope_api.ingestion import extract_zip
 from nope_api.models import AuthorizationScope, Project, Scan, ScanMode, ScanRequest
 from nope_api.reports import render_report
@@ -36,7 +37,7 @@ app.add_middleware(
 @app.on_event("startup")
 def startup() -> None:
     try:
-        init_auth_db(settings)
+        run_migrations(settings)
     except Exception:
         # Core scanning must still start if Postgres is temporarily unavailable.
         pass
@@ -65,8 +66,8 @@ async def health() -> dict:
 
 
 @app.get("/api/projects", response_model=list[Project])
-def list_projects() -> list[Project]:
-    return store.list_projects()
+def list_projects(authorization: str | None = Header(default=None)) -> list[Project]:
+    return store.list_projects(_owner_user_id(authorization))
 
 
 @app.post("/api/auth/login")
@@ -95,43 +96,57 @@ def logout(authorization: str | None = Header(default=None)) -> dict:
     return {"ok": True}
 
 
-@app.post("/api/projects", response_model=Project)
-def create_project(project: Project) -> Project:
-    return store.create_project(project.name, project.repository, project.target_url)
+def _owner_user_id(authorization: str | None) -> str | None:
+    token = authorization.removeprefix("Bearer ").strip() if authorization else None
+    if not token:
+        return None
+    user = get_user_for_token(settings, token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated.")
+    return str(user["id"])
 
 
-@app.get("/api/scans", response_model=list[Scan])
-def list_scans() -> list[Scan]:
-    return store.list_scans()
-
-
-@app.get("/api/scans/{scan_id}", response_model=Scan)
-def get_scan(scan_id: str) -> Scan:
-    scan = store.get_scan(scan_id)
+def _load_scan(scan_id: str, authorization: str | None) -> Scan:
+    scan = store.get_scan(scan_id, _owner_user_id(authorization))
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found.")
     return scan
 
 
+@app.post("/api/projects", response_model=Project)
+def create_project(project: Project, authorization: str | None = Header(default=None)) -> Project:
+    return store.create_project(project.name, project.repository, project.target_url, _owner_user_id(authorization))
+
+
+@app.get("/api/scans", response_model=list[Scan])
+def list_scans(authorization: str | None = Header(default=None)) -> list[Scan]:
+    return store.list_scans(_owner_user_id(authorization))
+
+
+@app.get("/api/scans/{scan_id}", response_model=Scan)
+def get_scan(scan_id: str, authorization: str | None = Header(default=None)) -> Scan:
+    return _load_scan(scan_id, authorization)
+
+
 @app.get("/api/scans/{scan_id}/findings")
-def get_findings(scan_id: str):
-    return get_scan(scan_id).findings
+def get_findings(scan_id: str, authorization: str | None = Header(default=None)):
+    return _load_scan(scan_id, authorization).findings
 
 
 @app.get("/api/scans/{scan_id}/coverage")
-def get_coverage(scan_id: str):
-    return get_scan(scan_id).coverage
+def get_coverage(scan_id: str, authorization: str | None = Header(default=None)):
+    return _load_scan(scan_id, authorization).coverage
 
 
 @app.get("/api/scans/{scan_id}/attack-map")
-def get_attack_map(scan_id: str):
-    scan = get_scan(scan_id)
+def get_attack_map(scan_id: str, authorization: str | None = Header(default=None)):
+    scan = _load_scan(scan_id, authorization)
     return {"attack_surface": scan.attack_surface, "code_graph": scan.code_graph}
 
 
 @app.get("/api/scans/{scan_id}/report.{fmt}")
-def get_report(scan_id: str, fmt: str):
-    scan = get_scan(scan_id)
+def get_report(scan_id: str, fmt: str, authorization: str | None = Header(default=None)):
+    scan = _load_scan(scan_id, authorization)
     try:
         media_type, body = render_report(scan, fmt)
     except ValueError as exc:
@@ -140,7 +155,7 @@ def get_report(scan_id: str, fmt: str):
 
 
 @app.post("/api/scans/url", response_model=Scan)
-async def start_url_scan(request: ScanRequest) -> Scan:
+async def start_url_scan(request: ScanRequest, authorization: str | None = Header(default=None)) -> Scan:
     if request.mode != ScanMode.url:
         raise HTTPException(status_code=400, detail="Use mode=url for this endpoint.")
     if not request.target_url:
@@ -153,9 +168,10 @@ async def start_url_scan(request: ScanRequest) -> Scan:
         mode=ScanMode.url,
         target_url=str(request.target_url),
     )
-    store.save_scan(scan)
+    owner_user_id = _owner_user_id(authorization)
+    store.save_scan(scan, owner_user_id)
     scan = await run_url_only_scan(scan, settings)
-    return store.save_scan(scan)
+    return store.save_scan(scan, owner_user_id)
 
 
 @app.post("/api/scans/repository", response_model=Scan)
@@ -165,7 +181,9 @@ async def start_repository_scan(
     repository_name: str | None = Form(default="Uploaded ZIP"),
     branch: str | None = Form(default=None),
     commit_sha: str | None = Form(default=None),
+    authorization: str | None = Header(default=None),
 ) -> Scan:
+    owner_user_id = _owner_user_id(authorization)
     scan = Scan(
         project_id=project_id,
         mode=ScanMode.repository,
@@ -173,10 +191,10 @@ async def start_repository_scan(
         branch=branch,
         commit_sha=commit_sha,
     )
-    store.save_scan(scan)
+    store.save_scan(scan, owner_user_id)
     root = await extract_zip(file, scan.id, settings)
     scan = await run_repository_scan(scan, root, settings)
-    return store.save_scan(scan)
+    return store.save_scan(scan, owner_user_id)
 
 
 @app.post("/api/scans/full", response_model=Scan)
@@ -189,7 +207,9 @@ async def start_full_scan(
     repository_name: str | None = Form(default="Uploaded ZIP"),
     branch: str | None = Form(default=None),
     commit_sha: str | None = Form(default=None),
+    authorization: str | None = Header(default=None),
 ) -> Scan:
+    owner_user_id = _owner_user_id(authorization)
     scope = AuthorizationScope(
         confirmed=authorization_confirmed,
         confirmed_at=datetime.now(timezone.utc) if authorization_confirmed else None,
@@ -204,10 +224,10 @@ async def start_full_scan(
         branch=branch,
         commit_sha=commit_sha,
     )
-    store.save_scan(scan)
+    store.save_scan(scan, owner_user_id)
     root = await extract_zip(file, scan.id, settings)
     scan = await run_full_scan(scan, root, settings)
-    return store.save_scan(scan)
+    return store.save_scan(scan, owner_user_id)
 
 
 @app.get("/api/settings/model")

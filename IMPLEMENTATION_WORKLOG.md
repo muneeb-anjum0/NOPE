@@ -225,3 +225,83 @@ Rebuild the current implementation status from repository evidence before starti
 ### Next phase
 
 Phase 1: add persistent PostgreSQL storage and migrations. The first implementation target is to replace `InMemoryStore` with a migration-backed repository layer while preserving the current API behavior and tests.
+
+## 2026-07-15 Phase 1 Persistent Postgres Storage
+
+### Objective
+
+Replace `apps/api/nope_api/storage.py` in-memory project/scan state with a migration-backed Postgres repository. Preserve current API contracts while adding normalized durable tables for the entities required by the continuation prompt.
+
+### Planned implementation
+
+1. Add a small SQL migration runner and version table.
+2. Add an initial schema migration for local auth plus project, scan, stage, scanner-run, finding, evidence, source, history, coverage, report, settings, baseline, drift, artifact, audit, and GitHub contract tables.
+3. Update API startup to run migrations instead of ad hoc auth table creation.
+4. Replace `InMemoryStore` with a Postgres-backed store using psycopg.
+5. Keep flexible JSON columns for current scan graph/stack/AI fields while normalizing core relationships.
+6. Add tests for migration application, scan persistence, and cross-user ownership guard helpers.
+7. Verify Docker restart persistence with a ZIP scan.
+
+### Implementation results
+
+- Added `apps/api/nope_api/db.py` with a small SQL migration runner and `schema_migrations` tracking.
+- Added `apps/api/migrations/0001_initial.sql`.
+- Replaced `InMemoryStore` with `PostgresStore` in `apps/api/nope_api/storage.py`.
+- Migrations now create durable tables for:
+  - `local_users`
+  - `local_sessions`
+  - `projects`
+  - `project_targets`
+  - `repository_sources`
+  - `repository_snapshots`
+  - `scans`
+  - `scan_stages`
+  - `scanner_runs`
+  - `findings`
+  - `finding_evidence`
+  - `finding_sources`
+  - `finding_history`
+  - `scan_coverage`
+  - `reports`
+  - `model_configurations`
+  - `scanner_configurations`
+  - `application_settings`
+  - `security_baselines`
+  - `drift_events`
+  - `uploaded_artifacts`
+  - `job_artifacts`
+  - `audit_logs`
+  - `github_connections`
+  - `github_installations`
+  - `github_repository_references`
+- Updated auth startup to use migrations instead of ad hoc auth-only DDL.
+- Updated API project/scan routes to pass authenticated owner IDs when available.
+- Updated Next server API calls and scan upload proxy to forward the local session token.
+- Added `apps/api/tests/test_persistence.py`.
+
+### Verification results
+
+- `$env:PYTHONPATH='apps/api'; python -m pytest`: passed, 13 tests.
+- `pnpm --dir apps/web lint`: passed.
+- `pnpm --dir apps/web typecheck`: passed.
+- `pnpm --dir apps/web build`: passed.
+- `git diff --check`: passed.
+- `docker compose up --build -d`: passed.
+- Docker services healthy after rebuild.
+- Web ZIP upload smoke test created `scan_6c5090b8fe1c474d`.
+- `docker compose restart nope-api`, then `GET /api/scans/scan_6c5090b8fe1c474d` returned HTTP 200 with status `completed`.
+- Postgres row-count smoke after scan showed rows in normalized tables:
+  - scans: 3
+  - stages: 5
+  - scanner_runs: 8
+  - findings: 1
+  - coverage: 15
+  - reports: 9
+  - schema_migrations: 1
+
+### Known limitations after Phase 1
+
+- Direct local API access without an authorization header remains possible for development compatibility. Authenticated dashboard calls are scoped by local user.
+- Scan execution is still synchronous; Redis-backed queuing is Phase 2.
+- Raw scanner output and generated report bodies are not stored in MinIO yet.
+- Migration runner is intentionally small SQL-file based rather than Alembic; it records applied migration filenames in `schema_migrations`.
