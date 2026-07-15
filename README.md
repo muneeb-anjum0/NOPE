@@ -22,7 +22,8 @@ NOPE is a working local MVP, not a finished production platform. The current bui
 - Attack-surface mapping.
 - Lightweight code graph.
 - NOPE deterministic rule pack.
-- Real scanner execution for bundled Semgrep and Bandit, plus parser/normalizer support for Semgrep, Gitleaks, OSV-Scanner, Trivy, Checkov, Hadolint, and Bandit JSON outputs.
+- Real scanner execution for bundled Semgrep, Gitleaks, OSV-Scanner, Trivy, Checkov, Hadolint, and Bandit, with normalized parser output.
+- MinIO-backed raw scanner artifacts linked from scanner runs and artifact tables.
 - Finding normalization, deduplication, scoring, verdicts, coverage tracking, and reports.
 - Optional Qwen/local-AI configuration through llama.cpp with graceful failure.
 - Docker Compose stack with web, API, worker, Postgres, Redis, and MinIO.
@@ -88,7 +89,7 @@ flowchart LR
 
   subgraph Stores["Local Stores"]
     Postgres["Postgres<br/>auth, projects, scans,<br/>findings, coverage, reports"]:::store
-    MinIO["MinIO<br/>planned raw artifacts"]:::partial
+    MinIO["MinIO<br/>raw scanner artifacts"]:::store
     Redis["Redis<br/>planned queued jobs"]:::partial
   end
 
@@ -125,7 +126,7 @@ flowchart LR
   Coverage --> Reports
   Reports --> UI
   API --> Postgres
-  API -.scanner artifact phase.-> MinIO
+  API --> MinIO
   API -.next phase.-> Redis
   Sandbox -.deep scan path.-> Orchestrator
   Reports -.future.-> PR
@@ -205,7 +206,8 @@ Repository-only:
 - Accepts ZIP uploads.
 - Extracts into a temporary workspace with size, file-count, symlink, and path traversal protections.
 - Runs stack detection, attack-surface mapping, code graph construction, NOPE rules, scanner adapters, deduplication, coverage, and reports.
-- Bundled API images include Semgrep and Bandit; additional scanner parsers are ready for their CLI/container integrations.
+- Bundled API images include Semgrep, Gitleaks, OSV-Scanner, Trivy, Checkov, Hadolint, and Bandit.
+- Scanner runs persist command, exit code, bounded redacted output, normalized findings, and MinIO raw-output artifacts.
 - Clearly reports when runtime behavior was not verified.
 
 Full scan:
@@ -231,6 +233,7 @@ Full scan:
 - `GET /api/scans/{scan_id}/report.json`
 - `GET /api/scans/{scan_id}/report.md`
 - `GET /api/scans/{scan_id}/report.sarif`
+- `GET /api/scanners/capabilities`
 - `GET /api/settings/model`
 - `POST /api/settings/model/test`
 
@@ -242,7 +245,7 @@ See `docs/API_REFERENCE.md` for more detail.
 
 Last verified locally:
 
-- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests`: passed, 21 tests.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests`: passed, 23 tests.
 - `python -m compileall nope_api tests`: passed.
 - `pnpm --dir apps/web lint`: passed.
 - `pnpm --dir apps/web typecheck`: passed.
@@ -254,13 +257,13 @@ Last verified locally:
 - API health returned `status: ok`.
 - Web UI returned HTTP 200.
 - MinIO console returned HTTP 200.
-- Vulnerable ZIP fixture scan completed and produced real NOPE-rule findings.
+- Phase 2 scanner fixture scan `scan_e1b6a69758a848bd` completed with 29 findings: NOPE rules 1, Semgrep 1, Gitleaks 1, OSV-Scanner 5, Trivy 10, Checkov 6, Hadolint 2, Bandit 3.
+- Scanner raw-output artifacts for Semgrep, Gitleaks, OSV-Scanner, Trivy, Checkov, Hadolint, and Bandit were written to MinIO and linked from persisted scanner runs.
 - Phase 1 persistence hardening verified authenticated API scoping and stored report bodies.
 
 Known verification caveats:
 
 - Ruff lint was not completed because the Ruff wheel download stalled locally.
-- Gitleaks, OSV-Scanner, Trivy, Checkov, and Hadolint are not bundled in the API image yet.
 - Qwen GGUF file exists at `D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf`, but llama.cpp container loading and inference are not verified yet.
 - npm reported two moderate frontend dependency advisories during Docker install.
 

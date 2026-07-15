@@ -3,7 +3,14 @@ import sys
 
 from nope_api.config import Settings
 from nope_api.models import Severity
-from nope_api.scanners import BanditPlugin, GitleaksPlugin, ScannerPlugin, SemgrepPlugin, TrivyPlugin
+from nope_api.scanners import (
+    BanditPlugin,
+    GitleaksPlugin,
+    ScannerPlugin,
+    SemgrepPlugin,
+    TrivyPlugin,
+    scanner_capabilities,
+)
 
 
 def test_semgrep_parser_normalizes_findings(tmp_path):
@@ -111,3 +118,12 @@ def test_scanner_execute_captures_redacted_raw_output(tmp_path):
     assert "***REDACTED***" in run.raw_stdout
     assert "sk-test-secret-value" not in run.raw_stdout
     assert "warning" in run.raw_stderr
+
+
+def test_scanner_capabilities_include_versions_and_coverage():
+    capabilities = scanner_capabilities()
+    semgrep = next(item for item in capabilities if item["name"] == "Semgrep")
+
+    assert "installed" in semgrep
+    assert "version" in semgrep
+    assert "Secrets" in semgrep["coverage_categories"]

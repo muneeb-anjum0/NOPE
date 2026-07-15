@@ -375,3 +375,50 @@ Start replacing scanner placeholders with real scanner execution evidence, norma
 - Add containerized scanner execution for the non-Python scanners.
 - Store full scanner raw artifacts in MinIO with authorized downloads.
 - Add scanner version and capability reporting.
+
+## 2026-07-15 Phase 2 Scanner Execution Completion
+
+### Objective
+
+Close Phase 2 for the bundled repository scanner matrix: real scanner binaries in Docker, normalized parser output, persisted scanner-run metadata, MinIO raw artifacts, and capability/version reporting.
+
+### Implemented
+
+- Bundled Semgrep, Gitleaks, OSV-Scanner, Trivy, Checkov, Hadolint, and Bandit into the API/worker Docker image.
+- Added scanner version commands and authenticated `GET /api/scanners/capabilities`.
+- Added MinIO artifact writer for raw scanner stdout/stderr JSON payloads.
+- Linked raw artifacts from `scanner_runs.raw_artifact_id`, `uploaded_artifacts`, and `job_artifacts`.
+- Fixed Checkov parsing for top-level JSON-array output.
+- Updated Gitleaks execution to write JSON reports to stdout through `--report-path /dev/stdout`.
+- Added a broad vulnerable scanner fixture covering Python, Dockerfile, Terraform, lockfile dependency, and secret detection paths.
+- Added backend tests for scanner capability reporting and raw scanner artifact persistence.
+
+### Verification
+
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests`: 23 passed.
+- `docker compose up --build -d nope-api nope-worker`: rebuilt and started successfully.
+- `GET /health`: all bundled scanners reported `Installed.`
+- Scanner versions in container:
+  - Semgrep `1.169.0`
+  - Gitleaks `8.28.0`
+  - OSV-Scanner `2.2.3`
+  - Trivy `0.72.0`
+  - Checkov `3.3.8`
+  - Hadolint `2.14.0`
+  - Bandit `1.9.4`
+- Authenticated `GET /api/scanners/capabilities`: returned installed status, versions, coverage categories, and supported markers for all bundled scanners.
+- Authenticated ZIP scan `scan_e1b6a69758a848bd`: completed with 29 findings.
+  - NOPE rules: 1
+  - Semgrep: 1
+  - Gitleaks: 1
+  - OSV-Scanner: 5
+  - Trivy: 10
+  - Checkov: 6
+  - Hadolint: 2
+  - Bandit: 3
+- Postgres artifact join verified raw artifact links for all seven external scanner runs.
+- MinIO object listing verified seven raw-output JSON artifacts under `nope-artifacts/scans/scan_e1b6a69758a848bd/`.
+
+### Phase Result
+
+Phase 2 is complete for bundled repository scanner execution and evidence persistence. Redis queueing, ZAP/browser dynamic testing, Qwen inference, suppression workflow, and PDF reports remain separate later phases.

@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     auth_database_url: str = "postgresql://nope:nope@localhost:5432/nope"
     redis_url: str = "redis://localhost:6379/0"
     minio_endpoint: str = "http://localhost:9000"
+    minio_access_key: str = "nope"
+    minio_secret_key: str = "nope-development-password"
+    minio_bucket: str = "nope-artifacts"
+    minio_secure: bool = False
     session_secret: str = "development-session-secret-change-me"
     encryption_key: str = "development-encryption-key-change-me"
     require_authenticated_api: bool = True

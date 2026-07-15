@@ -2,7 +2,7 @@ from uuid import uuid4
 
 from nope_api.config import Settings
 from nope_api.db import connect, run_migrations
-from nope_api.models import Finding, Project, Scan, ScanMode, Severity, Confidence
+from nope_api.models import Confidence, Finding, Scan, ScannerRun, ScanMode, Severity
 from nope_api.storage import PostgresStore
 
 
@@ -74,3 +74,37 @@ def test_user_scoped_scan_lookup_blocks_other_user():
     scan = Scan(id=f"scan_owner_{suffix}", mode=ScanMode.repository)
     store.save_scan(scan, None)
     assert store.get_scan(scan.id, "user_does_not_own_this") is None
+
+
+def test_scanner_raw_output_artifact_is_recorded(monkeypatch):
+    suffix = uuid4().hex[:8]
+    store = PostgresStore()
+
+    def fake_put_json_artifact(settings, *, scan_id, artifact_type, name, payload):
+        return {
+            "id": f"art_{suffix}",
+            "type": artifact_type,
+            "filename": f"{name}.json",
+            "storage_url": f"minio://nope-artifacts/scans/{scan_id}/{name}.json",
+            "size_bytes": 42,
+            "sha256": "abc123",
+        }
+
+    monkeypatch.setattr("nope_api.storage.put_json_artifact", fake_put_json_artifact)
+    scan = Scan(
+        id=f"scan_artifact_{suffix}",
+        mode=ScanMode.repository,
+        scanner_runs=[
+            ScannerRun(
+                scanner="Semgrep",
+                status="passed",
+                raw_stdout='{"results":[]}',
+                raw_stderr="",
+                exit_code=0,
+            )
+        ],
+    )
+
+    saved = store.save_scan(scan, None)
+    assert saved.scanner_runs[0].raw_artifact_id == f"art_{suffix}"
+    assert saved.scanner_runs[0].raw_artifact_url.startswith("minio://")

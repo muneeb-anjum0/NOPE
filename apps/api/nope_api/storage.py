@@ -5,6 +5,7 @@ from typing import Any
 
 from psycopg.types.json import Jsonb
 
+from nope_api.artifacts import put_json_artifact
 from nope_api.config import get_settings
 from nope_api.db import connect, run_migrations
 from nope_api.models import Project, Scan, new_id
@@ -235,13 +236,17 @@ class PostgresStore:
             )
 
         for run in scan.scanner_runs:
+            artifact = self._store_scanner_artifact(scan.id, run)
+            if artifact:
+                run.raw_artifact_id = artifact["id"]
+                run.raw_artifact_url = artifact["storage_url"]
             conn.execute(
                 """
                 insert into scanner_runs (
                   scan_id, scanner, version, status, coverage_categories,
-                  started_at, completed_at, message, findings_count, data
+                  started_at, completed_at, message, findings_count, raw_artifact_id, data
                 )
-                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     scan.id,
@@ -253,9 +258,44 @@ class PostgresStore:
                     run.completed_at,
                     run.message,
                     run.findings_count,
+                    run.raw_artifact_id,
                     Jsonb(run.model_dump(mode="json")),
                 ),
             )
+            if artifact:
+                conn.execute(
+                    """
+                    insert into uploaded_artifacts (
+                      id, scan_id, artifact_type, filename, storage_url, size_bytes, sha256, data
+                    )
+                    values (%s, %s, %s, %s, %s, %s, %s, %s)
+                    on conflict (id) do nothing
+                    """,
+                    (
+                        artifact["id"],
+                        scan.id,
+                        artifact["type"],
+                        artifact["filename"],
+                        artifact["storage_url"],
+                        artifact["size_bytes"],
+                        artifact["sha256"],
+                        Jsonb(artifact),
+                    ),
+                )
+                conn.execute(
+                    """
+                    insert into job_artifacts (id, scan_id, artifact_type, storage_url, data)
+                    values (%s, %s, %s, %s, %s)
+                    on conflict (id) do nothing
+                    """,
+                    (
+                        f"job_{artifact['id']}",
+                        scan.id,
+                        artifact["type"],
+                        artifact["storage_url"],
+                        Jsonb(artifact),
+                    ),
+                )
 
         for finding in scan.findings:
             finding_data = finding.model_dump(mode="json")
@@ -370,6 +410,26 @@ class PostgresStore:
                     ),
                 ),
             )
+
+    def _store_scanner_artifact(self, scan_id: str, run) -> dict | None:
+        if not run.raw_stdout and not run.raw_stderr:
+            return None
+        safe_name = "".join(ch.lower() if ch.isalnum() else "-" for ch in run.scanner).strip("-")
+        return put_json_artifact(
+            self.settings,
+            scan_id=scan_id,
+            artifact_type="scanner_raw_output",
+            name=f"{safe_name}-raw-output",
+            payload={
+                "scan_id": scan_id,
+                "scanner": run.scanner,
+                "command": run.command,
+                "exit_code": run.exit_code,
+                "status": run.status,
+                "stdout": run.raw_stdout,
+                "stderr": run.raw_stderr,
+            },
+        )
 
 
 store = PostgresStore()

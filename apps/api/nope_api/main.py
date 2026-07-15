@@ -13,7 +13,7 @@ from nope_api.ingestion import extract_zip
 from nope_api.models import AuthorizationScope, Project, Scan, ScanMode, ScanRequest
 from nope_api.reports import render_report
 from nope_api.scan_engine import run_full_scan, run_repository_scan, run_url_only_scan
-from nope_api.scanners import scanner_health
+from nope_api.scanners import scanner_capabilities, scanner_health
 from nope_api.security import validate_url_scope
 from nope_api.storage import store
 
@@ -131,6 +131,12 @@ def create_project(project: Project, authorization: str | None = Header(default=
 @app.get("/api/scans", response_model=list[Scan])
 def list_scans(authorization: str | None = Header(default=None)) -> list[Scan]:
     return store.list_scans(_require_owner_user_id(authorization))
+
+
+@app.get("/api/scanners/capabilities")
+def scanners_capabilities(authorization: str | None = Header(default=None)) -> list[dict]:
+    _require_owner_user_id(authorization)
+    return scanner_capabilities()
 
 
 @app.get("/api/scans/{scan_id}", response_model=Scan)

@@ -157,6 +157,8 @@ class ScannerRun(BaseModel):
     exit_code: int | None = None
     raw_stdout: str = ""
     raw_stderr: str = ""
+    raw_artifact_id: str | None = None
+    raw_artifact_url: str | None = None
 
 
 class CoverageRecord(BaseModel):

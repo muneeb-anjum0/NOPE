@@ -4,9 +4,32 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV HOME=/tmp
 ENV SEMGREP_SEND_METRICS=off
+ENV TRIVY_CACHE_DIR=/tmp/trivy
 WORKDIR /app
 
 RUN addgroup --system nope && adduser --system --ingroup nope nope
+
+ARG GITLEAKS_VERSION=8.28.0
+ARG OSV_SCANNER_VERSION=2.2.3
+ARG TRIVY_VERSION=0.72.0
+ARG HADOLINT_VERSION=2.14.0
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl tar unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+    | tar -xz -C /usr/local/bin gitleaks \
+    && curl -fsSL "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64" \
+      -o /usr/local/bin/osv-scanner \
+    && chmod +x /usr/local/bin/osv-scanner \
+    && curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+    | tar -xz -C /usr/local/bin trivy \
+    && curl -fsSL "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-linux-x86_64" \
+      -o /usr/local/bin/hadolint \
+    && chmod +x /usr/local/bin/hadolint \
+    && mkdir -p /tmp/trivy \
+    && chmod 0777 /tmp/trivy
 
 COPY apps/api/requirements.txt /app/apps/api/requirements.txt
 RUN pip install --no-cache-dir -r /app/apps/api/requirements.txt

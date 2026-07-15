@@ -7,6 +7,11 @@ NOPE treats scanner output as evidence. Scanner findings are normalized into the
 The API image installs:
 
 - `semgrep` for multi-language static analysis.
+- `gitleaks` for repository secret detection.
+- `osv-scanner` for open-source dependency vulnerability checks.
+- `trivy` for filesystem dependency/container/IaC checks.
+- `checkov` for Terraform, Dockerfile, and CI/CD policy checks.
+- `hadolint` for Dockerfile lint/security checks.
 - `bandit` for Python security analysis.
 
 These tools run during repository scans when applicable to the uploaded project.
@@ -31,25 +36,31 @@ Parsers produce normalized severity, confidence, category, affected file, line, 
 
 Each scanner run records:
 
-- Scanner name and version placeholder
+- Scanner name and version
 - Status: `passed`, `failed`, or `skipped`
 - Command arguments
 - Exit code
 - Redacted stdout and stderr, bounded by `NOPE_MAX_SCANNER_OUTPUT_BYTES`
+- MinIO raw-output artifact reference when stdout/stderr exists
 - Coverage categories
 - Finding count
 
-Secret-like values are redacted before raw output is stored in the scan snapshot and normalized scanner-run data.
+Secret-like values are redacted before raw output is stored in the scan snapshot, normalized scanner-run data, and MinIO artifact payload.
 
-## Remaining Phase 2 Work
+Raw scanner artifacts are JSON objects in `nope-artifacts` under `scans/{scan_id}/...`. The database links them through `uploaded_artifacts`, `job_artifacts`, and `scanner_runs.raw_artifact_id`.
 
-- Add containerized execution for Gitleaks, OSV-Scanner, Trivy, Checkov, and Hadolint.
-- Persist raw scanner artifacts to MinIO with authorized downloads.
-- Add scanner capability/version endpoint.
-- Add scanner image availability checks.
-- Add broader vulnerable fixtures for parser and integration tests.
+## Capability Reporting
+
+Authenticated users can call `GET /api/scanners/capabilities` to see:
+
+- Installed status and health message
+- Version string
+- Coverage categories
+- Supported file markers used for applicability checks
 
 ## Verified Smoke
 
-- Docker API image: Semgrep `1.169.0`, Bandit `1.9.4`.
-- Repository ZIP scan `scan_28e96fc09a904bc9`: Semgrep status `passed`, exit code `1`, 2 normalized findings, redacted raw output captured.
+- Docker API image: Semgrep `1.169.0`, Gitleaks `8.28.0`, OSV-Scanner `2.2.3`, Trivy `0.72.0`, Checkov `3.3.8`, Hadolint `2.14.0`, Bandit `1.9.4`.
+- Repository ZIP scan `scan_e1b6a69758a848bd`: status `completed`, 29 findings total.
+- Scanner findings in that smoke: Semgrep 1, Gitleaks 1, OSV-Scanner 5, Trivy 10, Checkov 6, Hadolint 2, Bandit 3.
+- MinIO artifacts were written for all seven external scanner raw outputs and linked from persisted scanner runs.

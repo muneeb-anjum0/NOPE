@@ -18,6 +18,7 @@ Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `
 - `GET /api/scans/{scan_id}/coverage` - coverage records.
 - `GET /api/scans/{scan_id}/attack-map` - attack-surface graph.
 - `GET /api/scans/{scan_id}/report.{format}` - export report as `json`, `md`, or `sarif`.
+- `GET /api/scanners/capabilities` - authenticated scanner health, version, coverage category, and applicability marker metadata.
 - `GET /api/settings/model` - current AI model configuration.
 - `POST /api/settings/model/test` - test AI runtime reachability.
 - `POST /api/findings/explain` - send one normalized finding to the configured llama.cpp adapter for a focused explanation.

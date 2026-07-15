@@ -126,6 +126,39 @@ class ScannerPlugin:
             return True, "Installed."
         return False, f"{self.command} was not found on PATH."
 
+    def version_command(self) -> list[str]:
+        return [self.command, "--version"]
+
+    def version(self) -> str:
+        installed, _ = self.health_check()
+        if not installed:
+            return "unavailable"
+        try:
+            result = subprocess.run(
+                self.version_command(),
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+                env={**os.environ, "HOME": os.environ.get("HOME") or "/tmp", "SEMGREP_SEND_METRICS": "off"},
+            )
+        except Exception as exc:
+            return f"version check failed: {exc}"
+        output = (result.stdout or result.stderr).strip().splitlines()
+        return output[0] if output else "unknown"
+
+    def capability(self) -> dict:
+        installed, message = self.health_check()
+        return {
+            "name": self.name,
+            "command": self.command,
+            "installed": installed,
+            "health": message,
+            "version": self.version(),
+            "coverage_categories": self.coverage_categories,
+            "supported_markers": self.supported_markers,
+        }
+
     def execute(self, root: Path, settings: Settings) -> tuple[ScannerRun, list[Finding]]:
         started = now_utc()
         applicable = self.detect_applicability(root)
@@ -264,7 +297,20 @@ class GitleaksPlugin(ScannerPlugin):
     coverage_categories = ["Secrets"]
 
     def build_command(self, root: Path) -> list[str]:
-        return ["gitleaks", "detect", "--source", str(root), "--report-format", "json", "--no-git"]
+        return [
+            "gitleaks",
+            "detect",
+            "--source",
+            str(root),
+            "--report-format",
+            "json",
+            "--report-path",
+            "/dev/stdout",
+            "--no-git",
+        ]
+
+    def version_command(self) -> list[str]:
+        return ["gitleaks", "version"]
 
     def parse_results(self, stdout: str, stderr: str, root: Path) -> list[Finding]:
         data = load_json_or_none(stdout)
@@ -338,7 +384,15 @@ class TrivyPlugin(ScannerPlugin):
     coverage_categories = ["Dependencies", "Containers", "CI/CD"]
 
     def build_command(self, root: Path) -> list[str]:
-        return ["trivy", "fs", "--format", "json", "--scanners", "vuln,secret,misconfig", str(root)]
+        return [
+            "trivy",
+            "fs",
+            "--format",
+            "json",
+            "--scanners",
+            "vuln,secret,misconfig",
+            str(root),
+        ]
 
     def parse_results(self, stdout: str, stderr: str, root: Path) -> list[Finding]:
         data = _as_dict(load_json_or_none(stdout))
@@ -407,16 +461,15 @@ class CheckovPlugin(ScannerPlugin):
     supported_markers = ["*.tf", "*.yaml", "*.yml", "Dockerfile"]
 
     def build_command(self, root: Path) -> list[str]:
-        return ["checkov", "-d", str(root), "-o", "json"]
+        return ["checkov", "-d", str(root), "-o", "json", "--quiet", "--skip-download"]
 
     def parse_results(self, stdout: str, stderr: str, root: Path) -> list[Finding]:
-        data = _as_dict(load_json_or_none(stdout))
-        results = data.get("results")
-        if isinstance(results, dict):
-            failed_checks = _as_list(results.get("failed_checks"))
+        payload = load_json_or_none(stdout)
+        failed_checks = []
+        if isinstance(payload, dict):
+            failed_checks.extend(_as_list(_as_dict(payload.get("results")).get("failed_checks")))
         else:
-            failed_checks = []
-            for framework in _as_list(data):
+            for framework in _as_list(payload):
                 failed_checks.extend(_as_list(_as_dict(_as_dict(framework).get("results")).get("failed_checks")))
         findings: list[Finding] = []
         for check in failed_checks:
@@ -482,6 +535,9 @@ class BanditPlugin(ScannerPlugin):
     def build_command(self, root: Path) -> list[str]:
         return ["bandit", "-r", str(root), "-f", "json"]
 
+    def version_command(self) -> list[str]:
+        return ["bandit", "--version"]
+
     def parse_results(self, stdout: str, stderr: str, root: Path) -> list[Finding]:
         data = _as_dict(load_json_or_none(stdout))
         findings: list[Finding] = []
@@ -520,6 +576,10 @@ def scanner_plugins() -> list[ScannerPlugin]:
 
 def scanner_health() -> dict[str, str]:
     return {plugin.name: plugin.health_check()[1] for plugin in scanner_plugins()}
+
+
+def scanner_capabilities() -> list[dict]:
+    return [plugin.capability() for plugin in scanner_plugins()]
 
 
 def load_json_or_none(text: str):
