@@ -422,3 +422,147 @@ Close Phase 2 for the bundled repository scanner matrix: real scanner binaries i
 ### Phase Result
 
 Phase 2 is complete for bundled repository scanner execution and evidence persistence. Redis queueing, ZAP/browser dynamic testing, Qwen inference, suppression workflow, and PDF reports remain separate later phases.
+
+## 2026-07-15 Canonical Phase 0 Recovery Audit
+
+### Objective
+
+Execute the canonical continuation prompt's Phase 0 only: recover the repository state, inspect current implementation and history, create `docs/PHASE_RECONCILIATION.md`, refresh status/worklog documentation, run current verification, commit the Phase 0 audit docs, and stop before any later phase implementation.
+
+### Pre-phase repository state
+
+- Branch: `main`.
+- Pre-phase commit SHA: `194a1e8`.
+- HEAD: `feat(phase-2): complete scanner execution pipeline`.
+- Tracking: `main...origin/main`.
+- Working tree before Phase 0 documentation edits was not clean:
+  - Modified: `apps/api/nope_api/main.py`
+  - Modified: `apps/api/nope_api/models.py`
+  - Modified: `apps/api/requirements.txt`
+  - Modified: `apps/worker/worker.py`
+  - Modified: `docker-compose.yml`
+  - Untracked: `apps/api/nope_api/queue.py`
+  - Untracked: `apps/api/tests/test_queue.py`
+- Those existing changes are Phase 3 queue/worker work-in-progress and were not authored as part of this Phase 0 audit.
+- CodeGraph: `.codegraph/` is not present, so normal repository inspection was used.
+
+### Git history inspected
+
+- `194a1e8 feat(phase-2): complete scanner execution pipeline`
+- `0b036fb feat(phase-2): add real scanner parsing and bundled sast`
+- `a5189fb feat(phase-1): harden persistence completion`
+- `fcbdbe4 docs: move markdown docs into docs folder`
+- `0c07d73 feat(phase-1): add persistent postgres storage and migrations`
+- `c7bbe9f feat(phase-0): baseline implementation audit`
+- `50a0004 fix: repair scan uploads and sidebar state`
+- `e4eab90 feat: add local auth and refresh dashboard UX`
+- `0a4ba90 feat: redesign NOPE and integrate local Qwen runtime`
+- `1041135 docs: add NOPE README`
+- `376e157 feat: build NOPE security orchestration platform`
+- `6c0807d Initial commit`
+
+### Documentation inspected
+
+- `README.md`
+- `docs/API_REFERENCE.md`
+- `docs/ARCHITECTURE.md`
+- `docs/DATABASE.md`
+- `docs/DEPLOYMENT.md`
+- `docs/DESIGN_SYSTEM.md`
+- `docs/DEVELOPMENT.md`
+- `docs/FEATURE_STATUS.md`
+- `docs/IMPLEMENTATION_WORKLOG.md`
+- `docs/LOCAL_AI.md`
+- `docs/SCANNERS.md`
+- `docs/SECURITY_MODEL.md`
+
+### Implementation inspected
+
+- API endpoints and contracts: `apps/api/nope_api/main.py`, `apps/api/nope_api/models.py`
+- Persistence and migrations: `apps/api/nope_api/storage.py`, `apps/api/nope_api/db.py`, `apps/api/migrations/0001_initial.sql`, `apps/api/migrations/0002_report_bodies.sql`
+- Auth/session handling: `apps/api/nope_api/auth.py`
+- ZIP ingestion and URL scope controls: `apps/api/nope_api/ingestion.py`, `apps/api/nope_api/security.py`, `apps/api/nope_api/url_scanner.py`
+- Pipeline/scoring: `apps/api/nope_api/scan_engine.py`, `apps/api/nope_api/scoring.py`
+- Stack/attack/code graph: `apps/api/nope_api/stack_detector.py`, `apps/api/nope_api/attack_surface.py`
+- Scanners/rules/artifacts: `apps/api/nope_api/scanners.py`, `apps/api/nope_api/rules_engine.py`, `apps/api/nope_api/artifacts.py`, `security-packs/nope-core-rules.json`, `security-packs/semgrep/nope.yml`
+- Qwen/RAG/reporting: `apps/api/nope_api/ai.py`, `apps/api/nope_api/reports.py`
+- Queue/worker WIP: `apps/api/nope_api/queue.py`, `apps/worker/worker.py`
+- Frontend routes/components: `apps/web/app`, `apps/web/components`, `apps/web/lib`
+- Tests/fixtures: `apps/api/tests`, `apps/api/tests/fixtures`
+- Docker/env: `docker-compose.yml`, `docker-compose.ai-cpu.yml`, `docker-compose.ai-gpu.yml`, `docker/api.Dockerfile`, `docker/web.Dockerfile`, `.env.example`
+
+### Required Phase 0 task list
+
+1. Inspect recent commits.
+2. Inspect documentation.
+3. Inspect services, migrations, scanners, worker, queue, Qwen, RAG, reporting, frontend, tests, Docker Compose, and environment templates.
+4. Create `docs/PHASE_RECONCILIATION.md`.
+5. Update `docs/FEATURE_STATUS.md`.
+6. Add this `docs/IMPLEMENTATION_WORKLOG.md` entry.
+7. Run required current verification commands where repository-specific equivalents exist.
+8. Document command results exactly.
+9. Commit and push only Phase 0 documentation changes if verification permits.
+10. Stop after the Phase 0 completion dossier.
+
+### Required Phase 0 test list
+
+- Git status/history/diff checks.
+- Backend test suite: `python -m pytest apps/api/tests`.
+- Frontend lint/typecheck/build: `pnpm --dir apps/web lint`, `pnpm --dir apps/web typecheck`, `pnpm --dir apps/web build`.
+- Docker config/build/up/ps/log health checks.
+- Migration status through API health and available migration runner.
+- Keyword sweep over implementation/docs.
+- Security checks available locally: Gitleaks, dependency audit, Docker configuration, and scanner-related tests.
+
+### Phase reconciliation summary
+
+- Authentication, local user/project/scan persistence, bundled scanner execution/parsing/artifacts, JSON/Markdown/SARIF reports, and Docker core stack have real implementation evidence.
+- Redis queue/worker/retry/cancellation is now partially implemented in the dirty working tree, but is not complete or verified against Phase 3 acceptance criteria.
+- Qwen is configured as adapter/profile documentation only; live llama.cpp model loading and inference remain Phase 5.
+- RAG is only finding-snippet retrieval; graph-aware focused retrieval remains Phase 6.
+- Findings filters/detail/code-flow/history, baselines/drift, PDF, sandbox, persistent settings, GitHub routes/adapters, benchmarks, expanded tests, E2E, and final documentation remain later phases.
+- GitHub private repository access remains blocked by missing credentials and must not be faked.
+
+### Keyword sweep conclusion
+
+The required sweep found documentation status language, intentional vulnerable fixtures/rules, test-only fakes, a real `pass` control-flow statement in `security.py`, migration `pending` status reporting, placeholder attributes in UI inputs, and a UI "Pending" label. Each group is classified in `docs/PHASE_RECONCILIATION.md`; no sweep match remains undocumented.
+
+### Verification results
+
+Final command results for this Phase 0 pass:
+
+- `git status --short --branch`: `main...origin/main`; dirty tree with pre-existing Phase 3 queue/worker WIP plus Phase 0 docs.
+- `git log --oneline --decorate -20`: inspected through `194a1e8` back to `6c0807d`.
+- `Test-Path .codegraph`: `False`; CodeGraph not available.
+- `rg --files`: repository file inventory captured for docs, API, worker, web, tests, migrations, Docker, and security packs.
+- Keyword sweep with `rg -n -i "TODO|FIXME|placeholder|stub|mock|fake|demo-only|temporary|in-memory|NotImplemented|NotImplementedError|hardcoded|later|pending|\bpass\b"`: completed; classifications recorded in `docs/PHASE_RECONCILIATION.md`.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests`: collected 24 tests but hung after starting `apps/api/tests/test_api_auth.py`; process was stopped after repeated waits. Result: failed/incomplete, likely because local Postgres/Docker was unavailable.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests/test_pipeline.py apps/api/tests/test_scanners.py apps/api/tests/test_security.py apps/api/tests/test_queue.py`: passed, 17 tests in 2.92s.
+- `python -m compileall apps/api/nope_api apps/api/tests apps/worker`: passed.
+- `python -m ruff check apps/api/nope_api apps/api/tests`: failed, `No module named ruff`.
+- `pnpm --dir apps/web lint`: passed.
+- `pnpm --dir apps/web typecheck`: passed.
+- `pnpm --dir apps/web build`: passed; Next.js generated 17 routes successfully.
+- `pnpm --dir apps/web run test`: failed, no `test` script exists.
+- `git diff --check`: passed with line-ending warnings for dirty files.
+- `docker --version`: Docker `29.6.1`.
+- `docker compose version`: Docker Compose `v5.2.0`.
+- `docker compose config`: passed and printed normalized configuration.
+- `docker compose config --quiet`: passed.
+- `docker compose build`: failed because Docker Desktop Linux engine was not reachable at `npipe:////./pipe/dockerDesktopLinuxEngine`.
+- `docker compose up -d`: failed for the same Docker API connection issue.
+- `docker compose ps`: failed for the same Docker API connection issue.
+- `docker compose logs --tail 200`: failed for the same Docker API connection issue.
+- Alembic check: `alembic` unavailable; repository uses the SQL migration runner in `apps/api/nope_api/db.py`, not Alembic.
+- `gitleaks detect --source . --no-git --redact`: failed, `gitleaks` not installed locally.
+- `pnpm audit --audit-level moderate`: failed with one moderate advisory: PostCSS `<8.5.10` via `apps__web>next>postcss`, GHSA-qx2v-qp2m-jg93.
+- `python -m pip audit`: failed, `pip` has no `audit` command in this environment.
+- `Get-Command pip-audit/trivy/semgrep`: unavailable locally.
+- `Test-Path D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf`: `True`.
+- `nvidia-smi --query-gpu=name,memory.total,memory.used --format=csv,noheader`: `NVIDIA GeForce GTX 1060 with Max-Q Design, 6144 MiB, 0 MiB`.
+
+### Phase 0 closure notes
+
+- Phase 0 documentation requirements were implemented.
+- Full verification is not green because Docker/Postgres-dependent commands and security tools were unavailable in the current local state.
+- The dirty Phase 3 queue/worker files remain uncommitted work-in-progress unless explicitly authorized for Phase 3.
