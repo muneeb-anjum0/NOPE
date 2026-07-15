@@ -6,8 +6,9 @@ NOPE integrates local Qwen through a dedicated llama.cpp server container. Ollam
 
 - Model family: Qwen3 8B-class
 - Quantization: Q4_K_M
-- Expected filename: `qwen3-8b-q4_k_m.gguf`
-- Default in-container path: `/models/qwen3-8b-q4_k_m.gguf`
+- Expected local filename: `Qwen3-8B-Q4_K_M.gguf`
+- Current host path: `D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf`
+- Default in-container path for the next AI phase: `/models/Qwen3-8B-Q4_K_M.gguf`
 
 The model file must not be committed to Git. `*.gguf` and `models/` are ignored.
 
@@ -16,8 +17,8 @@ The model file must not be committed to Git. `*.gguf` and `models/` are ignored.
 Set this in `.env` or shell:
 
 ```bash
-NOPE_MODEL_DIR=C:/models/nope
-NOPE_QWEN_MODEL_FILE=qwen3-8b-q4_k_m.gguf
+NOPE_MODEL_DIR=D:/Desktop/Model
+NOPE_QWEN_MODEL_FILE=Qwen3-8B-Q4_K_M.gguf
 ```
 
 The directory is mounted read-only into `nope-ai` at `/models`.
@@ -64,4 +65,4 @@ GPU mode requests an NVIDIA GPU through Docker Compose device reservations.
 
 ## Current Verification
 
-The code and Compose service were added. Actual model loading and inference are not verified unless a valid GGUF exists at the configured model path and Docker can run the selected CPU/GPU profile.
+The GGUF file exists at `D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf`, and `nvidia-smi` sees a 6 GB GTX 1060 Max-Q. Actual llama.cpp container loading, GPU VRAM use, and inference are still not verified.

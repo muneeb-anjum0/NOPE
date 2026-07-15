@@ -169,7 +169,7 @@ AI GPU mode:
 docker compose -f docker-compose.yml -f docker-compose.ai-gpu.yml --profile ai-gpu up --build -d
 ```
 
-Set `NOPE_MODEL_DIR` and `NOPE_QWEN_MODEL_FILE` before starting AI mode. See `LOCAL_AI.md`.
+Set `NOPE_MODEL_DIR` and `NOPE_QWEN_MODEL_FILE` before starting AI mode. The current local model path is `D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf`. See `LOCAL_AI.md`.
 
 ## Local development
 
@@ -258,7 +258,7 @@ Known verification caveats:
 
 - Ruff lint was not completed because the Ruff wheel download stalled locally.
 - External scanner CLIs were not installed locally or in the API image.
-- Qwen GGUF/llama.cpp runtime inference was not verified in this pass because no GGUF model file was found during local search.
+- Qwen GGUF file exists at `D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf`, but llama.cpp container loading and inference are not verified yet.
 - npm reported two moderate frontend dependency advisories during Docker install.
 
 ## Important docs

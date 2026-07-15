@@ -133,3 +133,95 @@
 - A broad local `*.gguf` search did not find the downloaded Qwen model in the searched filesystem paths.
 - `nope-ai` service configuration was added but actual model loading, GPU VRAM use, and inference were not verified.
 - CPU/GPU profile commands are documented and can be run once `NOPE_MODEL_DIR` and `NOPE_QWEN_MODEL_FILE` point at the downloaded model.
+
+## 2026-07-15 Phase 0 Baseline Audit
+
+### Objective
+
+Rebuild the current implementation status from repository evidence before starting the persistence, queue, scanner, Qwen, reporting, drift, sandbox, settings, benchmark, and testing phases requested by the continuation prompt.
+
+### Repository and tool baseline
+
+- Branch: `main`.
+- Baseline commit: `50a0004`.
+- Remote: `origin https://github.com/muneeb-anjum0/NOPE.git`.
+- Working tree before Phase 0 edits: clean.
+- Node: `v24.16.0`.
+- pnpm: `11.5.0`.
+- Python: `3.11.9`.
+- Docker: `29.6.1`.
+- Docker Compose: `v5.2.0`.
+- GPU: `NVIDIA GeForce GTX 1060 with Max-Q Design`, 6144 MiB total, 0 MiB used at baseline.
+- Qwen model file: `D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf`, 5,027,783,488 bytes, present.
+- Scanner CLIs on PATH: Semgrep, Gitleaks, OSV-Scanner, Trivy, Checkov, Hadolint, Bandit were not found.
+- Local `nvidia-smi` exists and can be used for later GPU verification.
+
+### Documentation inspected
+
+- `README.md`
+- `FEATURE_STATUS.md`
+- `IMPLEMENTATION_WORKLOG.md`
+- `ARCHITECTURE.md`
+- `SECURITY_MODEL.md`
+- `DEVELOPMENT.md`
+- `DEPLOYMENT.md`
+- `API_REFERENCE.md`
+- `DESIGN_SYSTEM.md`
+- `LOCAL_AI.md`
+
+### Implementation evidence inspected
+
+- API models and endpoints: `apps/api/nope_api/models.py`, `apps/api/nope_api/main.py`
+- Storage: `apps/api/nope_api/storage.py`
+- Local auth: `apps/api/nope_api/auth.py`
+- ZIP ingestion: `apps/api/nope_api/ingestion.py`
+- URL scope and scanner: `apps/api/nope_api/security.py`, `apps/api/nope_api/url_scanner.py`
+- Pipeline: `apps/api/nope_api/scan_engine.py`
+- Stack/attack graph: `apps/api/nope_api/stack_detector.py`, `apps/api/nope_api/attack_surface.py`
+- Rules/scanners/RAG/Qwen/reports: `apps/api/nope_api/rules_engine.py`, `apps/api/nope_api/scanners.py`, `apps/api/nope_api/ai.py`, `apps/api/nope_api/reports.py`
+- Worker: `apps/worker/worker.py`
+- Web routes/components: `apps/web/app`, `apps/web/components`, `apps/web/lib`
+- Docker: `docker-compose.yml`, `docker-compose.ai-cpu.yml`, `docker-compose.ai-gpu.yml`, `docker/api.Dockerfile`, `docker/web.Dockerfile`
+
+### Baseline verification commands
+
+- `git status --short`: clean before Phase 0 edits.
+- `git rev-parse --short HEAD`: `50a0004`.
+- `git branch --show-current`: `main`.
+- `git remote -v`: `origin https://github.com/muneeb-anjum0/NOPE.git`.
+- `node --version`: `v24.16.0`.
+- `pnpm --version`: `11.5.0`.
+- `python --version`: `Python 3.11.9`.
+- `docker --version`: `Docker version 29.6.1, build 8900f1d`.
+- `docker compose version`: `Docker Compose version v5.2.0`.
+- `Test-Path D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf`: `True`.
+- `nvidia-smi --query-gpu=name,memory.total,memory.used --format=csv,noheader`: GTX 1060 Max-Q, 6144 MiB total, 0 MiB used.
+- `$env:PYTHONPATH='apps/api'; python -m pytest`: passed, 10 tests.
+- `pnpm --dir apps/web lint`: passed.
+- `pnpm --dir apps/web typecheck`: passed.
+- `pnpm --dir apps/web build`: passed.
+- `docker compose config --quiet`: passed.
+- `docker compose up --build -d`: passed from cache.
+- `docker compose ps`: `NOPE`, `nope-api`, `nope-postgres`, `nope-redis`, `nope-minio` healthy; worker started.
+- `GET http://127.0.0.1:8000/health`: returned `status: ok`; AI provider `none`; scanner CLIs reported missing.
+- `GET http://127.0.0.1:3000`: HTTP 200.
+- `GET http://127.0.0.1:9001`: HTTP 200.
+- UI route ZIP smoke test through `POST http://127.0.0.1:3000/api/start-scan`: returned HTTP 307 to `/app/projects/local`; created repository scan `scan_649d1a2906c349ae` with status `completed`, score `45`, coverage `27`.
+
+### Phase 0 audit conclusions
+
+- NOPE is a working local MVP with functional web/API/Docker, local Postgres auth, ZIP upload, synchronous repository scans, basic URL checks, custom rules, heuristic stack/attack graph, coverage, reports, and graceful AI-disabled behavior.
+- The central scan/project/finding/report state is still in `InMemoryStore`, so persistence is the highest priority next phase.
+- Redis exists as a service, but scan jobs are not queued. `apps/worker/worker.py` only prints readiness.
+- Scanner plugins are adapter shells that can run local CLIs if present, but no scanners are installed in the API image or local PATH, and parser implementations are not present.
+- Qwen model file now exists locally, but the llama.cpp container has not been started or inference-tested.
+- MinIO exists, but artifacts and reports are not stored there.
+- GitHub private repository access remains blocked by missing GitHub App/OAuth credentials. Local contracts still need implementation.
+
+### Phase 0 documentation changes
+
+- Replaced `FEATURE_STATUS.md` with an evidence-based matrix covering local auth, persistence, scans, worker/queue, scanner execution/parsing, RAG/Qwen, reports, history/drift, sandbox, settings, GitHub, benchmarks, tests, Docker, and documentation.
+
+### Next phase
+
+Phase 1: add persistent PostgreSQL storage and migrations. The first implementation target is to replace `InMemoryStore` with a migration-backed repository layer while preserving the current API behavior and tests.
