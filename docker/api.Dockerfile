@@ -2,6 +2,8 @@ FROM python:3.11-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV HOME=/tmp
+ENV SEMGREP_SEND_METRICS=off
 WORKDIR /app
 
 RUN addgroup --system nope && adduser --system --ingroup nope nope

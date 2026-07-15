@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     max_file_count: int = 8000
     max_scan_seconds: int = 900
     max_scanner_seconds: int = 180
+    max_scanner_output_bytes: int = 2 * 1024 * 1024
     allow_private_url_targets: bool = False
     allow_localhost_url_targets: bool = False
     temp_root: Path = Field(default_factory=lambda: Path.cwd() / ".nope-workspaces")

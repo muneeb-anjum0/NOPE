@@ -1,0 +1,29 @@
+rules:
+  - id: nope.hardcoded-secret.assignment
+    message: Hardcoded secret-like assignment detected.
+    severity: ERROR
+    languages:
+      - javascript
+      - typescript
+      - python
+    pattern-regex: '(?i)(api[_-]?key|secret|token|password)\s*=\s*["''][^"'']{8,}["'']'
+    metadata:
+      category: security
+      technology:
+        - secrets
+      confidence: HIGH
+      remediation: Move the secret into a secret manager or environment variable and rotate the exposed value.
+
+  - id: nope.wildcard-cors.header
+    message: Wildcard CORS header detected.
+    severity: WARNING
+    languages:
+      - javascript
+      - typescript
+    pattern-regex: 'Access-Control-Allow-Origin["'']?\s*,\s*value:\s*["'']\*["'']'
+    metadata:
+      category: security
+      technology:
+        - cors
+      confidence: MEDIUM
+      remediation: Restrict CORS to explicit trusted origins.

@@ -332,3 +332,46 @@ Close the remaining Phase 1 persistence/auth/report gaps before starting Phase 2
 ### Phase 1 closure
 
 Phase 1 is now complete for the local persistence scope. Remaining scanner execution, queueing, raw scanner artifact storage, MinIO object payloads, and advanced history/drift work belong to later phases.
+
+## 2026-07-15 Phase 2 Scanner Execution Start
+
+### Objective
+
+Start replacing scanner placeholders with real scanner execution evidence, normalized parser output, and honest capability reporting.
+
+### Implementation results
+
+- Extended `ScannerRun` with command arguments, exit code, redacted stdout, and redacted stderr.
+- Added `NOPE_MAX_SCANNER_OUTPUT_BYTES` to bound stored scanner output.
+- Added scanner output redaction before persistence.
+- Implemented JSON parsers/normalizers for:
+  - Semgrep
+  - Gitleaks
+  - OSV-Scanner
+  - Trivy
+  - Checkov
+  - Hadolint
+  - Bandit
+- Bundled Semgrep and Bandit in `apps/api/requirements.txt` for API-image execution.
+- Added local Semgrep rules at `security-packs/semgrep/nope.yml` and configured Semgrep to use them with metrics disabled.
+- Set Docker API `HOME=/tmp` so Semgrep can write local runtime state as the non-root `nope` user.
+- Added `apps/api/tests/test_scanners.py` with parser normalization and raw-output redaction coverage.
+- Added `docs/SCANNERS.md`.
+
+### Verification results
+
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests`: passed, 21 tests.
+- `pnpm --dir apps/web lint`: passed.
+- `pnpm --dir apps/web typecheck`: passed.
+- `pnpm --dir apps/web build`: passed.
+- `docker compose up --build -d`: passed.
+- `docker compose exec -T nope-api semgrep --version`: `1.169.0`.
+- `docker compose exec -T nope-api bandit --version`: `1.9.4`.
+- `GET /health`: Semgrep and Bandit report `Installed.`
+- Authenticated repository ZIP scan `scan_28e96fc09a904bc9`: completed with Semgrep status `passed`, exit code `1`, 2 normalized Semgrep findings, and redacted raw output captured.
+
+### Remaining Phase 2 work
+
+- Add containerized scanner execution for the non-Python scanners.
+- Store full scanner raw artifacts in MinIO with authorized downloads.
+- Add scanner version and capability reporting.

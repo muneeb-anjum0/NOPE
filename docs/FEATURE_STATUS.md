@@ -23,10 +23,10 @@ This matrix was rebuilt during Phase 0 on 2026-07-15 from repository evidence, l
 | Stack detection | Partially complete | Heuristic detector identifies common languages/frameworks/data systems from files/manifests. | `apps/api/nope_api/stack_detector.py` | Expand ecosystem coverage, parser-backed evidence, more fixtures. | `python -m pytest`, ZIP smoke scan. | None. |
 | Attack-surface extraction | Partially complete | Heuristic extraction maps common API routes and risky hints. | `apps/api/nope_api/attack_surface.py` | Detailed method/handler/middleware/auth/tenant extraction across frameworks. | `python -m pytest`, code audit. | None. |
 | Code graph | Partially complete | Lightweight route/file/auth/risk graph is generated from attack-surface hints. | `apps/api/nope_api/attack_surface.py`, `apps/web/components/attack-map.tsx` | Interprocedural AST graph, call/data-flow edges, interactive zoom/filter UI. | Smoke scan and UI build. | None. |
-| Scanner adapters | Partially complete | Plugin classes exist with applicability and CLI health checks. | `apps/api/nope_api/scanners.py` | Container execution, pinned images, raw artifact storage, parser implementations. | API health shows unavailable CLIs honestly. | Scanner CLIs absent on PATH; images not integrated. |
-| Real scanner execution | Partially complete | Direct CLI execution path exists, but no scanner CLI is installed locally or bundled in Docker. | `apps/api/nope_api/scanners.py`, `docker-compose.yml` | Containerized Semgrep/Gitleaks/OSV/Trivy/Checkov/Hadolint/Bandit/ZAP. | `GET /health` shows each scanner command missing. | Docker image pulls allowed; no credentials needed. |
-| Result parsing | Not implemented | Scanner `parse_results` base returns empty and scanner subclasses do not parse JSON/SARIF. | `apps/api/nope_api/scanners.py` | Implement parser/normalizer per scanner. | Code audit. | Depends on scanner outputs/images. |
-| Finding normalization | Partially complete | Custom rule findings share one Pydantic model; external scanner findings are not normalized. | `apps/api/nope_api/models.py`, `apps/api/nope_api/rules_engine.py` | Normalize scanner severity, CWE, evidence, raw refs, package data. | Rule tests and code audit. | None. |
+| Scanner adapters | Partially complete | Plugin classes execute CLIs when present, capture redacted raw output, record command/exit code, and normalize supported JSON outputs. | `apps/api/nope_api/scanners.py`, `apps/api/nope_api/models.py` | Container execution, pinned non-Python scanner images, MinIO raw artifact storage. | Backend scanner parser tests and API health. | Semgrep/Bandit bundled; other CLIs pending. |
+| Real scanner execution | Partially complete | Semgrep and Bandit are bundled in the API image; Semgrep executed in a Docker ZIP scan and produced normalized findings plus raw output metadata. | `apps/api/requirements.txt`, `apps/api/nope_api/scanners.py`, `docker/api.Dockerfile`, `security-packs/semgrep/nope.yml` | Containerized Gitleaks/OSV/Trivy/Checkov/Hadolint/ZAP and version reporting. | Backend tests, Docker build, `/health`, Semgrep/Bandit version checks, ZIP scan `scan_28e96fc09a904bc9`. | Docker image pulls allowed; no credentials needed. |
+| Result parsing | Partially complete | Parsers exist for Semgrep, Gitleaks, OSV-Scanner, Trivy, Checkov, Hadolint, and Bandit JSON outputs. | `apps/api/nope_api/scanners.py`, `apps/api/tests/test_scanners.py` | Add SARIF import, more edge-case fixtures, and live CLI integration fixtures. | `python -m pytest apps/api/tests` scanner parser tests. | Depends on scanner outputs/images for live integration. |
+| Finding normalization | Partially complete | Custom rule and external scanner findings share the Pydantic model with normalized severity, confidence, evidence, remediation, file, line, source, and stable fingerprint. | `apps/api/nope_api/models.py`, `apps/api/nope_api/rules_engine.py`, `apps/api/nope_api/scanners.py` | Normalize CWE/CVSS/package metadata more deeply. | Rule and scanner parser tests. | None. |
 | Deduplication | Partially complete | Custom-rule dedupe merges matching fingerprints in memory. | `apps/api/nope_api/rules_engine.py` | Cross-scanner correlation, recurrence, persistent fingerprints/history. | `python -m pytest`. | None. |
 | Suppression/false-positive workflow | Not implemented | Finding status field exists, but no suppression model/API/UI. | `apps/api/nope_api/models.py`, `apps/web/app/app/projects/local/findings/page.tsx` | Persist suppression reason/user/expiry/scope and filters. | Code audit. | None. |
 | Focused RAG | Partially complete | Lexical context builder selects finding evidence snippets for AI calls. | `apps/api/nope_api/ai.py` | Chunk repository evidence, metadata limits, prompt-injection controls, optional vector index. | Code audit; AI disabled path verified. | None. |
@@ -46,10 +46,10 @@ This matrix was rebuilt during Phase 0 on 2026-07-15 from repository evidence, l
 | Scanner health/capability reporting | Partially complete | `/health` reports scanner command availability. | `apps/api/nope_api/scanners.py`, `apps/api/nope_api/main.py` | Capability endpoint, versions, image availability, enabled/disabled config. | `GET /health`. | Scanner images not integrated. |
 | GitHub contracts | Partially complete | Docs and UI mention GitHub partial status; no schema/routes/adapters beyond placeholders. | `README.md`, `apps/web/app/page.tsx`, `apps/web/app/app/projects/local/assets/page.tsx` | Add DB entities, settings UI, callback route structure, adapter interfaces. | Code/docs audit. | None for local contracts. |
 | GitHub private access | Blocked by external dependency | No GitHub App/OAuth credentials exist. | None | Configure GitHub App ID/client/private key/callback and implement token flow. | Credential audit. | Requires GitHub credentials. |
-| MinIO artifact storage | Not implemented | MinIO service exists, but reports/scanner artifacts are not stored in it. | `docker-compose.yml`, `apps/api/nope_api/reports.py` | Add MinIO client, artifact rows, authorized downloads. | Code audit. | None. |
+| MinIO artifact storage | Not implemented | MinIO service exists, but scanner raw artifacts are currently stored redacted in scan snapshots/Postgres data, not object storage. | `docker-compose.yml`, `apps/api/nope_api/scanners.py`, `apps/api/nope_api/storage.py` | Add MinIO client, artifact rows, authorized downloads. | Code audit. | None. |
 | Audit logs | Not implemented | No audit log model/API exists. | None | Persist auth, project, scan, settings, report events. | Code audit. | None. |
 | Benchmarks | Partially complete | One vulnerable Next fixture exists for tests. | `apps/api/tests/fixtures/vulnerable-next` | Add broader vulnerable fixtures and benchmark runner/expected results. | `python -m pytest`. | None. |
-| Tests | Partially complete | 16 backend tests pass, including persistence, report-body storage, report-body backfill, auth gating, and owner scoping; no frontend/unit/E2E suite. | `apps/api/tests/test_pipeline.py`, `apps/api/tests/test_security.py`, `apps/api/tests/test_persistence.py`, `apps/api/tests/test_api_auth.py` | Queue/scanner/RAG/Qwen/PDF/sandbox/settings/E2E/security tests. | `python -m pytest`, frontend lint/type/build. | Optional model/scanner tests need images/runtime. |
+| Tests | Partially complete | 21 backend tests pass, including persistence, report-body storage/backfill, auth gating, owner scoping, scanner parser normalization, and scanner output redaction; no frontend/unit/E2E suite. | `apps/api/tests/test_pipeline.py`, `apps/api/tests/test_security.py`, `apps/api/tests/test_persistence.py`, `apps/api/tests/test_api_auth.py`, `apps/api/tests/test_scanners.py` | Queue/RAG/Qwen/PDF/sandbox/settings/E2E/security tests and live scanner image tests. | `python -m pytest`, frontend lint/type/build. | Optional model/scanner tests need images/runtime. |
 | Documentation | Complete | Core docs are current for Phase 1 persistence, auth scoping, report storage, and migration behavior. | `README.md`, `docs/ARCHITECTURE.md`, `docs/FEATURE_STATUS.md`, `docs/IMPLEMENTATION_WORKLOG.md`, `docs/DATABASE.md`, `docs/API_REFERENCE.md` | Keep current per phase. | Docs audit. | None. |
 | Docker core stack | Complete | Web/API/worker/Postgres/Redis/MinIO start; primary container is named `NOPE`; health checks pass. | `docker-compose.yml`, `docker/api.Dockerfile`, `docker/web.Dockerfile` | Production gateway/resource limits/scanner jobs. | `docker compose up --build -d`, `docker compose ps`. | None. |
 | Docker AI profile | Partially complete | AI service/profile exists but model path and inference are not verified. | `docker-compose.yml`, `docker-compose.ai-cpu.yml`, `docker-compose.ai-gpu.yml` | Mount `D:/Desktop/Model`, start llama.cpp, test health/completion, document VRAM. | Model file and GPU baseline collected. | Requires Docker AI image pull/runtime. |
@@ -85,3 +85,25 @@ Verification evidence:
 - Generated JSON, Markdown, and SARIF report bodies persist in Postgres with body hashes and byte counts.
 
 Phase 1 is closed. Phase 2 still owns Redis-backed queued scan execution and real scanner artifact handling.
+
+## Phase 2 In Progress
+
+Phase 2 objective: make external scanner execution real enough to produce normalized findings and durable scanner-run evidence without faking unavailable tools.
+
+Phase 2 completed slice:
+
+- Added normalized JSON parsers for Semgrep, Gitleaks, OSV-Scanner, Trivy, Checkov, Hadolint, and Bandit.
+- Added command, exit-code, redacted stdout, and redacted stderr fields to scanner runs.
+- Added bounded scanner output storage through `NOPE_MAX_SCANNER_OUTPUT_BYTES`.
+- Bundled Semgrep and Bandit in the API image requirements.
+- Added local Semgrep rules under `security-packs/semgrep/nope.yml`.
+- Added scanner parser and scanner execution artifact tests.
+- Added `docs/SCANNERS.md`.
+- Verified Docker API image reports Semgrep and Bandit installed.
+- Verified authenticated ZIP scan `scan_28e96fc09a904bc9` completed with Semgrep status `passed`, exit code `1`, and 2 normalized Semgrep findings.
+
+Phase 2 remaining work:
+
+- Add containerized execution for Gitleaks, OSV-Scanner, Trivy, Checkov, Hadolint, and ZAP.
+- Persist raw scanner artifacts to MinIO with authorized downloads.
+- Add scanner version/capability reporting.

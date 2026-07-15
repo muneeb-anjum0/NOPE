@@ -153,6 +153,10 @@ class ScannerRun(BaseModel):
     completed_at: datetime = Field(default_factory=now_utc)
     message: str = ""
     findings_count: int = 0
+    command: list[str] = Field(default_factory=list)
+    exit_code: int | None = None
+    raw_stdout: str = ""
+    raw_stderr: str = ""
 
 
 class CoverageRecord(BaseModel):

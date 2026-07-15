@@ -22,12 +22,12 @@ NOPE is a working local MVP, not a finished production platform. The current bui
 - Attack-surface mapping.
 - Lightweight code graph.
 - NOPE deterministic rule pack.
-- Scanner plugin contracts for Semgrep, Gitleaks, OSV-Scanner, Trivy, Checkov, Hadolint, Bandit, and ecosystem audit adapters.
+- Real scanner execution for bundled Semgrep and Bandit, plus parser/normalizer support for Semgrep, Gitleaks, OSV-Scanner, Trivy, Checkov, Hadolint, and Bandit JSON outputs.
 - Finding normalization, deduplication, scoring, verdicts, coverage tracking, and reports.
 - Optional Qwen/local-AI configuration through llama.cpp with graceful failure.
 - Docker Compose stack with web, API, worker, Postgres, Redis, and MinIO.
 
-External scanner CLIs and a local Qwen runtime are intentionally not faked. If they are unavailable, NOPE marks that coverage as failed, skipped, or not tested.
+Unavailable scanner CLIs and a local Qwen runtime are intentionally not faked. If they are unavailable, NOPE marks that coverage as failed, skipped, or not tested.
 
 ## Pipeline DFD
 
@@ -205,6 +205,7 @@ Repository-only:
 - Accepts ZIP uploads.
 - Extracts into a temporary workspace with size, file-count, symlink, and path traversal protections.
 - Runs stack detection, attack-surface mapping, code graph construction, NOPE rules, scanner adapters, deduplication, coverage, and reports.
+- Bundled API images include Semgrep and Bandit; additional scanner parsers are ready for their CLI/container integrations.
 - Clearly reports when runtime behavior was not verified.
 
 Full scan:
@@ -241,7 +242,7 @@ See `docs/API_REFERENCE.md` for more detail.
 
 Last verified locally:
 
-- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests`: passed, 16 tests.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests`: passed, 21 tests.
 - `python -m compileall nope_api tests`: passed.
 - `pnpm --dir apps/web lint`: passed.
 - `pnpm --dir apps/web typecheck`: passed.
@@ -259,7 +260,7 @@ Last verified locally:
 Known verification caveats:
 
 - Ruff lint was not completed because the Ruff wheel download stalled locally.
-- External scanner CLIs were not installed locally or in the API image.
+- Gitleaks, OSV-Scanner, Trivy, Checkov, and Hadolint are not bundled in the API image yet.
 - Qwen GGUF file exists at `D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf`, but llama.cpp container loading and inference are not verified yet.
 - npm reported two moderate frontend dependency advisories during Docker install.
 
@@ -275,6 +276,7 @@ Known verification caveats:
 - `docs/DESIGN_SYSTEM.md` - graphite design tokens, typography, motion, components, and responsive rules.
 - `docs/LOCAL_AI.md` - llama.cpp/Qwen setup, CPU/GPU modes, security notes, and troubleshooting.
 - `docs/DATABASE.md` - Phase 1 Postgres schema and migration notes.
+- `docs/SCANNERS.md` - scanner execution, parser, artifact, and remaining integration notes.
 
 ## README maintenance
 
