@@ -15,11 +15,14 @@ target_metadata = None
 
 
 def _database_url() -> str:
-    return (
+    url = (
         os.environ.get("NOPE_AUTH_DATABASE_URL")
         or os.environ.get("NOPE_DATABASE_URL")
         or config.get_main_option("sqlalchemy.url")
     )
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+psycopg://", 1)
+    return url
 
 
 def run_migrations_offline() -> None:
