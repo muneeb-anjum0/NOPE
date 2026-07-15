@@ -3,12 +3,30 @@ services:
     environment:
       NOPE_AI_PROVIDER: llama.cpp
       NOPE_AI_RUNTIME_URL: http://nope-ai:8080
-      NOPE_AI_GPU_LAYERS: "${NOPE_AI_GPU_LAYERS:-28}"
+      NOPE_QWEN_ENDPOINT: http://nope-ai:8080
+      NOPE_AI_GPU_LAYERS: "${NOPE_QWEN_GPU_LAYERS:-28}"
+      NOPE_QWEN_GPU_LAYERS: "${NOPE_QWEN_GPU_LAYERS:-28}"
+      NOPE_AI_GPU_MEMORY_TARGET_MB: "${NOPE_QWEN_GPU_MEMORY_TARGET_MB:-5000}"
+      NOPE_QWEN_GPU_MEMORY_TARGET_MB: "${NOPE_QWEN_GPU_MEMORY_TARGET_MB:-5000}"
+    depends_on:
+      nope-ai:
+        condition: service_healthy
+
+  nope-worker:
+    environment:
+      NOPE_AI_PROVIDER: llama.cpp
+      NOPE_AI_RUNTIME_URL: http://nope-ai:8080
+      NOPE_QWEN_ENDPOINT: http://nope-ai:8080
+      NOPE_AI_GPU_LAYERS: "${NOPE_QWEN_GPU_LAYERS:-28}"
+      NOPE_QWEN_GPU_LAYERS: "${NOPE_QWEN_GPU_LAYERS:-28}"
+      NOPE_AI_GPU_MEMORY_TARGET_MB: "${NOPE_QWEN_GPU_MEMORY_TARGET_MB:-5000}"
+      NOPE_QWEN_GPU_MEMORY_TARGET_MB: "${NOPE_QWEN_GPU_MEMORY_TARGET_MB:-5000}"
     depends_on:
       nope-ai:
         condition: service_healthy
 
   nope-ai:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
     profiles:
       - ai-gpu
     deploy:
@@ -18,3 +36,6 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "all"
+      NVIDIA_DRIVER_CAPABILITIES: "compute,utility"

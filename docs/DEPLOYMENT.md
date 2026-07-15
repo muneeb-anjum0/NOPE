@@ -32,7 +32,18 @@ GPU mode:
 docker compose -f docker-compose.yml -f docker-compose.ai-gpu.yml --profile ai-gpu up --build -d
 ```
 
-For GPU mode, Docker Desktop/WSL2 must have NVIDIA container support available. The GGUF model directory is mounted read-only from `NOPE_MODEL_DIR`.
+For GPU mode, Docker Desktop/WSL2 must have NVIDIA container support available. The GGUF model directory is mounted read-only from `NOPE_MODEL_HOST_DIR`.
+
+Verified local Qwen settings:
+
+```bash
+NOPE_MODEL_HOST_DIR=D:/Desktop/Model
+NOPE_MODEL_FILE=Qwen3-8B-Q4_K_M.gguf
+NOPE_QWEN_GPU_LAYERS=28
+NOPE_QWEN_GPU_MEMORY_TARGET_MB=5000
+```
+
+On the local GTX 1060 Max-Q, 28 GPU layers measured about 4041 MiB VRAM. 30 layers failed to fit, so 28 is the highest verified setting under the 5 GB cap.
 
 ## Environment
 

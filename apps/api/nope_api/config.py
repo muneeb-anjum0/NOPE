@@ -36,19 +36,62 @@ class Settings(BaseSettings):
     ai_provider: str = "none"
     ai_runtime_url: str = "http://localhost:11434"
     ai_model_name: str = "qwen3-8b-q4-k-m"
-    ai_model_path: str = "/models/qwen3-8b-q4_k_m.gguf"
-    ai_context_length: int = 8192
+    ai_model_path: str = "/models/Qwen3-8B-Q4_K_M.gguf"
+    qwen_endpoint: str = "http://localhost:11434"
+    qwen_model_file: str = "Qwen3-8B-Q4_K_M.gguf"
+    qwen_context_size: int = 4096
+    qwen_batch_size: int = 256
+    qwen_threads: int = 8
+    qwen_parallel: int = 1
+    qwen_gpu_layers: int = 28
+    qwen_max_output_tokens: int = 1024
+    qwen_timeout_seconds: int = 180
+    qwen_gpu_memory_target_mb: int = 5000
+    qwen_retry_limit: int = 0
+    ai_context_length: int = 4096
     ai_max_output_tokens: int = 1024
     ai_temperature: float = 0.1
     ai_top_p: float = 0.9
     ai_gpu_layers: int = 28
-    ai_gpu_memory_target_mb: int = 5120
-    ai_timeout_seconds: int = 60
+    ai_gpu_memory_target_mb: int = 5000
+    ai_timeout_seconds: int = 180
     ai_max_concurrent_tasks: int = 1
     ai_max_iterations: int = 2
     ai_max_tool_calls: int = 4
     ai_max_retrieved_chunks: int = 8
     ai_max_repository_tokens: int = 24000
+
+    @property
+    def qwen_runtime_url(self) -> str:
+        if self.qwen_endpoint != "http://localhost:11434":
+            return self.qwen_endpoint
+        return self.ai_runtime_url
+
+    @property
+    def qwen_model_path(self) -> str:
+        if self.ai_model_path != "/models/Qwen3-8B-Q4_K_M.gguf":
+            return self.ai_model_path
+        return f"/models/{self.qwen_model_file}"
+
+    @property
+    def effective_qwen_context_size(self) -> int:
+        return min(self.qwen_context_size, self.ai_context_length)
+
+    @property
+    def effective_qwen_max_output_tokens(self) -> int:
+        return min(self.qwen_max_output_tokens, self.ai_max_output_tokens)
+
+    @property
+    def effective_qwen_gpu_layers(self) -> int:
+        return min(self.qwen_gpu_layers, self.ai_gpu_layers)
+
+    @property
+    def effective_qwen_timeout_seconds(self) -> int:
+        return max(1, min(self.qwen_timeout_seconds, self.ai_timeout_seconds))
+
+    @property
+    def effective_qwen_gpu_memory_target_mb(self) -> int:
+        return min(self.qwen_gpu_memory_target_mb, self.ai_gpu_memory_target_mb, 5000)
 
     def validate_production_secrets(self) -> list[str]:
         if self.environment != "production":

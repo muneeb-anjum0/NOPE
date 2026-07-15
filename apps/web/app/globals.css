@@ -387,6 +387,26 @@ textarea:focus-visible {
   gap: 8px;
 }
 
+.ai-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai-result {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.035);
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
 .stage-row,
 .finding-row,
 .data-row {

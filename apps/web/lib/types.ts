@@ -2,6 +2,7 @@ export type Severity = "critical" | "high" | "medium" | "low" | "info";
 
 export type Finding = {
   id: string;
+  fingerprint?: string;
   severity: Severity;
   title: string;
   description?: string;
@@ -49,4 +50,23 @@ export type ModelSettings = {
   maximum_output_tokens: number;
   gpu_layer_count: number;
   maximum_gpu_memory_target_mb: number;
+  batch_size?: number;
+  threads?: number;
+  parallel?: number;
+  request_timeout?: number;
+};
+
+export type AIHealth = {
+  status: string;
+  message?: string;
+  latency_ms?: number;
+  runtime?: string;
+  model?: string;
+  model_path?: string;
+  gpu?: {
+    status: string;
+    layers: number;
+    memory_target_mb: number;
+    message: string;
+  };
 };

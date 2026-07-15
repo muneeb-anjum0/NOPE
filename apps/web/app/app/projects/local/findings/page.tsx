@@ -1,4 +1,5 @@
 import { FindingTable } from "@/components/finding-table";
+import { AIFindingActions } from "@/components/ai-finding-actions";
 import { freshScan, getLatestScan } from "@/lib/nope-data";
 
 export default async function FindingsPage() {
@@ -25,11 +26,7 @@ export default async function FindingsPage() {
               <span className={`severity-pill severity-${first.severity}`}>{first.severity}</span>
               <h2>{first.title}</h2>
               <p className="muted">{first.remediation}</p>
-              <div className="stage-list">
-                <button className="button" type="button">Explain simply</button>
-                <button className="button" type="button">Generate fix</button>
-                <button className="button" type="button">Generate regression test</button>
-              </div>
+              <AIFindingActions finding={first} />
             </>
           ) : (
             <p className="muted">Run a scan to inspect finding evidence.</p>

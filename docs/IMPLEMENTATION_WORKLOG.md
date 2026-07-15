@@ -691,3 +691,40 @@ Complete canonical backend finding normalization, deduplication, correlation, li
 ### Closure
 
 Phase 4 is complete for backend canonical finding normalization, deduplication, correlation, lifecycle persistence, suppression expiry, and recurrence. Phase 5 Qwen/llama.cpp remains untouched; the user requirement to keep GPU VRAM under 5 GB is reserved for that phase.
+
+## 2026-07-15 Phase 5 Qwen llama.cpp Runtime
+
+### Objective
+
+Complete canonical Phase 5 by running Qwen through llama.cpp Docker, invoking it from NOPE, preserving deterministic scans on AI failure, and keeping GPU VRAM under 5 GB.
+
+### Implemented
+
+- Added canonical Qwen settings for endpoint, model file, context, batch size, threads, parallelism, GPU layers, output cap, timeout, retry limit, and GPU memory target.
+- Updated Docker AI profiles to mount `D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf` read-only through `NOPE_MODEL_HOST_DIR` and `NOPE_MODEL_FILE`.
+- Switched the GPU profile to `ghcr.io/ggml-org/llama.cpp:server-cuda`.
+- Reworked the AI adapter for llama.cpp health, direct completion, OpenAI-compatible structured chat completion, JSON validation, redacted logs, focused finding context, and failure-safe scan continuation.
+- Added FastAPI finding actions for explain, challenge, fix, and test.
+- Added frontend finding action controls plus settings health/runtime/GPU status display.
+- Added Phase 5 unit tests for focused context, structured validation, invalid JSON rejection, deterministic preservation on Qwen failure, and GPU memory target capping.
+
+### Verification results
+
+- Model file exists at `D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf`, size 5,027,783,488 bytes.
+- GPU baseline is `NVIDIA GeForce GTX 1060 with Max-Q Design`, 6144 MiB total.
+- `NOPE_QWEN_GPU_LAYERS=30` failed to fit in available GPU memory.
+- `NOPE_QWEN_GPU_LAYERS=28` is stable and measured about 4041-4049 MiB VRAM, below the 5000 MiB ceiling.
+- Docker health showed `nope-ai` healthy with `gpu_layers: 28`, `gpu_memory_target_mb: 5000`, and AI latency around 119-147 ms.
+- Direct llama.cpp `/completion` succeeded.
+- Structured `/v1/chat/completions` JSON succeeded.
+- FastAPI finding explanation succeeded through Qwen with validated structured output.
+- Stopped `nope-ai` and ran repository scan `scan_443bb3dbdb9b4568`; it completed with 7 deterministic findings and `ai_review.status` set to `Failed`, proving Qwen failure does not stop scans.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests/test_phase5_qwen.py`: passed, 5 tests.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests`: passed, 41 tests.
+- `pnpm --dir apps/web lint`: passed.
+- `pnpm --dir apps/web typecheck`: passed.
+- `pnpm --dir apps/web build`: passed.
+
+### Closure
+
+Phase 5 is complete for local Qwen inference through llama.cpp Docker. The final verified GPU setting is 28 layers, using about 4.0 GB VRAM and staying below the 5 GB cap while still combining GPU offload with CPU execution for the remaining layers.

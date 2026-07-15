@@ -1,7 +1,8 @@
-import { getModelSettings } from "@/lib/nope-data";
+import { getAIHealth, getModelSettings } from "@/lib/nope-data";
 
 export default async function SettingsPage() {
   const model = await getModelSettings();
+  const aiHealth = await getAIHealth();
   const sections = [
     {
       title: "Workspace",
@@ -30,6 +31,9 @@ export default async function SettingsPage() {
         ["Endpoint", model?.runtime_endpoint ?? "not configured", "Local"],
         ["Context", `${model?.context_length ?? 0} context / ${model?.maximum_output_tokens ?? 0} output`, "Limit"],
         ["GPU target", `${model?.gpu_layer_count ?? 0} layers / ${model?.maximum_gpu_memory_target_mb ?? 0} MB`, "Budget"],
+        ["GPU state", aiHealth?.gpu?.status ?? "unknown", aiHealth?.gpu?.layers ? `${aiHealth.gpu.layers} layers` : "State"],
+        ["Latency", aiHealth?.latency_ms ? `${aiHealth.latency_ms} ms` : aiHealth?.status ?? "unverified", "Health"],
+        ["Concurrency", `${model?.parallel ?? 0} parallel / batch ${model?.batch_size ?? 0}`, "Bounded"],
       ],
     },
     {

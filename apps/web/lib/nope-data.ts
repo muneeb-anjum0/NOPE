@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { ModelSettings, Scan } from "@/lib/types";
+import type { AIHealth, ModelSettings, Scan } from "@/lib/types";
 
 export async function getScans(): Promise<Scan[]> {
   try {
@@ -17,6 +17,15 @@ export async function getLatestScan(): Promise<Scan | null> {
 export async function getModelSettings(): Promise<ModelSettings | null> {
   try {
     return await api<ModelSettings>("/api/settings/model");
+  } catch {
+    return null;
+  }
+}
+
+export async function getAIHealth(): Promise<AIHealth | null> {
+  try {
+    const health = await api<{ ai: { health: AIHealth } }>("/health");
+    return health.ai.health;
   } catch {
     return null;
   }

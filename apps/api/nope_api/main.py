@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
 from nope_api import __version__
-from nope_api.ai import check_ai_health, explain_finding
+from nope_api.ai import check_ai_health, explain_finding, finding_action
 from nope_api.auth import create_or_login, delete_session, get_user_for_token, init_auth_db
 from nope_api.config import get_settings
 from nope_api.db import migration_status, run_migrations
@@ -52,11 +52,11 @@ async def health() -> dict:
         "scanners": scanner_health(),
         "ai": {
             "provider": settings.ai_provider,
-            "runtime_url": settings.ai_runtime_url,
+            "runtime_url": settings.qwen_runtime_url,
             "model": settings.ai_model_name,
-            "model_path": settings.ai_model_path,
-            "gpu_layers": settings.ai_gpu_layers,
-            "gpu_memory_target_mb": settings.ai_gpu_memory_target_mb,
+            "model_path": settings.qwen_model_path,
+            "gpu_layers": settings.effective_qwen_gpu_layers,
+            "gpu_memory_target_mb": settings.effective_qwen_gpu_memory_target_mb,
             "health": ai_health,
         },
         "warnings": production_warnings,
@@ -334,15 +334,18 @@ def model_settings(authorization: str | None = Header(default=None)) -> dict:
     return {
         "provider": settings.ai_provider,
         "model_name": settings.ai_model_name,
-        "model_file_path": settings.ai_model_path,
-        "runtime_endpoint": settings.ai_runtime_url,
-        "context_length": settings.ai_context_length,
-        "maximum_output_tokens": settings.ai_max_output_tokens,
+        "model_file_path": settings.qwen_model_path,
+        "runtime_endpoint": settings.qwen_runtime_url,
+        "context_length": settings.effective_qwen_context_size,
+        "maximum_output_tokens": settings.effective_qwen_max_output_tokens,
         "temperature": settings.ai_temperature,
         "top_p": settings.ai_top_p,
-        "gpu_layer_count": settings.ai_gpu_layers,
-        "maximum_gpu_memory_target_mb": settings.ai_gpu_memory_target_mb,
-        "request_timeout": settings.ai_timeout_seconds,
+        "gpu_layer_count": settings.effective_qwen_gpu_layers,
+        "maximum_gpu_memory_target_mb": settings.effective_qwen_gpu_memory_target_mb,
+        "batch_size": settings.qwen_batch_size,
+        "threads": settings.qwen_threads,
+        "parallel": settings.qwen_parallel,
+        "request_timeout": settings.effective_qwen_timeout_seconds,
         "maximum_concurrent_ai_tasks": settings.ai_max_concurrent_tasks,
         "maximum_analysis_iterations": settings.ai_max_iterations,
         "maximum_tool_calls": settings.ai_max_tool_calls,
@@ -368,3 +371,14 @@ async def explain_finding_endpoint(finding: dict, authorization: str | None = He
 
     parsed = Finding(**finding)
     return await explain_finding(settings, parsed)
+
+
+@app.post("/api/findings/{action}")
+async def finding_action_endpoint(action: str, finding: dict, authorization: str | None = Header(default=None)) -> dict:
+    _require_owner_user_id(authorization)
+    if action not in {"explain", "challenge", "fix", "test"}:
+        raise HTTPException(status_code=404, detail="Unsupported finding AI action.")
+    from nope_api.models import Finding
+
+    parsed = Finding(**finding)
+    return await finding_action(settings, parsed, action)  # type: ignore[arg-type]

@@ -8,7 +8,7 @@ NOPE integrates local Qwen through a dedicated llama.cpp server container. Ollam
 - Quantization: Q4_K_M
 - Expected local filename: `Qwen3-8B-Q4_K_M.gguf`
 - Current host path: `D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf`
-- Default in-container path for the next AI phase: `/models/Qwen3-8B-Q4_K_M.gguf`
+- Default in-container path: `/models/Qwen3-8B-Q4_K_M.gguf`
 
 The model file must not be committed to Git. `*.gguf` and `models/` are ignored.
 
@@ -17,8 +17,10 @@ The model file must not be committed to Git. `*.gguf` and `models/` are ignored.
 Set this in `.env` or shell:
 
 ```bash
-NOPE_MODEL_DIR=D:/Desktop/Model
-NOPE_QWEN_MODEL_FILE=Qwen3-8B-Q4_K_M.gguf
+NOPE_MODEL_HOST_DIR=D:/Desktop/Model
+NOPE_MODEL_FILE=Qwen3-8B-Q4_K_M.gguf
+NOPE_QWEN_GPU_LAYERS=28
+NOPE_QWEN_GPU_MEMORY_TARGET_MB=5000
 ```
 
 The directory is mounted read-only into `nope-ai` at `/models`.
@@ -37,7 +39,7 @@ This starts NOPE without requiring a model.
 docker compose -f docker-compose.yml -f docker-compose.ai-cpu.yml --profile ai-cpu up --build -d
 ```
 
-CPU mode sets `NOPE_AI_PROVIDER=llama.cpp` and uses `NOPE_AI_GPU_LAYERS=0`.
+CPU mode sets `NOPE_AI_PROVIDER=llama.cpp` and uses `NOPE_QWEN_GPU_LAYERS=0`.
 
 ## GPU AI Mode
 
@@ -45,7 +47,7 @@ CPU mode sets `NOPE_AI_PROVIDER=llama.cpp` and uses `NOPE_AI_GPU_LAYERS=0`.
 docker compose -f docker-compose.yml -f docker-compose.ai-gpu.yml --profile ai-gpu up --build -d
 ```
 
-GPU mode requests an NVIDIA GPU through Docker Compose device reservations.
+GPU mode requests an NVIDIA GPU through Docker Compose device reservations. The verified GTX 1060 Max-Q setting is `NOPE_QWEN_GPU_LAYERS=28`, which loads Qwen through CUDA while keeping measured VRAM below the 5 GB target.
 
 ## Endpoints
 
@@ -53,6 +55,7 @@ GPU mode requests an NVIDIA GPU through Docker Compose device reservations.
 - Internal endpoint: `http://nope-ai:8080`
 - Health: `/health`
 - Completion: `/completion`
+- OpenAI-compatible chat completion: `/v1/chat/completions`
 
 ## Security Notes
 
@@ -65,4 +68,13 @@ GPU mode requests an NVIDIA GPU through Docker Compose device reservations.
 
 ## Current Verification
 
-The GGUF file exists at `D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf`, and `nvidia-smi` sees a 6 GB GTX 1060 Max-Q. Actual llama.cpp container loading, GPU VRAM use, and inference are still not verified.
+Verified on 2026-07-15:
+
+- GGUF file exists at `D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf`.
+- GPU is `NVIDIA GeForce GTX 1060 with Max-Q Design`, 6144 MiB total.
+- `ghcr.io/ggml-org/llama.cpp:server-cuda` loads the model in `nope-ai`.
+- Stable GPU setting is `NOPE_QWEN_GPU_LAYERS=28`.
+- Measured VRAM at 28 layers is about 4041-4049 MiB, below the 5000 MiB Phase 5 ceiling.
+- `NOPE_QWEN_GPU_LAYERS=30` failed to fit in available GPU memory, so 28 is the final verified setting.
+- Direct `/completion`, structured `/v1/chat/completions`, API health, and NOPE finding explanation all succeeded.
+- With `nope-ai` stopped, repository scan `scan_443bb3dbdb9b4568` still completed with 7 deterministic findings and recorded Qwen review as failed.
