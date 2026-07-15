@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import base64
 from hashlib import sha256
 from typing import Any
 
 from psycopg.types.json import Jsonb
 
-from nope_api.artifacts import put_json_artifact
+from nope_api.artifacts import put_binary_artifact, put_json_artifact
 from nope_api.config import get_settings
 from nope_api.db import connect, run_migrations
 from nope_api.models import BaselineState, FindingStatus, Project, Scan, now_utc, new_id
@@ -16,6 +17,7 @@ REPORT_MEDIA_TYPES = {
     "json": "application/json",
     "md": "text/markdown",
     "sarif": "application/sarif+json",
+    "pdf": "application/pdf",
 }
 
 
@@ -516,10 +518,22 @@ class PostgresStore:
         scan_id: str,
         fmt: str,
         owner_user_id: str | None = None,
-    ) -> tuple[str, str] | None:
+    ) -> tuple[str, str | bytes] | None:
+        payload = self.get_report_payload(scan_id, fmt, owner_user_id)
+        if not payload:
+            return None
+        return str(payload["media_type"]), payload["body"]
+
+    def get_report_payload(
+        self,
+        scan_id: str,
+        fmt: str,
+        owner_user_id: str | None = None,
+    ) -> dict[str, Any] | None:
         self.migrate()
         query = """
-            select reports.media_type, reports.body
+            select reports.id, reports.scan_id, reports.format, reports.media_type, reports.body,
+                   reports.body_sha256, reports.byte_size, reports.generated_at, reports.data
             from reports
             join scans on scans.id = reports.scan_id
             where reports.scan_id = %s and reports.format = %s
@@ -532,7 +546,144 @@ class PostgresStore:
             row = conn.execute(query, params).fetchone()
         if not row or not row["body"]:
             return None
-        return str(row["media_type"]), str(row["body"])
+        data = dict(row["data"] or {})
+        body: str | bytes = str(row["body"])
+        if data.get("encoding") == "base64":
+            body = base64.b64decode(body.encode("ascii"))
+        return {
+            "id": row["id"],
+            "scan_id": row["scan_id"],
+            "format": row["format"],
+            "media_type": row["media_type"],
+            "body": body,
+            "body_sha256": row["body_sha256"],
+            "byte_size": row["byte_size"],
+            "generated_at": row["generated_at"],
+            "data": data,
+        }
+
+    def get_report_status(self, scan_id: str, fmt: str, owner_user_id: str | None = None) -> dict[str, Any] | None:
+        payload = self.get_report_payload(scan_id, fmt, owner_user_id)
+        if not payload:
+            return None
+        data = payload["data"]
+        return {
+            "id": payload["id"],
+            "scan_id": payload["scan_id"],
+            "format": payload["format"],
+            "media_type": payload["media_type"],
+            "status": data.get("status", "completed"),
+            "storage_url": data.get("storage_url"),
+            "artifact_id": data.get("artifact_id"),
+            "body_sha256": payload["body_sha256"],
+            "byte_size": payload["byte_size"],
+            "generated_at": payload["generated_at"],
+        }
+
+    def save_report(
+        self,
+        scan: Scan,
+        fmt: str,
+        media_type: str,
+        body: str | bytes,
+        *,
+        owner_user_id: str | None = None,
+        status: str = "completed",
+    ) -> dict[str, Any]:
+        self.migrate()
+        encoded = body if isinstance(body, bytes) else body.encode("utf-8")
+        body_sha256 = sha256(encoded).hexdigest()
+        text_body = base64.b64encode(encoded).decode("ascii") if isinstance(body, bytes) else body
+        metadata: dict[str, Any] = {
+            "scan_id": scan.id,
+            "format": fmt,
+            "status": status,
+            "body_sha256": body_sha256,
+            "byte_size": len(encoded),
+        }
+        if isinstance(body, bytes):
+            artifact = put_binary_artifact(
+                self.settings,
+                scan_id=scan.id,
+                artifact_type="report_pdf",
+                name=f"{scan.id}-report",
+                body=body,
+                content_type=media_type,
+                extension=fmt,
+            )
+            metadata["encoding"] = "base64"
+            if artifact:
+                metadata.update(
+                    {
+                        "artifact_id": artifact["id"],
+                        "storage_url": artifact["storage_url"],
+                        "object_name": artifact["object_name"],
+                    }
+                )
+        with connect(self.settings) as conn:
+            row = conn.execute(
+                """
+                insert into reports (
+                  id, scan_id, format, media_type, body, body_sha256, byte_size, generated_at, data
+                )
+                values (%s, %s, %s, %s, %s, %s, %s, now(), %s)
+                on conflict (scan_id, format) do update set
+                  media_type = excluded.media_type,
+                  body = excluded.body,
+                  body_sha256 = excluded.body_sha256,
+                  byte_size = excluded.byte_size,
+                  generated_at = excluded.generated_at,
+                  data = excluded.data
+                returning id, scan_id, format, media_type, body_sha256, byte_size, generated_at, data
+                """,
+                (
+                    f"rpt_{scan.id}_{fmt}",
+                    scan.id,
+                    fmt,
+                    media_type or REPORT_MEDIA_TYPES.get(fmt, "application/octet-stream"),
+                    text_body,
+                    body_sha256,
+                    len(encoded),
+                    Jsonb(metadata),
+                ),
+            ).fetchone()
+            if isinstance(body, bytes) and metadata.get("artifact_id"):
+                conn.execute(
+                    """
+                    insert into uploaded_artifacts (
+                      id, scan_id, artifact_type, filename, storage_url, size_bytes, sha256, data
+                    )
+                    values (%s, %s, %s, %s, %s, %s, %s, %s)
+                    on conflict (id) do nothing
+                    """,
+                    (
+                        metadata["artifact_id"],
+                        scan.id,
+                        "report_pdf",
+                        f"{scan.id}-report.{fmt}",
+                        metadata["storage_url"],
+                        len(encoded),
+                        body_sha256,
+                        Jsonb(metadata),
+                    ),
+                )
+                conn.execute(
+                    """
+                    insert into job_artifacts (id, scan_id, artifact_type, storage_url, data)
+                    values (%s, %s, %s, %s, %s)
+                    on conflict (id) do nothing
+                    """,
+                    (
+                        f"job_{metadata['artifact_id']}",
+                        scan.id,
+                        "report_pdf",
+                        metadata["storage_url"],
+                        Jsonb(metadata),
+                    ),
+                )
+        result = dict(row)
+        result["data"] = dict(result["data"] or {})
+        return result
 
     def backfill_report_bodies(self) -> int:
         self.migrate()
@@ -552,7 +703,7 @@ class PostgresStore:
                     media_type, body = render_report(scan, str(row["format"]))
                 except ValueError:
                     continue
-                encoded = body.encode("utf-8")
+                encoded = body if isinstance(body, bytes) else body.encode("utf-8")
                 body_sha256 = sha256(encoded).hexdigest()
                 conn.execute(
                     """
@@ -567,10 +718,10 @@ class PostgresStore:
                     """,
                     (
                         media_type,
-                        body,
+                        base64.b64encode(encoded).decode("ascii") if isinstance(body, bytes) else body,
                         body_sha256,
                         len(encoded),
-                        Jsonb({"body_sha256": body_sha256, "byte_size": len(encoded)}),
+                        Jsonb({"body_sha256": body_sha256, "byte_size": len(encoded), "encoding": "base64"} if isinstance(body, bytes) else {"body_sha256": body_sha256, "byte_size": len(encoded)}),
                         row["id"],
                     ),
                 )
@@ -754,8 +905,18 @@ class PostgresStore:
 
         for fmt in scan.report_formats:
             media_type, body = render_report(scan, fmt)
-            encoded = body.encode("utf-8")
+            encoded = body if isinstance(body, bytes) else body.encode("utf-8")
             body_sha256 = sha256(encoded).hexdigest()
+            text_body = base64.b64encode(encoded).decode("ascii") if isinstance(body, bytes) else body
+            metadata = {
+                "scan_id": scan.id,
+                "format": fmt,
+                "status": "completed",
+                "body_sha256": body_sha256,
+                "byte_size": len(encoded),
+            }
+            if isinstance(body, bytes):
+                metadata["encoding"] = "base64"
             conn.execute(
                 """
                 insert into reports (
@@ -775,17 +936,10 @@ class PostgresStore:
                     scan.id,
                     fmt,
                     media_type or REPORT_MEDIA_TYPES.get(fmt, "application/octet-stream"),
-                    body,
+                    text_body,
                     body_sha256,
                     len(encoded),
-                    Jsonb(
-                        {
-                            "scan_id": scan.id,
-                            "format": fmt,
-                            "body_sha256": body_sha256,
-                            "byte_size": len(encoded),
-                        }
-                    ),
+                    Jsonb(metadata),
                 ),
             )
 

@@ -880,3 +880,49 @@ Implement persistent security baselines, scan-to-scan and scan-to-baseline compa
 ### Closure
 
 Phase 8 is complete for baseline metadata, scan comparisons, persisted drift events, drift UI summary, stable fingerprints, reintroduced/fixed/new detection, coverage regression visibility, and conservative incremental-scope reporting. Full scan replacement remains explicitly deferred until Phase 14 verification.
+
+## 2026-07-15 Phase 9 PDF Reporting
+
+### Objective
+
+Complete PDF reporting with real scan data, protected downloads, durable generation metadata, MinIO artifact storage, redaction, pagination, partial-scan honesty, and baseline/drift visibility.
+
+### Pre-phase state
+
+- Pre-phase commit: `0d243da`.
+- JSON, Markdown, and SARIF report routes existed and persisted text bodies in Postgres.
+- `reports` table already stored body, hash, byte size, generated time, and JSON metadata.
+- PDF reports were explicitly marked not implemented.
+
+### Implemented
+
+- Added ReportLab PDF rendering with NOPE branding, project/repository/commit/target/date/scope, executive summary, verdict, coverage, scanner status, severity sections, suppressed findings, failed scanners, untested areas, Qwen status, baseline/drift summary, privacy warnings, staging warnings, limitations, methodology, and reproducibility metadata.
+- Added secret redaction to report text before Markdown, JSON/SARIF text fields, and PDF rendering.
+- Added PDF pagination through ReportLab flowables and verified large reports span multiple pages.
+- Added binary artifact storage helper for PDF uploads to MinIO.
+- Extended report persistence to handle binary PDF bodies as base64 in Postgres with SHA-256, byte size, generation status, and MinIO object metadata when available.
+- Added protected report status route for persisted report generation metadata.
+- Kept generation synchronous because current local PDF rendering is bounded; persisted status records `completed` and can survive API restart.
+- Added PDF as a first-class report format and exposed it on the reports page.
+
+### Verification results
+
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests/test_phase9_pdf_reports.py -q`: passed, 3 tests.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests -q`: passed, 60 tests.
+- `python -m compileall apps/api/nope_api apps/api/tests apps/worker`: passed.
+- `pnpm --dir apps/web lint`: passed.
+- `pnpm --dir apps/web typecheck`: passed.
+- `pnpm --dir apps/web build`: passed.
+- `docker compose config --quiet`: passed.
+- `git diff --check`: passed with Windows line-ending warnings only.
+- `docker compose build nope-api nope-worker nope-web`: passed; rebuilt API, worker, and web images with `reportlab` installed in API/worker.
+- `$env:NOPE_MODEL_HOST_DIR='D:/Desktop/Model'; $env:NOPE_MODEL_FILE='Qwen3-8B-Q4_K_M.gguf'; $env:NOPE_QWEN_GPU_LAYERS='28'; docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml up -d`: passed.
+- `docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml ps`: passed; web, API, AI, Postgres, Redis, and MinIO healthy; worker running.
+- `GET http://localhost:8000/health`: passed; API reports database migrations current, scanner availability, and Qwen runtime reachable.
+- `nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader,nounits`: `NVIDIA GeForce GTX 1060 with Max-Q Design, 0, 6144` during Phase 9 smoke because inference was not exercised; GPU profile remains configured at 28 layers and below the 5 GB ceiling.
+- Live Phase 9 PDF smoke against rebuilt Docker stack: passed; login 200, PDF download 200, body starts `%PDF`, size 17,317 bytes, secret value redacted, status route 200, generation status `completed`, MinIO URL `minio://nope-artifacts/scans/scan_phase9_live_f038b010/art_e2d3b616115345c4-scan_phase9_live_f038b010-report.pdf`, byte size matched.
+- `docker compose run --rm --no-deps nope-api gitleaks detect --no-git --redact --source /app/apps/api/nope_api`: passed, no leaks found.
+
+### Closure
+
+Phase 9 is complete for local PDF report generation and protected download behavior. PDF reports contain real scan data, persisted generation status, MinIO artifact metadata, redaction, pagination, partial/failed scanner representation, drift/baseline summary, limitations, methodology, and reproducibility metadata.

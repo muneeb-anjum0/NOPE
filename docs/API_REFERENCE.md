@@ -31,7 +31,8 @@ Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `
 - `GET /api/scans/{scan_id}/attack-map` - attack-surface graph.
 - `GET /api/queue/status` - queue depth, processing depth, worker heartbeat, and Redis health.
 - `GET /api/worker/health` - worker-oriented health summary derived from Redis heartbeat state.
-- `GET /api/scans/{scan_id}/report.{format}` - export report as `json`, `md`, or `sarif`.
+- `GET /api/scans/{scan_id}/report.{format}` - protected report download as `json`, `md`, `sarif`, or `pdf`; PDF generation persists report status and MinIO artifact metadata when object storage is reachable.
+- `GET /api/scans/{scan_id}/reports/{format}/status` - protected report generation status, byte size, SHA-256, and artifact metadata.
 - `GET /api/scanners/capabilities` - authenticated scanner health, version, coverage category, and applicability marker metadata.
 - `GET /api/settings/model` - current AI model configuration.
 - `POST /api/settings/model/test` - test AI runtime reachability.

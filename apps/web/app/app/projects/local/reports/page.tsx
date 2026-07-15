@@ -6,6 +6,7 @@ const reportSections = [
     title: "Executive Report",
     summary: "Readable summary for humans who need risk, evidence, and next action.",
     rows: [
+      ["PDF", "Formal paginated report for review, archival, and stakeholder handoff.", "pdf"],
       ["Markdown", "Developer-friendly report with findings and remediation.", "md"],
       ["JSON", "Structured report for automation and archival.", "json"],
     ],

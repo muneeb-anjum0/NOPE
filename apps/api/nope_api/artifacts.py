@@ -60,3 +60,43 @@ def put_json_artifact(
         "sha256": sha256(body).hexdigest(),
         "object_name": object_name,
     }
+
+
+def put_binary_artifact(
+    settings: Settings,
+    *,
+    scan_id: str,
+    artifact_type: str,
+    name: str,
+    body: bytes,
+    content_type: str,
+    extension: str,
+) -> dict | None:
+    if not body:
+        return None
+    artifact_id = new_id("art")
+    safe_extension = extension.lstrip(".") or "bin"
+    object_name = f"scans/{scan_id}/{artifact_id}-{name}.{safe_extension}"
+    try:
+        client = minio_client(settings)
+        if not client.bucket_exists(settings.minio_bucket):
+            client.make_bucket(settings.minio_bucket)
+        client.put_object(
+            settings.minio_bucket,
+            object_name,
+            BytesIO(body),
+            length=len(body),
+            content_type=content_type,
+        )
+    except Exception:
+        return None
+    return {
+        "id": artifact_id,
+        "type": artifact_type,
+        "filename": f"{name}.{safe_extension}",
+        "storage_url": f"minio://{settings.minio_bucket}/{object_name}",
+        "size_bytes": len(body),
+        "sha256": sha256(body).hexdigest(),
+        "object_name": object_name,
+        "content_type": content_type,
+    }

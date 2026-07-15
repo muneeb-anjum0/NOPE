@@ -14,7 +14,7 @@ from nope_api.findings import finding_detail, parse_finding_query, query_finding
 from nope_api.ingestion import extract_zip
 from nope_api.models import AuthorizationScope, Project, Scan, ScanMode, ScanRequest
 from nope_api.queue import clear_scan_cancel, enqueue_scan_job, queue_status, request_scan_cancel, scan_events
-from nope_api.reports import render_report
+from nope_api.reports import ReportContext, render_report
 from nope_api.scanners import scanner_capabilities, scanner_health
 from nope_api.security import validate_url_scope
 from nope_api.storage import store
@@ -352,13 +352,41 @@ def get_attack_map(scan_id: str, authorization: str | None = Header(default=None
 
 @app.get("/api/scans/{scan_id}/report.{fmt}")
 def get_report(scan_id: str, fmt: str, authorization: str | None = Header(default=None)):
+    owner_user_id = _require_owner_user_id(authorization)
     scan = _load_scan(scan_id, authorization)
     try:
-        stored_report = store.get_report(scan_id, fmt, _require_owner_user_id(authorization))
-        media_type, body = stored_report or render_report(scan, fmt)
+        if fmt == "pdf":
+            context = ReportContext(
+                drift_events=store.list_drift_events(scan_id, owner_user_id),
+                baselines=store.list_security_baselines(owner_user_id, scan.project_id),
+            )
+            media_type, body = render_report(scan, fmt, context)
+            store.save_report(scan, fmt, media_type, body, owner_user_id=owner_user_id)
+        else:
+            stored_report = store.get_report(scan_id, fmt, owner_user_id)
+            if stored_report:
+                media_type, body = stored_report
+            else:
+                media_type, body = render_report(scan, fmt)
+                store.save_report(scan, fmt, media_type, body, owner_user_id=owner_user_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return Response(content=body, media_type=media_type)
+    filename = f"nope-{scan.id}.{fmt}"
+    return Response(
+        content=body,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/api/scans/{scan_id}/reports/{fmt}/status")
+def get_report_status(scan_id: str, fmt: str, authorization: str | None = Header(default=None)):
+    owner_user_id = _require_owner_user_id(authorization)
+    _load_scan(scan_id, authorization)
+    status = store.get_report_status(scan_id, fmt, owner_user_id)
+    if not status:
+        return {"scan_id": scan_id, "format": fmt, "status": "not_generated"}
+    return status
 
 
 @app.post("/api/scans/url", response_model=Scan)

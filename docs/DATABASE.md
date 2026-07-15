@@ -29,7 +29,7 @@ The initial migration creates tables for:
 - Projects and repository metadata: `projects`, `project_targets`, `repository_sources`, `repository_snapshots`
 - Scans: `scans`, `scan_stages`, `scanner_runs`, `scan_coverage`
 - Findings: `findings`, `finding_evidence`, `finding_sources`, `finding_history`
-- Reports: `reports`, including generated body, SHA-256 hash, byte size, media type, and generation timestamp
+- Reports: `reports`, including generated body, SHA-256 hash, byte size, media type, generation status metadata, and generation timestamp
 - Settings: `model_configurations`, `scanner_configurations`, `application_settings`
 - History/drift foundation: `security_baselines`, `drift_events`
 - Artifacts/logging: `uploaded_artifacts`, `job_artifacts`, `audit_logs`
@@ -42,8 +42,8 @@ The `scans` table stores both normalized fields and a JSON snapshot of the curre
 - Protected API routes require a valid local bearer token by default through `NOPE_REQUIRE_AUTHENTICATED_API=true`.
 - Dashboard-originated calls forward the HttpOnly local session token and are scoped to the authenticated user.
 - Scan execution is Redis-backed: API requests persist queued scans, workers checkpoint stage progress to Postgres, and scan/event routes reload progress from durable scan snapshots.
-- Generated report payloads are stored in Postgres.
-- Raw scanner stdout/stderr artifacts are stored in MinIO and linked through `uploaded_artifacts`, `job_artifacts`, and `scanner_runs.raw_artifact_id`.
+- Generated report payloads are stored in Postgres. PDF bodies are base64-backed in Postgres and, when MinIO is reachable, also stored as binary report artifacts with object metadata recorded in `reports.data`.
+- Raw scanner stdout/stderr artifacts and PDF report artifacts are stored in MinIO and linked through `uploaded_artifacts`, `job_artifacts`, scanner runs, and report metadata.
 - Project creation now creates target/source metadata rows when target URL or repository metadata is supplied.
 - Scan saves upsert repository snapshot rows when repository branch, commit, or upload metadata is present.
 - Application setting, model configuration, scanner configuration, baseline, drift-event, and audit-log rows have repository-layer persistence methods and Phase 1 tests.
