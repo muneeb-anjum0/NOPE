@@ -1130,3 +1130,53 @@ Expand unit, integration, E2E, and NOPE-security tests while keeping the core su
 ### Closure
 
 - Phase 13 is complete for expanded unit, integration, API-level E2E, and NOPE-security tests; CI-compatible frontend test commands; core backend tests that run without Qwen; separate GPU/Qwen verification; Docker image refresh; and under-5 GB VRAM validation.
+
+## 2026-07-16 Phase 14 Full End-to-End Pipeline
+
+### Objective
+
+Verify the complete local-first pipeline from login and project creation through full scan execution, queued worker processing, deterministic analysis, focused Qwen/RAG contracts, reports, baselines, modified second scan, drift, and honest failure handling.
+
+### Pre-phase state
+
+- Pre-phase commit: `84b10af`.
+- The full scan endpoint existed, but Phase 14 was not yet documented or tested as one end-to-end pipeline.
+- `run_full_scan` combined repository and URL checks, but the URL leg did not have an explicit stage and URL scanner failure did not force the final full-scan status to `partial`.
+- Status docs still marked full scan, stack detection, attack-surface extraction, code graph, and Phase 14 drift proof as incomplete or deferred.
+
+### Implemented
+
+- Added an explicit `Running URL checks` stage to full scans.
+- Ensured full scans finish as `partial` when any scanner run fails, including URL scanner failures.
+- Updated drift incremental-scope wording to keep full scans as the authoritative comparison path.
+- Added `apps/api/tests/test_phase14_pipeline.py`.
+- Verified API login, project creation, full ZIP upload, repository snapshot persistence, queued job payloads, worker execution via `execute_scan_job`, stack detection, attack-surface mapping, code graph creation, scanner selection/execution contract, URL scan merging, finding normalization/deduplication, evidence persistence, Qwen/RAG review contract, coverage, findings query, JSON/PDF report generation, baseline creation, modified second scan, comparison, and persisted drift events.
+- Added failure-path coverage for scanner failure/timeout, Qwen unavailable, unsupported sandbox, malformed ZIP, and cancelled scan persistence.
+- Updated feature and reconciliation status for Phase 14 pipeline scope.
+
+### Verification results
+
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests/test_phase14_pipeline.py -q`: passed, 2 tests.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests/test_phase14_pipeline.py apps/api/tests/test_phase8_drift.py -q`: passed, 6 tests.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests/test_queue.py apps/api/tests/test_phase8_drift.py apps/api/tests/test_phase9_pdf_reports.py -q`: passed, 11 tests.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests -q`: passed, 84 tests.
+- `python -m compileall apps/api/nope_api apps/api/tests apps/worker`: passed.
+- `pnpm --dir apps/web lint`: passed.
+- `pnpm --dir apps/web typecheck`: passed.
+- `pnpm --dir apps/web test`: passed.
+- `pnpm --dir apps/web build`: passed.
+- `docker compose config --quiet`: passed.
+- `git diff --check`: passed.
+- `docker compose build nope-api nope-worker nope-web`: passed; images `nope-nope-api@sha256:bd525ce0c50e`, `nope-nope-worker@sha256:c032824df94e`, and `nope-nope-web@sha256:19fa894e01b2`.
+- `docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml up -d`: passed with `NOPE_QWEN_GPU_LAYERS=28` and `NOPE_QWEN_GPU_MEMORY_TARGET_MB=5000`.
+- `docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml ps`: passed; web, API, AI, Postgres, Redis, and MinIO healthy; worker running.
+- `Invoke-RestMethod http://localhost:8000/health`: passed; migrations current, scanner tools installed, Qwen runtime reachable, GPU layers `28`, GPU memory target `5000`.
+- Authenticated `/api/queue/status` and `/api/worker/health`: passed; Redis `ok`, queue depth `0`, processing depth `0`, worker heartbeat present, worker healthy.
+- `Invoke-WebRequest http://localhost:3000 -UseBasicParsing`: passed with HTTP `200`.
+- `docker compose run --rm --no-deps nope-api python -m compileall /app/apps/api/nope_api /app/apps/worker`: passed.
+- `docker compose run --rm --no-deps nope-api gitleaks detect --no-git --redact --source /app/apps/api/nope_api`: passed, no leaks found.
+- `nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader,nounits`: `NVIDIA GeForce GTX 1060 with Max-Q Design, 4485, 6144`; GPU profile remained under the 5 GB VRAM cap.
+
+### Closure
+
+- Phase 14 is complete for the full local end-to-end pipeline proof, explicit full-scan URL stages, honest partial status on scanner failures, persisted baselines and drift from a modified second scan, JSON/PDF reports after full worker execution, failure-path coverage, Docker image refresh, live queue/worker/API/web/AI health, and under-5 GB VRAM validation.

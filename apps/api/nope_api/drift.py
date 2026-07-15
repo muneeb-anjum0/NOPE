@@ -326,7 +326,7 @@ def _incremental_scope(current: Scan, reference: Scan | BaselineSnapshot, new: l
         "relevant_scanners": relevant_scanners,
         "finding_categories": dict(categories),
         "requires_full_scan": bool(drift),
-        "note": "Incremental scope is advisory only; NOPE still runs full scans until Phase 14 verifies replacement behavior.",
+        "note": "Incremental scope is advisory; NOPE keeps full-scan verification as the authoritative comparison path.",
     }
 
 

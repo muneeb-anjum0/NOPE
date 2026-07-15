@@ -25,6 +25,15 @@ This file adds explicit unit, integration, E2E, and NOPE-security tests:
 - E2E: login, project creation, ZIP upload, scan start, progress events, findings filtering, finding detail, evidence tabs, Qwen explanation fallback, report download, baseline, comparison, settings persistence.
 - Security: cross-user access, malformed ZIP, private URL blocking, bearer-only CSRF posture, login rate limiting, command construction safety, redaction.
 
+## Phase 14 Pipeline
+
+```powershell
+$env:PYTHONPATH='apps/api'
+python -m pytest apps/api/tests/test_phase14_pipeline.py -q
+```
+
+This file proves the full local pipeline: login, project creation, full ZIP upload, queued scan payload, worker execution, stack detection, attack-surface mapping, code graph, scanner selection, URL checks, persisted evidence, Qwen/RAG review contract, reports, baseline, modified second scan, drift persistence, and failure paths.
+
 ## Frontend
 
 ```powershell

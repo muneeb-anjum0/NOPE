@@ -198,16 +198,20 @@ async def run_full_scan(
 ) -> Scan:
     await run_repository_scan(scan, root, settings, progress_callback, cancellation_checker)
     if scan.target_url:
+        scan.stages.append({"name": "Running URL checks", "status": "running"})
         await _checkpoint(scan, progress_callback, cancellation_checker)
         url_findings, url_runs, coverage_updates = await scan_url(scan.target_url)
         scan.findings = dedupe_findings(scan.findings + url_findings)
         scan.scanner_runs.extend(url_runs)
         scan.coverage = merge_coverage(scan.coverage, coverage_updates, url_runs)
+        scan.stages[-1]["status"] = "completed" if url_runs and url_runs[0].status == "passed" else "partial"
+        scan.stages[-1]["message"] = url_runs[0].message if url_runs else "URL checks did not produce a scanner run."
         await _checkpoint(scan, progress_callback, cancellation_checker)
     scan.coverage_percent = coverage_percent(scan.coverage)
     scan.score = calculate_score(scan.findings, scan.coverage)
     scan.verdict = verdict(scan.score, scan.coverage_percent, scan.findings)
     scan.mode = ScanMode.full
+    scan.status = "partial" if any(run.status == "failed" for run in scan.scanner_runs) else "completed"
     scan.completed_at = now_utc()
     await _checkpoint(scan, progress_callback, cancellation_checker)
     return scan
