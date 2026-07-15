@@ -54,7 +54,7 @@ def test_retrieved_context_is_focused_and_redacted():
 async def test_structured_completion_validates_qwen_json(monkeypatch):
     async def fake_completion(settings, *, system, user, json_mode=False):
         assert json_mode is True
-        assert "Focused evidence JSON" in user
+        assert "Focused graph-aware evidence JSON" in user
         return {
             "content": """
             {

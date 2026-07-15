@@ -133,7 +133,7 @@ async def run_repository_scan(
     scan.findings = dedupe_findings(findings)
     scan.coverage = merge_coverage(default_coverage(), [], scan.scanner_runs)
     await _checkpoint(scan, progress_callback, cancellation_checker)
-    scan.ai_review = await run_ai_review(settings, scan.findings)
+    scan.ai_review = await run_ai_review(settings, scan.findings, root=root, scan=scan)
     if scan.ai_review.status in {"Complete", "Partial"}:
         scan.coverage.append(CoverageRecord(domain="Qwen AI review", status=CoverageStatus.partial, scanners=["AI adapter"], notes=scan.ai_review.message))
     elif scan.ai_review.status == "Failed":
@@ -165,7 +165,7 @@ async def run_url_only_scan(
     scan.findings = findings
     scan.scanner_runs = runs
     scan.coverage = merge_coverage(default_coverage(), coverage_updates, runs)
-    scan.ai_review = await run_ai_review(settings, scan.findings)
+    scan.ai_review = await run_ai_review(settings, scan.findings, scan=scan)
     scan.coverage_percent = coverage_percent(scan.coverage)
     scan.score = calculate_score(scan.findings, scan.coverage)
     scan.verdict = verdict(scan.score, scan.coverage_percent, scan.findings)

@@ -95,9 +95,9 @@ def build_code_graph(root: Path, surface: list[AttackSurfaceItem]) -> CodeGraph:
         add_node(GraphNode(id=file_id, label=item.file, kind="file", file=item.file))
         edges.append(GraphEdge(source=route_id, target=file_id, relationship="handled by"))
         if item.authentication == "present":
-            auth_id = f"auth:{item.file}"
-            add_node(GraphNode(id=auth_id, label="Authentication check", kind="auth", file=item.file))
-            edges.append(GraphEdge(source=route_id, target=auth_id, relationship="authenticates through"))
+            login_node = f"login:{item.file}"
+            add_node(GraphNode(id=login_node, label="Login check", kind="login", file=item.file))
+            edges.append(GraphEdge(source=route_id, target=login_node, relationship="uses login check"))
         if item.authorization != "present" and item.database_access:
             risk_id = f"risk:{item.id}"
             add_node(GraphNode(id=risk_id, label="Missing ownership check risk", kind="authorization", file=item.file, risk=Severity.high))

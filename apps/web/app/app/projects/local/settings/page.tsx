@@ -34,6 +34,7 @@ export default async function SettingsPage() {
         ["GPU state", aiHealth?.gpu?.status ?? "unknown", aiHealth?.gpu?.layers ? `${aiHealth.gpu.layers} layers` : "State"],
         ["Latency", aiHealth?.latency_ms ? `${aiHealth.latency_ms} ms` : aiHealth?.status ?? "unverified", "Health"],
         ["Concurrency", `${model?.parallel ?? 0} parallel / batch ${model?.batch_size ?? 0}`, "Bounded"],
+        ["RAG limits", `${model?.rag?.maximum_files ?? 0} files / ${model?.rag?.maximum_tokens ?? 0} tokens`, "Focused"],
       ],
     },
     {

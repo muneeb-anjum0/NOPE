@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     ai_max_tool_calls: int = 4
     ai_max_retrieved_chunks: int = 8
     ai_max_repository_tokens: int = 24000
+    ai_rag_max_files: int = 8
+    ai_rag_max_tokens: int = 6000
+    ai_rag_graph_depth: int = 2
+    ai_rag_chunk_chars: int = 1600
 
     @property
     def qwen_runtime_url(self) -> str:

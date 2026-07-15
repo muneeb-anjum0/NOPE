@@ -351,6 +351,13 @@ def model_settings(authorization: str | None = Header(default=None)) -> dict:
         "maximum_tool_calls": settings.ai_max_tool_calls,
         "maximum_retrieved_chunks": settings.ai_max_retrieved_chunks,
         "maximum_repository_tokens_per_task": settings.ai_max_repository_tokens,
+        "rag": {
+            "maximum_files": settings.ai_rag_max_files,
+            "maximum_tokens": settings.ai_rag_max_tokens,
+            "maximum_graph_depth": settings.ai_rag_graph_depth,
+            "chunk_characters": settings.ai_rag_chunk_chars,
+            "embeddings_required": False,
+        },
     }
 
 

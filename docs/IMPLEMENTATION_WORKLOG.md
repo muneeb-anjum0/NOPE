@@ -728,3 +728,67 @@ Complete canonical Phase 5 by running Qwen through llama.cpp Docker, invoking it
 ### Closure
 
 Phase 5 is complete for local Qwen inference through llama.cpp Docker. The final verified GPU setting is 28 layers, using about 4.0 GB VRAM and staying below the 5 GB cap while still combining GPU offload with CPU execution for the remaining layers.
+
+## 2026-07-15 Phase 6 Focused Graph-Aware RAG
+
+### Objective
+
+Implement focused graph-aware retrieval for Qwen without sending whole repositories and without requiring embeddings.
+
+### Pre-phase state
+
+- Pre-phase commit: `3ebec58a7d40491f6d22aa964b510443c16f8a6a`.
+- Phase 5 Qwen runtime is committed and pushed.
+- Existing context builder is finding-only and lives in `apps/api/nope_api/ai.py`.
+- Existing attack-surface and lightweight code graph are built during repository scans and persisted on the scan model.
+
+### Required tasks
+
+- Index source files, functions, classes, routes, middleware/auth/authorization/validation hints, models, queries, database policies, migrations, configuration, tests, scanner findings, attack-surface nodes, code-graph edges, security rules, and guidance.
+- Retrieve with lexical search, symbol/file/import/route relationships, code graph neighbors, finding-centered context, and no-embedding fallback.
+- Include route context: handler, middleware, authentication, authorization, validation, model/query/storage signals, related tests, scanner evidence, and security guidance.
+- Enforce maximum chunks, files, approximate tokens, graph depth, deduplication, metadata, retrieval reason, secret redaction, and truncation.
+- Treat repository instructions, comments, README text, and source strings as untrusted data separated from scanner evidence and security guidance.
+
+### Required tests
+
+- IDOR context retrieval.
+- Supabase policy retrieval.
+- Secret retrieval with redaction.
+- Dependency retrieval.
+- Overflow handling.
+- Duplicate removal.
+- Malicious repository prompt text handling.
+- RAG without embeddings.
+
+### Implemented
+
+- Added `apps/api/nope_api/rag.py` with bounded lexical and graph-aware retrieval.
+- Indexed repository source/config/test/dependency/database-policy files, functions, classes, routes, imports, scanner findings, scanner runs, stack evidence, attack-surface route context, code-graph edges, and security guidance.
+- Added provenance fields for file, line, symbol, route, chunk kind, trust boundary, metadata, retrieval reason, and score.
+- Added limits for chunks, files, approximate tokens, graph depth, and chunk size.
+- Added secret redaction and truncation before context is serialized for Qwen.
+- Added prompt-injection controls that treat README text, comments, and source strings as untrusted data.
+- Wired repository scans to pass root path and scan graph data into Qwen review.
+- Exposed RAG limits in `/api/settings/model` and the settings page.
+- Preserved no-embedding behavior through explicit `embeddings_used = False`.
+
+### Verification results
+
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests/test_phase6_rag.py apps/api/tests/test_phase5_qwen.py -q`: passed, 11 tests.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests -q`: passed, 47 tests.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests/test_phase6_rag.py apps/api/tests/test_pipeline.py -q`: passed, 10 tests after graph-label false-positive cleanup.
+- `python -m compileall apps/api/nope_api apps/api/tests apps/worker`: passed.
+- `pnpm --dir apps/web lint`: passed.
+- `pnpm --dir apps/web typecheck`: passed.
+- `pnpm --dir apps/web build`: passed.
+- `docker compose config --quiet`: passed.
+- `docker compose build nope-api nope-worker nope-web`: passed.
+- `docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml up -d`: passed.
+- `GET http://localhost:8000/health`: passed; API reports Qwen healthy at 28 GPU layers.
+- `nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader,nounits`: `NVIDIA GeForce GTX 1060 with Max-Q Design, 4041, 6144`.
+- `docker compose run --rm --no-deps nope-api gitleaks detect --no-git --redact --source /app/apps/api/nope_api`: passed after renaming a graph-local false-positive string.
+
+### Closure
+
+Phase 6 is complete for focused graph-aware RAG without embeddings. Whole repositories are not sent to Qwen; selected chunks carry provenance, retrieval reasons, trust boundaries, limits, redaction, and prompt-injection controls.

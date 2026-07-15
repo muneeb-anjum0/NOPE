@@ -54,6 +54,13 @@ export type ModelSettings = {
   threads?: number;
   parallel?: number;
   request_timeout?: number;
+  rag?: {
+    maximum_files: number;
+    maximum_tokens: number;
+    maximum_graph_depth: number;
+    chunk_characters: number;
+    embeddings_required: boolean;
+  };
 };
 
 export type AIHealth = {
