@@ -13,7 +13,7 @@ NOPE is a working local MVP, not a finished production platform. The current bui
 - A routed dark app workspace under `/app/projects/local`.
 - A React Bits LineSidebar-style dashboard navigation shell.
 - Local Postgres-backed account creation, login, sessions, and logout.
-- Migration-backed Postgres persistence for projects, scans, stages, scanner runs, findings, evidence, coverage, and report metadata.
+- Migration-backed Postgres persistence for projects, scans, stages, scanner runs, findings, evidence, coverage, and generated report payloads.
 - FastAPI orchestration API.
 - Next.js dashboard.
 - ZIP repository ingestion with Zip Slip protections.
@@ -88,7 +88,7 @@ flowchart LR
 
   subgraph Stores["Local Stores"]
     Postgres["Postgres<br/>auth, projects, scans,<br/>findings, coverage, reports"]:::store
-    MinIO["MinIO<br/>planned artifacts/reports"]:::partial
+    MinIO["MinIO<br/>planned raw artifacts"]:::partial
     Redis["Redis<br/>planned queued jobs"]:::partial
   end
 
@@ -125,7 +125,7 @@ flowchart LR
   Coverage --> Reports
   Reports --> UI
   API --> Postgres
-  API -.next phase.-> MinIO
+  API -.scanner artifact phase.-> MinIO
   API -.next phase.-> Redis
   Sandbox -.deep scan path.-> Orchestrator
   Reports -.future.-> PR
@@ -233,13 +233,15 @@ Full scan:
 - `GET /api/settings/model`
 - `POST /api/settings/model/test`
 
+Except for health and login, API routes require a valid `Authorization: Bearer <nope_session>` token. Dashboard server routes forward the HttpOnly local session cookie automatically.
+
 See `docs/API_REFERENCE.md` for more detail.
 
 ## Verification snapshot
 
 Last verified locally:
 
-- `python -m pytest`: passed, 10 tests.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests`: passed, 16 tests.
 - `python -m compileall nope_api tests`: passed.
 - `pnpm --dir apps/web lint`: passed.
 - `pnpm --dir apps/web typecheck`: passed.
@@ -252,6 +254,7 @@ Last verified locally:
 - Web UI returned HTTP 200.
 - MinIO console returned HTTP 200.
 - Vulnerable ZIP fixture scan completed and produced real NOPE-rule findings.
+- Phase 1 persistence hardening verified authenticated API scoping and stored report bodies.
 
 Known verification caveats:
 

@@ -2,6 +2,8 @@
 
 FastAPI exposes interactive OpenAPI documentation at `/docs`.
 
+Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `Authorization: Bearer <token>` header from the local login flow.
+
 ## Core endpoints
 
 - `GET /health` - service health, version, scanner availability, AI runtime status.
@@ -27,3 +29,4 @@ FastAPI exposes interactive OpenAPI documentation at `/docs`.
 - URL scans without authorization confirmation are rejected.
 - Private network targets are rejected unless local sandbox mode is explicitly allowed.
 - AI failures do not fail deterministic scans.
+- Project, scan, report, settings, and AI explanation routes are scoped to the authenticated local user.

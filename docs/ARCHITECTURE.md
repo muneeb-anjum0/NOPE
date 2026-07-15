@@ -40,7 +40,7 @@ Repository ZIP / Authorized URL
 - `nope-web`: Next.js UI. In Docker this is the primary container named `NOPE`.
 - `nope-api`: FastAPI backend and scan orchestration.
 - `nope-worker`: worker process for queue-oriented scan execution.
-- `nope-postgres`: local auth, project, scan, finding, coverage, stage, scanner-run, and report metadata persistence.
+- `nope-postgres`: local auth, project, scan, finding, coverage, stage, scanner-run, and generated report persistence.
 - `nope-redis`: queue broker.
 - `nope-minio`: object/artifact storage.
 - `nope-ai`: optional llama.cpp server for local Qwen inference, enabled with CPU or GPU Compose profiles.
@@ -62,7 +62,7 @@ The app shell uses a route-aware LineSidebar-style icon rail and a single graphi
 
 ## Storage model
 
-The local implementation uses Postgres for local authentication and scan persistence. The Phase 1 migration-backed repository stores projects, scans, stages, scanner runs, findings, evidence, finding sources/history, coverage, report metadata, settings placeholders, baselines, drift events, artifacts, audit logs, and GitHub contract entities.
+The local implementation uses Postgres for local authentication and scan persistence. The Phase 1 migration-backed repository stores projects, scans, stages, scanner runs, findings, evidence, finding sources/history, coverage, generated report bodies, settings placeholders, baselines, drift events, artifacts, audit logs, and GitHub contract entities.
 
 Current scan objects are also stored as JSON snapshots so the API contract remains stable while normalized tables mature through later phases.
 

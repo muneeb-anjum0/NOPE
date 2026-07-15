@@ -22,6 +22,26 @@ def migrations_dir() -> Path:
     return Path(__file__).resolve().parents[1] / "migrations"
 
 
+def migration_status(settings: Settings) -> dict[str, list[str]]:
+    available = [path.stem for path in sorted(migrations_dir().glob("*.sql"))]
+    with connect(settings) as conn:
+        conn.execute(
+            """
+            create table if not exists schema_migrations (
+              version text primary key,
+              applied_at timestamptz not null default now()
+            )
+            """
+        )
+        applied = [
+            row["version"]
+            for row in conn.execute("select version from schema_migrations order by version").fetchall()
+        ]
+    pending = [version for version in available if version not in set(applied)]
+    unexpected = [version for version in applied if version not in set(available)]
+    return {"available": available, "applied": applied, "pending": pending, "unexpected": unexpected}
+
+
 def run_migrations(settings: Settings) -> list[str]:
     applied: list[str] = []
     with connect(settings) as conn:

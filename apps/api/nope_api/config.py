@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     minio_endpoint: str = "http://localhost:9000"
     session_secret: str = "development-session-secret-change-me"
     encryption_key: str = "development-encryption-key-change-me"
+    require_authenticated_api: bool = True
 
     max_archive_bytes: int = 50 * 1024 * 1024
     max_extracted_bytes: int = 200 * 1024 * 1024

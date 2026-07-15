@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from hashlib import sha256
 from typing import Any
 
 from psycopg.types.json import Jsonb
@@ -7,6 +8,7 @@ from psycopg.types.json import Jsonb
 from nope_api.config import get_settings
 from nope_api.db import connect, run_migrations
 from nope_api.models import Project, Scan, new_id
+from nope_api.reports import render_report
 
 
 REPORT_MEDIA_TYPES = {
@@ -143,6 +145,72 @@ class PostgresStore:
             ).fetchone()
         return row is not None
 
+    def get_report(
+        self,
+        scan_id: str,
+        fmt: str,
+        owner_user_id: str | None = None,
+    ) -> tuple[str, str] | None:
+        self.migrate()
+        query = """
+            select reports.media_type, reports.body
+            from reports
+            join scans on scans.id = reports.scan_id
+            where reports.scan_id = %s and reports.format = %s
+        """
+        params: tuple[Any, ...] = (scan_id, fmt)
+        if owner_user_id:
+            query += " and scans.owner_user_id = %s"
+            params = (scan_id, fmt, owner_user_id)
+        with connect(self.settings) as conn:
+            row = conn.execute(query, params).fetchone()
+        if not row or not row["body"]:
+            return None
+        return str(row["media_type"]), str(row["body"])
+
+    def backfill_report_bodies(self) -> int:
+        self.migrate()
+        updated = 0
+        with connect(self.settings) as conn:
+            rows = conn.execute(
+                """
+                select reports.id, reports.format, scans.data
+                from reports
+                join scans on scans.id = reports.scan_id
+                where reports.body = ''
+                """
+            ).fetchall()
+            for row in rows:
+                try:
+                    scan = Scan(**row["data"])
+                    media_type, body = render_report(scan, str(row["format"]))
+                except ValueError:
+                    continue
+                encoded = body.encode("utf-8")
+                body_sha256 = sha256(encoded).hexdigest()
+                conn.execute(
+                    """
+                    update reports
+                    set media_type = %s,
+                        body = %s,
+                        body_sha256 = %s,
+                        byte_size = %s,
+                        generated_at = now(),
+                        data = data || %s
+                    where id = %s
+                    """,
+                    (
+                        media_type,
+                        body,
+                        body_sha256,
+                        len(encoded),
+                        Jsonb({"body_sha256": body_sha256, "byte_size": len(encoded)}),
+                        row["id"],
+                    ),
+                )
+                updated += 1
+        return updated
+
     def _replace_scan_children(self, conn, scan: Scan) -> None:
         conn.execute("delete from reports where scan_id = %s", (scan.id,))
         conn.execute("delete from scan_coverage where scan_id = %s", (scan.id,))
@@ -267,20 +335,39 @@ class PostgresStore:
             )
 
         for fmt in scan.report_formats:
+            media_type, body = render_report(scan, fmt)
+            encoded = body.encode("utf-8")
+            body_sha256 = sha256(encoded).hexdigest()
             conn.execute(
                 """
-                insert into reports (id, scan_id, format, media_type, data)
-                values (%s, %s, %s, %s, %s)
+                insert into reports (
+                  id, scan_id, format, media_type, body, body_sha256, byte_size, generated_at, data
+                )
+                values (%s, %s, %s, %s, %s, %s, %s, now(), %s)
                 on conflict (scan_id, format) do update set
                   media_type = excluded.media_type,
+                  body = excluded.body,
+                  body_sha256 = excluded.body_sha256,
+                  byte_size = excluded.byte_size,
+                  generated_at = excluded.generated_at,
                   data = excluded.data
                 """,
                 (
                     f"rpt_{scan.id}_{fmt}",
                     scan.id,
                     fmt,
-                    REPORT_MEDIA_TYPES.get(fmt, "application/octet-stream"),
-                    Jsonb({"scan_id": scan.id, "format": fmt}),
+                    media_type or REPORT_MEDIA_TYPES.get(fmt, "application/octet-stream"),
+                    body,
+                    body_sha256,
+                    len(encoded),
+                    Jsonb(
+                        {
+                            "scan_id": scan.id,
+                            "format": fmt,
+                            "body_sha256": body_sha256,
+                            "byte_size": len(encoded),
+                        }
+                    ),
                 ),
             )
 

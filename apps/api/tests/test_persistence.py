@@ -1,7 +1,7 @@
 from uuid import uuid4
 
 from nope_api.config import Settings
-from nope_api.db import run_migrations
+from nope_api.db import connect, run_migrations
 from nope_api.models import Finding, Project, Scan, ScanMode, Severity, Confidence
 from nope_api.storage import PostgresStore
 
@@ -45,6 +45,27 @@ def test_postgres_store_persists_scan_and_children():
     assert reloaded.id == scan.id
     assert reloaded.findings[0].title == "Persisted finding"
     assert reloaded.stages[0]["name"] == "Persisting"
+
+    stored_report = PostgresStore().get_report(scan.id, "md", owner)
+    assert stored_report is not None
+    assert stored_report[0] == "text/markdown"
+    assert "Persisted finding" in stored_report[1]
+
+
+def test_postgres_store_backfills_existing_empty_report_bodies():
+    suffix = uuid4().hex[:8]
+    store = PostgresStore()
+    scan = Scan(id=f"scan_report_backfill_{suffix}", mode=ScanMode.repository)
+    store.save_scan(scan, None)
+    with connect(store.settings) as conn:
+        conn.execute("update reports set body = '', body_sha256 = null, byte_size = 0 where scan_id = %s", (scan.id,))
+
+    updated = store.backfill_report_bodies()
+    stored_report = store.get_report(scan.id, "json", None)
+
+    assert updated >= 1
+    assert stored_report is not None
+    assert scan.id in stored_report[1]
 
 
 def test_user_scoped_scan_lookup_blocks_other_user():

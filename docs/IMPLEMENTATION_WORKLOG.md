@@ -299,9 +299,36 @@ Replace `apps/api/nope_api/storage.py` in-memory project/scan state with a migra
   - reports: 9
   - schema_migrations: 1
 
-### Known limitations after Phase 1
+### Known limitations before Phase 1 completion hardening
 
-- Direct local API access without an authorization header remains possible for development compatibility. Authenticated dashboard calls are scoped by local user.
+- Direct local API access without an authorization header still needed to be closed. Authenticated dashboard calls were already scoped by local user.
 - Scan execution is still synchronous; Redis-backed queuing is Phase 2.
-- Raw scanner output and generated report bodies are not stored in MinIO yet.
+- Raw scanner output and generated report bodies still needed durable payload handling.
 - Migration runner is intentionally small SQL-file based rather than Alembic; it records applied migration filenames in `schema_migrations`.
+
+## 2026-07-15 Phase 1 Completion Hardening
+
+### Objective
+
+Close the remaining Phase 1 persistence/auth/report gaps before starting Phase 2.
+
+### Implementation results
+
+- Added `NOPE_REQUIRE_AUTHENTICATED_API`, defaulting protected API routes to authenticated local sessions.
+- Enforced owner scoping on project, scan, finding, coverage, attack-map, report, settings, model-test, and finding-explanation routes.
+- Fixed authenticated URL scans so URL authorization scope no longer overwrites the bearer-token header value before owner lookup.
+- Added `apps/api/migrations/0002_report_bodies.sql` with durable report body, hash, byte-size, and generated timestamp columns.
+- Updated `PostgresStore` to render and persist JSON, Markdown, and SARIF report payloads on scan save.
+- Added stored-report retrieval for report downloads.
+- Added migration status reporting to `/health`.
+- Stopped swallowing migration startup failures; the API now fails loudly if the database schema cannot initialize.
+- Updated README, API, architecture, database, status, and worklog docs.
+
+### Verification results
+
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests`: passed, 16 tests.
+- New tests cover unauthenticated API rejection, user-scoped project visibility, and persisted report body retrieval.
+
+### Phase 1 closure
+
+Phase 1 is now complete for the local persistence scope. Remaining scanner execution, queueing, raw scanner artifact storage, MinIO object payloads, and advanced history/drift work belong to later phases.

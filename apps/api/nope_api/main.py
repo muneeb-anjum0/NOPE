@@ -8,7 +8,7 @@ from nope_api import __version__
 from nope_api.ai import check_ai_health, explain_finding
 from nope_api.auth import create_or_login, delete_session, get_user_for_token, init_auth_db
 from nope_api.config import get_settings
-from nope_api.db import run_migrations
+from nope_api.db import migration_status, run_migrations
 from nope_api.ingestion import extract_zip
 from nope_api.models import AuthorizationScope, Project, Scan, ScanMode, ScanRequest
 from nope_api.reports import render_report
@@ -36,11 +36,8 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup() -> None:
-    try:
-        run_migrations(settings)
-    except Exception:
-        # Core scanning must still start if Postgres is temporarily unavailable.
-        pass
+    run_migrations(settings)
+    store.backfill_report_bodies()
 
 
 @app.get("/health")
@@ -51,6 +48,7 @@ async def health() -> dict:
         "status": "ok" if not production_warnings else "degraded",
         "version": __version__,
         "environment": settings.environment,
+        "database": migration_status(settings),
         "scanners": scanner_health(),
         "ai": {
             "provider": settings.ai_provider,
@@ -67,7 +65,7 @@ async def health() -> dict:
 
 @app.get("/api/projects", response_model=list[Project])
 def list_projects(authorization: str | None = Header(default=None)) -> list[Project]:
-    return store.list_projects(_owner_user_id(authorization))
+    return store.list_projects(_require_owner_user_id(authorization))
 
 
 @app.post("/api/auth/login")
@@ -106,8 +104,15 @@ def _owner_user_id(authorization: str | None) -> str | None:
     return str(user["id"])
 
 
+def _require_owner_user_id(authorization: str | None) -> str | None:
+    owner_user_id = _owner_user_id(authorization)
+    if not owner_user_id and settings.require_authenticated_api:
+        raise HTTPException(status_code=401, detail="Not authenticated.")
+    return owner_user_id
+
+
 def _load_scan(scan_id: str, authorization: str | None) -> Scan:
-    scan = store.get_scan(scan_id, _owner_user_id(authorization))
+    scan = store.get_scan(scan_id, _require_owner_user_id(authorization))
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found.")
     return scan
@@ -115,12 +120,17 @@ def _load_scan(scan_id: str, authorization: str | None) -> Scan:
 
 @app.post("/api/projects", response_model=Project)
 def create_project(project: Project, authorization: str | None = Header(default=None)) -> Project:
-    return store.create_project(project.name, project.repository, project.target_url, _owner_user_id(authorization))
+    return store.create_project(
+        project.name,
+        project.repository,
+        project.target_url,
+        _require_owner_user_id(authorization),
+    )
 
 
 @app.get("/api/scans", response_model=list[Scan])
 def list_scans(authorization: str | None = Header(default=None)) -> list[Scan]:
-    return store.list_scans(_owner_user_id(authorization))
+    return store.list_scans(_require_owner_user_id(authorization))
 
 
 @app.get("/api/scans/{scan_id}", response_model=Scan)
@@ -148,7 +158,8 @@ def get_attack_map(scan_id: str, authorization: str | None = Header(default=None
 def get_report(scan_id: str, fmt: str, authorization: str | None = Header(default=None)):
     scan = _load_scan(scan_id, authorization)
     try:
-        media_type, body = render_report(scan, fmt)
+        stored_report = store.get_report(scan_id, fmt, _require_owner_user_id(authorization))
+        media_type, body = stored_report or render_report(scan, fmt)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return Response(content=body, media_type=media_type)
@@ -160,15 +171,15 @@ async def start_url_scan(request: ScanRequest, authorization: str | None = Heade
         raise HTTPException(status_code=400, detail="Use mode=url for this endpoint.")
     if not request.target_url:
         raise HTTPException(status_code=400, detail="target_url is required.")
-    authorization = validate_url_scope(str(request.target_url), request.authorization, settings)
-    if authorization.confirmed_at is None:
-        authorization.confirmed_at = datetime.now(timezone.utc)
+    owner_user_id = _require_owner_user_id(authorization)
+    scope = validate_url_scope(str(request.target_url), request.authorization, settings)
+    if scope.confirmed_at is None:
+        scope.confirmed_at = datetime.now(timezone.utc)
     scan = Scan(
         project_id=request.project_id,
         mode=ScanMode.url,
         target_url=str(request.target_url),
     )
-    owner_user_id = _owner_user_id(authorization)
     store.save_scan(scan, owner_user_id)
     scan = await run_url_only_scan(scan, settings)
     return store.save_scan(scan, owner_user_id)
@@ -183,7 +194,7 @@ async def start_repository_scan(
     commit_sha: str | None = Form(default=None),
     authorization: str | None = Header(default=None),
 ) -> Scan:
-    owner_user_id = _owner_user_id(authorization)
+    owner_user_id = _require_owner_user_id(authorization)
     scan = Scan(
         project_id=project_id,
         mode=ScanMode.repository,
@@ -209,7 +220,7 @@ async def start_full_scan(
     commit_sha: str | None = Form(default=None),
     authorization: str | None = Header(default=None),
 ) -> Scan:
-    owner_user_id = _owner_user_id(authorization)
+    owner_user_id = _require_owner_user_id(authorization)
     scope = AuthorizationScope(
         confirmed=authorization_confirmed,
         confirmed_at=datetime.now(timezone.utc) if authorization_confirmed else None,
@@ -231,7 +242,8 @@ async def start_full_scan(
 
 
 @app.get("/api/settings/model")
-def model_settings() -> dict:
+def model_settings(authorization: str | None = Header(default=None)) -> dict:
+    _require_owner_user_id(authorization)
     return {
         "provider": settings.ai_provider,
         "model_name": settings.ai_model_name,
@@ -253,7 +265,8 @@ def model_settings() -> dict:
 
 
 @app.post("/api/settings/model/test")
-async def test_model() -> dict:
+async def test_model(authorization: str | None = Header(default=None)) -> dict:
+    _require_owner_user_id(authorization)
     health_result = await check_ai_health(settings)
     status = "Complete" if health_result["status"] == "ok" else "Failed"
     if health_result["status"] == "disabled":
@@ -262,7 +275,8 @@ async def test_model() -> dict:
 
 
 @app.post("/api/findings/explain")
-async def explain_finding_endpoint(finding: dict) -> dict:
+async def explain_finding_endpoint(finding: dict, authorization: str | None = Header(default=None)) -> dict:
+    _require_owner_user_id(authorization)
     from nope_api.models import Finding
 
     parsed = Finding(**finding)
