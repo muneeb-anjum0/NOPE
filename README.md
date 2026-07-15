@@ -168,7 +168,7 @@ AI GPU mode:
 docker compose -f docker-compose.yml -f docker-compose.ai-gpu.yml --profile ai-gpu up --build -d
 ```
 
-Set `NOPE_MODEL_DIR` and `NOPE_QWEN_MODEL_FILE` before starting AI mode. The current local model path is `D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf`. See `LOCAL_AI.md`.
+Set `NOPE_MODEL_DIR` and `NOPE_QWEN_MODEL_FILE` before starting AI mode. The current local model path is `D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf`. See `docs/LOCAL_AI.md`.
 
 ## Local development
 
@@ -211,7 +211,7 @@ Full scan:
 
 - Combines repository and URL checks.
 - Provides the contract for sandbox, dynamic testing, focused retrieval, and optional AI review.
-- Deep sandbox execution and ZAP-style crawling are still partial and tracked in `FEATURE_STATUS.md`.
+- Deep sandbox execution and ZAP-style crawling are still partial and tracked in `docs/FEATURE_STATUS.md`.
 
 ## API highlights
 
@@ -233,7 +233,7 @@ Full scan:
 - `GET /api/settings/model`
 - `POST /api/settings/model/test`
 
-See `API_REFERENCE.md` for more detail.
+See `docs/API_REFERENCE.md` for more detail.
 
 ## Verification snapshot
 
@@ -262,16 +262,16 @@ Known verification caveats:
 
 ## Important docs
 
-- `ARCHITECTURE.md` - system architecture and data flow.
-- `SECURITY_MODEL.md` - scan authorization, upload, sandbox, secret, and failure-safety model.
-- `FEATURE_STATUS.md` - continuously updated feature matrix.
-- `IMPLEMENTATION_WORKLOG.md` - implementation and verification log.
-- `DEVELOPMENT.md` - local development commands.
-- `DEPLOYMENT.md` - Docker deployment notes.
-- `API_REFERENCE.md` - API endpoint reference.
-- `DESIGN_SYSTEM.md` - graphite design tokens, typography, motion, components, and responsive rules.
-- `LOCAL_AI.md` - llama.cpp/Qwen setup, CPU/GPU modes, security notes, and troubleshooting.
-- `DATABASE.md` - Phase 1 Postgres schema and migration notes.
+- `docs/ARCHITECTURE.md` - system architecture and data flow.
+- `docs/SECURITY_MODEL.md` - scan authorization, upload, sandbox, secret, and failure-safety model.
+- `docs/FEATURE_STATUS.md` - continuously updated feature matrix.
+- `docs/IMPLEMENTATION_WORKLOG.md` - implementation and verification log.
+- `docs/DEVELOPMENT.md` - local development commands.
+- `docs/DEPLOYMENT.md` - Docker deployment notes.
+- `docs/API_REFERENCE.md` - API endpoint reference.
+- `docs/DESIGN_SYSTEM.md` - graphite design tokens, typography, motion, components, and responsive rules.
+- `docs/LOCAL_AI.md` - llama.cpp/Qwen setup, CPU/GPU modes, security notes, and troubleshooting.
+- `docs/DATABASE.md` - Phase 1 Postgres schema and migration notes.
 
 ## README maintenance
 
