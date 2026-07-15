@@ -240,7 +240,7 @@ def _extract_json_object(content: str) -> dict[str, Any]:
         if isinstance(parsed, dict):
             return parsed
     except json.JSONDecodeError:
-        pass
+        parsed = None
     match = re.search(r"\{.*\}", content, flags=re.DOTALL)
     if not match:
         raise ValueError("No JSON object found in completion.")

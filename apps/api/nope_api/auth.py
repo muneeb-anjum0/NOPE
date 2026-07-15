@@ -13,7 +13,7 @@ def _connect(settings: Settings):
 
 
 class AuthRateLimitError(PermissionError):
-    pass
+    ...
 
 
 _LOGIN_FAILURES: dict[str, list[float]] = {}

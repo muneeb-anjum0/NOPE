@@ -39,13 +39,14 @@ Use `LOCAL_AI.md` for model path, llama.cpp, CPU/GPU profiles, and troubleshooti
 
 ## Tests
 
-```bash
-cd apps/api
-python -m pytest
-cd ../web
-pnpm lint
-pnpm typecheck
-pnpm build
+```powershell
+$env:PYTHONPATH='apps/api'
+python -m pytest apps/api/tests -q
+python -m compileall apps/api/nope_api apps/api/tests apps/worker
+pnpm --dir apps/web lint
+pnpm --dir apps/web typecheck
+pnpm --dir apps/web test
+pnpm --dir apps/web build
 ```
 
 ## Docker
@@ -58,4 +59,4 @@ docker compose down -v
 
 ## Scanner CLIs
 
-NOPE runs scanner plugins when their CLIs exist on PATH. Missing scanner tools are recorded as failed or unavailable coverage rather than producing fake results.
+The Docker API image is the verified scanner runtime and bundles Semgrep, Gitleaks, OSV-Scanner, Trivy, Checkov, Hadolint, and Bandit. Host CLIs are optional for local experiments. Missing scanner tools are recorded as failed or unavailable coverage rather than producing fake results.

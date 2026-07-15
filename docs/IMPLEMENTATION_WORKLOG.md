@@ -1230,3 +1230,58 @@ Complete the canonical Phase 15 frontend pass: one dark graphite theme, complete
 ### Closure
 
 Phase 15 is complete for the canonical UI and responsive scope: one graphite theme, no competing light/default UI, complete landing, separate dashboard, route-aware sidebar, polished app routes, dense findings experience, motion/reduced-motion support, mobile adaptation, required viewport verification, Docker image refresh, and under-5 GB Qwen VRAM validation.
+
+## 2026-07-16 Phase 16 Documentation and Final Cleanup
+
+### Objective
+
+Complete the final documentation and cleanup phase: refresh every required document, add the missing pipeline and troubleshooting docs, remove stale final-phase language, audit cleanup keywords, verify no placeholder core implementation remains, run the full test/build/Docker/security checks, commit, push, and stop.
+
+### Pre-phase state
+
+- Pre-phase commit: `9cbe664`.
+- Required docs existed except `docs/PIPELINE.md` and `docs/TROUBLESHOOTING.md`.
+- README still contained stale pre-queue/pre-Qwen verification language and an old verification snapshot.
+- `FEATURE_STATUS.md` and `PHASE_RECONCILIATION.md` still marked Documentation as partially complete pending Phase 16.
+
+### Implemented
+
+- Rewrote `README.md` with product purpose, supported scope, architecture, requirements, Docker startup, core mode, GPU mode, CPU fallback, model path, scanner setup, migrations, tests, benchmarks, endpoints, limitations, GitHub limitation, and authorized-use notice.
+- Added `docs/PIPELINE.md` covering auth, project scope, scan creation, Redis/worker flow, repository analysis, sandbox/ZAP, URL checks, findings, focused RAG, Qwen, coverage, reports, baselines, drift, and UI routes.
+- Added `docs/TROUBLESHOOTING.md` covering Docker, web/API connectivity, login, migrations, queue/worker health, scanners, Qwen GPU/CPU, sandbox, PDF reports, GitHub blocked state, and secret scanning.
+- Refreshed architecture, API, development, deployment, local AI, design system, feature status, and reconciliation docs to remove stale Phase 16 and Qwen/Redis language.
+- Removed behavior-preserving production `pass` keyword hits from empty exception classes and fall-through exception handlers.
+- Classified remaining cleanup sweep hits as documentation history, intentional vulnerable fixtures/rules, test-only doubles, real migration pending status, normal UI placeholder attributes, or explicit GitHub honesty language.
+- Added a web runtime image cleanup that removes npm/npx from the final container layer and starts Next directly with Node, clearing the global npm/undici image finding.
+- Added `postcss@8.5.10` overrides for web installs after the production audit identified the transitive PostCSS advisory path through Next.
+
+### Verification results
+
+- `python -m compileall apps/api/nope_api apps/api/tests apps/worker`: passed.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests -q`: passed, 84 tests.
+- `pnpm --dir apps/web lint`: passed.
+- `pnpm --dir apps/web typecheck`: passed.
+- `pnpm --dir apps/web test`: passed.
+- `pnpm --dir apps/web build`: passed.
+- `pnpm --dir apps/web audit --prod`: passed after the PostCSS override, no known vulnerabilities.
+- `$env:PYTHONPATH='apps/api'; python -m alembic -c apps/api/alembic.ini current`: passed, `0002_report_bodies (head)`.
+- `$env:PYTHONPATH='apps/api'; python -m alembic -c apps/api/alembic.ini upgrade head`: passed.
+- `docker compose config --quiet`: passed.
+- `docker compose build nope-api nope-worker nope-web`: passed; refreshed API, worker, and web images.
+- `docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml up -d`: passed with `NOPE_QWEN_GPU_LAYERS=28` and `NOPE_QWEN_GPU_MEMORY_TARGET_MB=5000`.
+- `docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml ps`: passed; web, API, AI, Postgres, Redis, and MinIO healthy; worker running.
+- `Invoke-RestMethod http://localhost:8000/health`: passed; migrations current, scanners installed, sandbox enabled, Qwen reachable, GPU layers `28`, memory target `5000`.
+- `Invoke-WebRequest http://localhost:3000/ -UseBasicParsing`: passed with HTTP `200`.
+- Authenticated login plus `/api/scans`: passed.
+- Direct llama.cpp `/v1/chat/completions`: passed.
+- `docker exec nope-ai nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader,nounits`: `NVIDIA GeForce GTX 1060 with Max-Q Design, 4485, 6144`; under the 5 GB VRAM cap and close to target.
+- `docker compose run --rm --no-deps nope-api gitleaks detect --no-git --redact --source /app/apps/api/nope_api`: passed, no leaks found.
+- `docker compose run --rm --no-deps nope-api semgrep --config /app/security-packs/semgrep/nope.yml /app/apps/api/nope_api --json`: passed, zero findings.
+- `trivy image --severity CRITICAL,HIGH --ignore-unfixed nope-nope-web`: passed, `HIGH=0`, `CRITICAL=0`.
+- `trivy image --severity CRITICAL,HIGH --ignore-unfixed nope-nope-api`: passed, `HIGH=0`, `CRITICAL=0`.
+- `rg -n "placeholder|TODO|FIXME|fake|stub|pass|pending|mock|dummy"` cleanup sweep: completed; remaining matches are classified in `docs/PHASE_RECONCILIATION.md`.
+- `git diff --check`: passed with Windows line-ending warnings only.
+
+### Closure
+
+Phase 16 is complete for final documentation and cleanup: all required documents are current, pipeline and troubleshooting docs exist, stale status language is removed, production placeholder/pass cleanup is done, dependency audit findings are fixed, refreshed Docker images start successfully, health checks pass, tests/builds pass, image scans are clean for high/critical findings, Qwen runs with CPU+GPU split at 28 layers, and measured VRAM is 4485 MiB under the 5000 MiB cap.

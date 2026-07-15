@@ -64,9 +64,9 @@ The app shell uses a route-aware LineSidebar-style icon rail and a single graphi
 
 ## Storage model
 
-The local implementation uses Postgres for local authentication and scan persistence. The Phase 1 migration-backed repository stores projects, scans, stages, scanner runs, findings, evidence, finding sources/history, coverage, generated report bodies, settings placeholders, baselines, drift events, artifacts, audit logs, and GitHub contract entities.
+The local implementation uses Postgres for local authentication and scan persistence. The migration-backed repository stores projects, scans, stages, scanner runs, findings, evidence, finding sources/history, coverage, generated report bodies, settings, baselines, drift events, artifacts, audit logs, and GitHub contract entities.
 
-Current scan objects are also stored as JSON snapshots so the API contract remains stable while normalized tables mature through later phases.
+Current scan objects are also stored as JSON snapshots so the API contract remains stable while normalized tables preserve the high-value relational records used by reports, history, and status views.
 
 ## Job flow
 

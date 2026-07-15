@@ -97,7 +97,7 @@ def _baseline_summary(scan: Scan, context: ReportContext) -> dict[str, Any]:
             comparison = compare_scans(scan, BaselineSnapshot(**latest["data"]), baseline_id=latest["id"])
             return comparison.model_dump(mode="json")
         except Exception:
-            pass
+            comparison = None
     if context.drift_events:
         return {
             "summary": {"total_drift_events": len(context.drift_events)},

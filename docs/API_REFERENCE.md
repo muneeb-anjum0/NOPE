@@ -39,7 +39,7 @@ Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `
 - `GET /api/github/status` - local GitHub credential/contract state, blocked honestly when credentials are absent or unverified.
 - `PUT /api/github/settings` - save GitHub App/OAuth contract settings; OAuth/private-key/webhook secrets are encrypted and never returned.
 - `GET /api/github/repositories` - returns no repositories while private GitHub access is blocked; never fakes private access.
-- `GET /api/github/callback` - callback route placeholder that returns blocked state until real credentials are supplied and verified.
+- `GET /api/github/callback` - callback route contract that returns blocked state until real credentials are supplied and verified.
 - `GET /api/scans/{scan_id}/report.{format}` - protected report download as `json`, `md`, `sarif`, or `pdf`; PDF generation persists report status and MinIO artifact metadata when object storage is reachable.
 - `GET /api/scans/{scan_id}/reports/{format}/status` - protected report generation status, byte size, SHA-256, and artifact metadata.
 - `GET /api/scanners/capabilities` - authenticated scanner health, version, coverage category, and applicability marker metadata.

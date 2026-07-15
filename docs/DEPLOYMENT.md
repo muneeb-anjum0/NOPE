@@ -43,7 +43,7 @@ NOPE_QWEN_GPU_LAYERS=28
 NOPE_QWEN_GPU_MEMORY_TARGET_MB=5000
 ```
 
-On the local GTX 1060 Max-Q, 28 GPU layers measured about 4041 MiB VRAM. 30 layers failed to fit, so 28 is the highest verified setting under the 5 GB cap.
+On the local GTX 1060 Max-Q, 28 GPU layers measured 4485 MiB VRAM from inside the CUDA container during Phase 15/16 verification. Earlier Phase 5 samples measured about 4041-4049 MiB. 30 layers failed to fit, so 28 is the highest verified setting under the 5 GB cap.
 
 ## Environment
 

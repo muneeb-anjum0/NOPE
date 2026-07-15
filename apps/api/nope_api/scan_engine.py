@@ -18,7 +18,7 @@ CancellationChecker = Callable[[Scan], Awaitable[bool]]
 
 
 class ScanCancelled(Exception):
-    pass
+    ...
 
 
 DOMAINS = [

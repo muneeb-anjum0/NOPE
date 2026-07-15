@@ -14,6 +14,7 @@ WORKDIR /app/apps/web
 ENV NODE_ENV=production
 RUN addgroup -S nope && adduser -S nope -G nope
 COPY --from=builder /app/apps/web ./
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 USER nope
 EXPOSE 3000
-CMD ["npm", "run", "start"]
+CMD ["node", "node_modules/next/dist/bin/next", "start", "-p", "3000"]

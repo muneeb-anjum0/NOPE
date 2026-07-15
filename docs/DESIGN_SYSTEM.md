@@ -55,7 +55,7 @@ Motion is CSS-based and intentionally restrained:
 - Landing hero collapses to one column under 980px.
 - App sidebar becomes a compact horizontal line navigation on mobile.
 - Dense tables scroll inside panels on mobile.
-- Attack maps remain scrollable rather than squashed.
+- Attack maps use their graph canvas on desktop and stack into readable nodes on narrow mobile viewports.
 
 ## Accessibility
 

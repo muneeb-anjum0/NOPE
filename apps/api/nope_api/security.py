@@ -28,7 +28,7 @@ def is_private_host(hostname: str) -> bool:
         ip = ipaddress.ip_address(hostname)
         return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
     except ValueError:
-        pass
+        ip = None
 
     try:
         addresses = socket.getaddrinfo(hostname, None)
