@@ -1079,3 +1079,54 @@ Add reproducible benchmarks and vulnerable fixtures with versioned expected outp
 ### Closure
 
 Phase 12 is complete for reproducible benchmark fixtures, versioned expected output, scanner-only and scanner-plus-Qwen commands, machine-readable comparison metrics, resource timing, explicit known false negatives, and documentation. Future scanner-quality phases can reduce known false negatives, but Phase 12 now makes the benchmark gaps visible and comparable.
+
+## 2026-07-16 Phase 13 Test Expansion
+
+### Objective
+
+Expand unit, integration, E2E, and NOPE-security tests while keeping the core suite runnable without Qwen and keeping GPU/Qwen checks separate.
+
+### Pre-phase state
+
+- Pre-phase commit: `9d39cac`.
+- Backend tests covered prior phase contracts but Phase 13 was still marked partially complete.
+- Frontend had lint/typecheck/build scripts but no `test` script.
+- No single Phase 13 test file explicitly grouped unit, integration, E2E, and NOPE-security coverage.
+
+### Implemented
+
+- Added `apps/api/tests/test_phase13_expansion.py` with unit, integration, E2E, and security coverage.
+- Added migration and scanner command-construction tests.
+- Added a core repository scan test that runs with `ai_provider="none"`.
+- Added ownership tests for scans, raw artifacts, and reports.
+- Added an API-level E2E flow for login, project creation, ZIP upload, scan start, events, findings filter/detail/evidence tabs, AI explanation fallback, report download, baseline, comparison, and settings persistence.
+- Added security tests for bearer-only CSRF posture, login rate limiting, private URL blocking, malformed ZIP rejection, command construction safety, and redaction.
+- Added a conservative login failure throttle returning `429` after repeated bad credentials.
+- Added `pnpm --dir apps/web test` as a CI-compatible no-emit TypeScript check.
+- Added `docs/TESTING.md` and updated feature/reconciliation status.
+
+### Verification results
+
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests/test_phase13_expansion.py -q`: passed, 6 tests.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests/test_security.py apps/api/tests/test_phase7_findings.py apps/api/tests/test_phase6_rag.py -q`: passed, 18 tests.
+- `$env:PYTHONPATH='apps/api'; python -m pytest apps/api/tests -q`: passed, 82 tests.
+- `python -m compileall apps/api/nope_api apps/api/tests apps/worker`: passed.
+- `pnpm --dir apps/web lint`: passed.
+- `pnpm --dir apps/web typecheck`: passed.
+- `pnpm --dir apps/web test`: passed.
+- `pnpm --dir apps/web build`: passed.
+- `docker compose config --quiet`: passed.
+- `git diff --check`: passed.
+- `docker compose build nope-api nope-worker nope-web`: passed; images `nope-nope-api@sha256:85da99402f32`, `nope-nope-worker@sha256:c9af5d8f73c0`, and `nope-nope-web@sha256:19fa894e01b2`.
+- `docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml up -d`: passed with `NOPE_QWEN_GPU_LAYERS=28` and `NOPE_QWEN_GPU_MEMORY_TARGET_MB=5000`.
+- `docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml ps`: passed; web, API, AI, Postgres, Redis, and MinIO healthy; worker running.
+- `Invoke-RestMethod http://localhost:8000/health`: passed; migrations current, scanner tools installed, Qwen runtime reachable, GPU layers `28`, GPU memory target `5000`.
+- `Invoke-WebRequest http://localhost:3000 -UseBasicParsing`: passed with HTTP `200`.
+- `docker compose run --rm --no-deps nope-api python -m compileall /app/apps/api/nope_api /app/apps/worker`: passed.
+- `docker compose run --rm --no-deps nope-api gitleaks detect --no-git --redact --source /app/apps/api/nope_api`: passed, no leaks found.
+- `docker compose run --rm --no-deps nope-api python -m pytest /app/apps/api/tests/test_phase13_expansion.py -q`: not run inside the production image because `pytest` is intentionally not installed there; the equivalent host suite passed before image refresh.
+- `nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader,nounits`: `NVIDIA GeForce GTX 1060 with Max-Q Design, 4485, 6144`; GPU profile remained under the 5 GB VRAM cap.
+
+### Closure
+
+- Phase 13 is complete for expanded unit, integration, API-level E2E, and NOPE-security tests; CI-compatible frontend test commands; core backend tests that run without Qwen; separate GPU/Qwen verification; Docker image refresh; and under-5 GB VRAM validation.

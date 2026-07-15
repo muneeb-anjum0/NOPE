@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from nope_api.config import Settings
 from nope_api.models import AttackSurfaceItem, CodeGraph, Evidence, Finding, Scan, ScannerRun, StackEvidence
+from nope_api.security import redact
 
 
 SECRET_PATTERNS = [
@@ -86,7 +87,7 @@ class RagContext(BaseModel):
 def redact_text(value: str | None) -> str:
     if not value:
         return ""
-    redacted = value
+    redacted = redact(value).replace("***REDACTED***", "[REDACTED]")
     for pattern in SECRET_PATTERNS:
         redacted = pattern.sub("[REDACTED]", redacted)
     return redacted

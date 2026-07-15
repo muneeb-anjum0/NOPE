@@ -1,6 +1,7 @@
 import hashlib
 import os
 import secrets
+import time
 from datetime import datetime, timedelta, timezone
 
 from nope_api.config import Settings
@@ -9,6 +10,44 @@ from nope_api.db import connect, run_migrations
 
 def _connect(settings: Settings):
     return connect(settings)
+
+
+class AuthRateLimitError(PermissionError):
+    pass
+
+
+_LOGIN_FAILURES: dict[str, list[float]] = {}
+_LOGIN_FAILURE_WINDOW_SECONDS = 300
+_LOGIN_FAILURE_LIMIT = 5
+
+
+def clear_login_rate_limits() -> None:
+    _LOGIN_FAILURES.clear()
+
+
+def _rate_limit_key(email: str) -> str:
+    return email.strip().lower()
+
+
+def _check_login_rate_limit(email: str) -> None:
+    key = _rate_limit_key(email)
+    now = time.monotonic()
+    attempts = [item for item in _LOGIN_FAILURES.get(key, []) if now - item < _LOGIN_FAILURE_WINDOW_SECONDS]
+    _LOGIN_FAILURES[key] = attempts
+    if len(attempts) >= _LOGIN_FAILURE_LIMIT:
+        raise AuthRateLimitError("Too many failed login attempts. Try again later.")
+
+
+def _record_login_failure(email: str) -> None:
+    key = _rate_limit_key(email)
+    now = time.monotonic()
+    attempts = [item for item in _LOGIN_FAILURES.get(key, []) if now - item < _LOGIN_FAILURE_WINDOW_SECONDS]
+    attempts.append(now)
+    _LOGIN_FAILURES[key] = attempts
+
+
+def _clear_login_failure(email: str) -> None:
+    _LOGIN_FAILURES.pop(_rate_limit_key(email), None)
 
 
 def init_auth_db(settings: Settings) -> None:
@@ -34,6 +73,7 @@ def create_or_login(settings: Settings, email: str, password: str) -> dict:
     normalized = email.strip().lower()
     if not normalized or len(password) < 8:
         raise ValueError("Email is required and password must be at least 8 characters.")
+    _check_login_rate_limit(normalized)
     init_auth_db(settings)
     with _connect(settings) as conn:
         user = conn.execute("select * from local_users where email = %s", (normalized,)).fetchone()
@@ -45,7 +85,9 @@ def create_or_login(settings: Settings, email: str, password: str) -> dict:
             )
             user = {"id": user_id, "email": normalized}
         elif not _verify_password(password, user["password_hash"]):
+            _record_login_failure(normalized)
             raise PermissionError("Invalid local credentials.")
+        _clear_login_failure(normalized)
         token = secrets.token_urlsafe(32)
         expires_at = datetime.now(timezone.utc) + timedelta(days=7)
         conn.execute(

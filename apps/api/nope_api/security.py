@@ -10,6 +10,7 @@ from nope_api.models import AuthorizationScope
 
 
 SECRET_PATTERNS = [
+    re.compile(r"(?i)([\"'](?:api[_-]?key|token|secret|password)[\"']\s*:\s*)[\"'][^\"']{12,}[\"']"),
     re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['\"]?([A-Za-z0-9_\-./+=]{12,})"),
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |)?PRIVATE KEY-----"),
 ]
@@ -18,7 +19,7 @@ SECRET_PATTERNS = [
 def redact(value: str) -> str:
     redacted = value
     for pattern in SECRET_PATTERNS:
-        redacted = pattern.sub(lambda m: f"{m.group(1) if m.groups() else 'secret'}=***REDACTED***", redacted)
+        redacted = pattern.sub(lambda m: f"{m.group(1) if m.groups() else 'secret'}***REDACTED***", redacted)
     return redacted
 
 

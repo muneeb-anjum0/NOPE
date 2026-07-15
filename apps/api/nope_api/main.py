@@ -6,7 +6,7 @@ from fastapi.responses import Response
 
 from nope_api import __version__
 from nope_api.ai import check_ai_health, explain_finding, finding_action
-from nope_api.auth import create_or_login, delete_session, get_user_for_token, init_auth_db
+from nope_api.auth import AuthRateLimitError, create_or_login, delete_session, get_user_for_token, init_auth_db
 from nope_api.config import get_settings
 from nope_api.db import migration_status, run_migrations
 from nope_api.drift import BaselineSnapshot, baseline_snapshot, compare_scans
@@ -88,6 +88,8 @@ def list_projects(authorization: str | None = Header(default=None)) -> list[Proj
 def login(payload: dict) -> dict:
     try:
         return create_or_login(settings, str(payload.get("email", "")), str(payload.get("password", "")))
+    except AuthRateLimitError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
     except PermissionError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except ValueError as exc:
