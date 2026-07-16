@@ -5,6 +5,7 @@ import { API_BASE } from "@/lib/api";
 export async function POST(request: Request) {
   const form = await request.formData();
   const scanId = String(form.get("scanId") ?? "");
+  const projectId = String(form.get("projectId") ?? "");
   if (!scanId) {
     return NextResponse.redirect(new URL("/app/projects/local/scans?error=Choose a scan to delete.", request.url), 303);
   }
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
     headers,
   });
 
-  const next = new URL("/app/projects/local/scans", request.url);
+  const next = new URL(projectId ? `/app/projects/local/scans/${encodeURIComponent(projectId)}` : "/app/projects/local/scans", request.url);
   if (!response.ok) {
     const detail = await response.text();
     next.searchParams.set("error", detail || `Delete failed with ${response.status}.`);

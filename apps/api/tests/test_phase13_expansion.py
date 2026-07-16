@@ -246,6 +246,63 @@ async def test_phase13_e2e_login_project_zip_scan_findings_qwen_report_baseline_
         assert settings_response.json()["target_url"] == "https://example.com"
 
 
+@pytest.mark.asyncio
+async def test_phase13_project_folder_rejects_low_similarity_zip(monkeypatch, tmp_path):
+    queued_jobs = []
+
+    async def fake_enqueue(settings, job, force=False):
+        queued_jobs.append({**job, "force": force})
+
+    monkeypatch.setattr(main_module, "enqueue_scan_job", fake_enqueue)
+
+    first = tmp_path / "gpa-tracker"
+    (first / "app" / "api" / "grades").mkdir(parents=True)
+    (first / "app" / "api" / "grades" / "route.ts").write_text("export async function GET() {}", encoding="utf-8")
+    (first / "app" / "page.tsx").write_text("export default function Page() {}", encoding="utf-8")
+    (first / "package.json").write_text('{"name":"gpa-tracker"}', encoding="utf-8")
+
+    different = tmp_path / "invoice-tool"
+    (different / "src" / "billing").mkdir(parents=True)
+    (different / "src" / "billing" / "invoice.py").write_text("print('invoice')", encoding="utf-8")
+    (different / "pyproject.toml").write_text("[project]\nname='invoice-tool'", encoding="utf-8")
+
+    with TestClient(app) as client:
+        session = login(client, "phase13-scaffold")
+        headers = auth(session["token"])
+        project_response = client.post("/api/projects", headers=headers, json={"name": "GPA Tracker"})
+        assert project_response.status_code == 200
+        project_id = project_response.json()["id"]
+
+        accepted = client.post(
+            "/api/scans/repository",
+            headers=headers,
+            data={"project_id": project_id, "repository_name": "gpa-tracker.zip"},
+            files={"file": ("gpa-tracker.zip", make_zip(first), "application/zip")},
+        )
+        assert accepted.status_code == 200
+        assert accepted.json()["repository_scaffold_similarity"] == 100
+
+        rejected = client.post(
+            "/api/scans/repository",
+            headers=headers,
+            data={"project_id": project_id, "repository_name": "invoice-tool.zip"},
+            files={"file": ("invoice-tool.zip", make_zip(different), "application/zip")},
+        )
+        assert rejected.status_code == 409
+        assert "looks like a different project" in rejected.json()["detail"]
+
+        forced = client.post(
+            "/api/scans/repository",
+            headers=headers,
+            data={"project_id": project_id, "repository_name": "invoice-tool.zip", "force_scaffold": "true"},
+            files={"file": ("invoice-tool.zip", make_zip(different), "application/zip")},
+        )
+        assert forced.status_code == 200
+        assert forced.json()["repository_scaffold_similarity"] < 30
+
+    assert len(queued_jobs) == 2
+
+
 def test_phase13_security_csrf_posture_and_login_rate_limit():
     suffix = uuid4().hex[:8]
     email = f"phase13-rate-{suffix}@example.com"

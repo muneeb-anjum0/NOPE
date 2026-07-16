@@ -120,6 +120,8 @@ export type Scan = {
   coverage_percent: number;
   target_url?: string | null;
   repository_name?: string | null;
+  repository_scaffold?: string[];
+  repository_scaffold_similarity?: number | null;
   branch?: string | null;
   commit_sha?: string | null;
   findings: Finding[];

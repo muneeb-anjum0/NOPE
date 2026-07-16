@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { Upload } from "lucide-react";
 
-export function ScanLauncher() {
+export function ScanLauncher({ projectId, scaffoldWarning }: { projectId?: string; scaffoldWarning?: string }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [fileName, setFileName] = useState("");
 
@@ -20,6 +20,7 @@ export function ScanLauncher() {
 
   return (
     <form className="app-grid" action="/api/start-scan" method="post" encType="multipart/form-data">
+      {projectId ? <input name="projectId" type="hidden" value={projectId} /> : null}
       <label
         className={`dropzone${fileName ? " dropzone-selected" : ""}`}
         htmlFor="repository"
@@ -56,6 +57,11 @@ export function ScanLauncher() {
       <label className="checkbox-line">
         <input name="confirmed" type="checkbox" />
         <span>I own this target or have explicit permission to test it.</span>
+      </label>
+      {scaffoldWarning ? <p className="login-error">{scaffoldWarning}</p> : null}
+      <label className="checkbox-line compact-checkbox">
+        <input name="forceScaffold" type="checkbox" />
+        <span>Upload anyway if this ZIP looks like a different project.</span>
       </label>
       <button className="button primary" type="submit">
         Start evidence scan

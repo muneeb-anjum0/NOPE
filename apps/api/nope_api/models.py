@@ -259,6 +259,8 @@ class Scan(BaseModel):
     target_url: str | None = None
     repository_name: str | None = None
     repository_workspace_path: str | None = None
+    repository_scaffold: list[str] = Field(default_factory=list)
+    repository_scaffold_similarity: int | None = None
     branch: str | None = None
     commit_sha: str | None = None
     started_at: datetime = Field(default_factory=now_utc)

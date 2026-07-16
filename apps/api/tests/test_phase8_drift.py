@@ -134,3 +134,26 @@ def test_baseline_and_drift_api_are_owner_scoped():
     assert drift_response.json()["persisted_events"]
     assert list_response.status_code == 200
     assert list_response.json()
+
+
+def test_compare_rejects_different_local_zip_uploads():
+    suffix = uuid4().hex[:8]
+    store = PostgresStore()
+    first = scan(f"scan_phase8_first_zip_{suffix}", [finding(f"first_{suffix}", "First")], project_id=None)
+    second = scan(f"scan_phase8_second_zip_{suffix}", [finding(f"second_{suffix}", "Second")], project_id=None)
+    first.repository_name = "first.zip"
+    second.repository_name = "second.zip"
+
+    with TestClient(app) as client:
+        login = client.post("/api/auth/login", json={"email": f"phase8-zip-{suffix}@example.com", "password": "correct horse battery staple"})
+        token = login.json()["token"]
+        user_id = login.json()["user"]["id"]
+        store.save_scan(first, user_id)
+        store.save_scan(second, user_id)
+        response = client.get(
+            f"/api/scans/{second.id}/compare?against_scan_id={first.id}",
+            headers={"authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 409
+    assert "different repositories or targets" in response.text

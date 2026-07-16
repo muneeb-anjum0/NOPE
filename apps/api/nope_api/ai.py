@@ -19,6 +19,8 @@ SECRET_PATTERNS = [
     re.compile(r"sk-[A-Za-z0-9_-]{12,}"),
     re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['\"]?[^'\"\s]{8,}"),
 ]
+TOKEN_CHAR_RATIO = 3.0
+PROMPT_SAFETY_TOKENS = 512
 
 
 class RetrievedContext(BaseModel):
@@ -118,6 +120,21 @@ def _runtime_url(settings: Settings) -> str:
     return settings.qwen_runtime_url.rstrip("/")
 
 
+def _estimate_tokens(value: str) -> int:
+    return max(1, int(len(value) / TOKEN_CHAR_RATIO))
+
+
+def _fit_chat_prompt(settings: Settings, system: str, user: str, *, output_tokens: int) -> str:
+    available_tokens = max(512, settings.effective_qwen_context_size - output_tokens - PROMPT_SAFETY_TOKENS)
+    system_tokens = _estimate_tokens(system)
+    user_budget_tokens = max(256, available_tokens - system_tokens)
+    user_char_budget = int(user_budget_tokens * TOKEN_CHAR_RATIO)
+    if len(user) <= user_char_budget:
+        return user
+    suffix = "\n\n[NOPE truncated focused evidence to fit the local Qwen context window.]"
+    return user[: max(0, user_char_budget - len(suffix))] + suffix
+
+
 def _gpu_state(settings: Settings) -> dict[str, Any]:
     layers = settings.effective_qwen_gpu_layers
     if layers <= 0:
@@ -203,6 +220,7 @@ async def llama_chat_completion(settings: Settings, *, system: str, user: str, j
     output_tokens = settings.effective_qwen_max_output_tokens
     if json_mode:
         output_tokens = min(output_tokens, 256)
+    user = _fit_chat_prompt(settings, system, user, output_tokens=output_tokens)
     payload: dict[str, Any] = {
         "model": settings.ai_model_name,
         "messages": [

@@ -3,7 +3,6 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { Scan } from "@/lib/types";
 
 const FALLOFF_CURVES = {
   linear: (p: number) => p,
@@ -197,7 +196,7 @@ function BitsLineSidebar({
   );
 }
 
-export function LineSidebar({ scans }: Readonly<{ scans: Scan[] }>) {
+export function LineSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -205,12 +204,7 @@ export function LineSidebar({ scans }: Readonly<{ scans: Scan[] }>) {
     0,
     routeItems.findIndex((item) => pathname === item.href || (item.href !== "/app/projects/local" && pathname.startsWith(item.href))),
   );
-  const selectedScan = searchParams.get("scan") ?? scans[0]?.id ?? "";
-  const selectedScanRecord = scans.find((scan) => scan.id === selectedScan) ?? scans[0] ?? null;
-  const labelFor = (scan: Scan, index: number) => {
-    if (scan.repository_name && scan.repository_name !== "Uploaded ZIP") return scan.repository_name;
-    return scan.id || `Upload ${index + 1}`;
-  };
+  const selectedScan = searchParams.get("scan") ?? "";
 
   const hrefFor = (href: string, scanId = selectedScan) => {
     const params = new URLSearchParams();
@@ -236,33 +230,6 @@ export function LineSidebar({ scans }: Readonly<{ scans: Scan[] }>) {
         fontSize={1.05}
         onItemClick={(index) => router.push(hrefFor(routeItems[index]?.href ?? "/app/projects/local"))}
       />
-      <div className="sidebar-scan-switcher">
-        <label htmlFor="active-scan">Active scan</label>
-        <div className="sidebar-select-shell">
-          <select
-            id="active-scan"
-            value={selectedScan}
-            onChange={(event) => router.push(hrefFor(pathname, event.target.value))}
-            disabled={scans.length === 0}
-          >
-            {scans.length === 0 ? <option value="">No scans yet</option> : null}
-            {scans.map((scan, index) => (
-              <option key={scan.id} value={scan.id}>
-                {labelFor(scan, index)} - {scan.status}
-              </option>
-            ))}
-          </select>
-        </div>
-        {selectedScanRecord ? (
-          <form action="/api/delete-scan" method="post">
-            <input name="scanId" type="hidden" value={selectedScanRecord.id} />
-            <button className="sidebar-delete" type="submit">
-              Delete selected scan
-            </button>
-          </form>
-        ) : null}
-        {selectedScan ? <span className="mono">{selectedScan}</span> : <span className="muted">Run a scan to pin a file.</span>}
-      </div>
     </aside>
   );
 }

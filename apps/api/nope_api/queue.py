@@ -188,10 +188,16 @@ async def scan_events(scan: Scan) -> dict[str, Any]:
 def _progress_percent(scan: Scan) -> int:
     if scan.status in {"completed", "failed", "cancelled", "partial"}:
         return 100
+    if scan.status == "preparing":
+        return 3
+    if scan.status == "queued":
+        return 8
     if not scan.stages:
-        return 0
+        return 15 if scan.status == "running" else 0
     done = sum(1 for stage in scan.stages if stage.get("status") in {"completed", "partial", "failed", "skipped", "cancelled", "timed out"})
-    return min(99, round(done / max(1, len(scan.stages)) * 100))
+    floor = 15 if scan.status == "running" else 0
+    expected_stages = len(scan.stages) if len(scan.stages) > 1 else 8
+    return max(floor, min(99, round(done / expected_stages * 100)))
 
 
 async def worker_loop(settings: Settings) -> None:

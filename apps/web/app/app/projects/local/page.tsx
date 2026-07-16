@@ -2,6 +2,7 @@ import { AttackMapPanel } from "@/components/attack-map";
 import { FindingTable } from "@/components/finding-table";
 import { PinkDotText } from "@/components/pink-dot-text";
 import { freshScan, getScanComparison, getScans, selectScan } from "@/lib/nope-data";
+import { scansAreComparable } from "@/lib/scan-identity";
 
 export default async function ProjectOverview({
   searchParams,
@@ -12,7 +13,7 @@ export default async function ProjectOverview({
   const scans = await getScans();
   const scan = selectScan(scans, params.scan) ?? freshScan();
   const scanIndex = scans.findIndex((item) => item.id === scan.id);
-  const previous = scans.find((item, index) => index > scanIndex && (!scan.project_id || item.project_id === scan.project_id));
+  const previous = scans.find((item, index) => index > scanIndex && scansAreComparable(scan, item));
   const comparison = previous ? await getScanComparison(scan.id, previous.id) : null;
   const severityCounts = ["critical", "high", "medium", "low"].map((severity) => ({
     severity,

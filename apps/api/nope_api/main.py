@@ -1,4 +1,6 @@
+import shutil
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -143,6 +145,116 @@ def _system_settings_for(owner_user_id: str | None) -> SystemSettings:
     return default_system_settings(settings)
 
 
+def _normalized_source(value: str | None) -> str | None:
+    cleaned = (value or "").strip().lower()
+    if not cleaned or cleaned == "uploaded zip":
+        return None
+    return cleaned
+
+
+def _scan_source(scan: Scan) -> str | None:
+    return _normalized_source(scan.repository_name) or _normalized_source(scan.target_url)
+
+
+def _snapshot_source(snapshot: BaselineSnapshot) -> str | None:
+    return _normalized_source(snapshot.repository_snapshot.get("repository_name")) or _normalized_source(snapshot.target)
+
+
+def _scans_comparable(current: Scan, reference: Scan) -> bool:
+    if current.project_id or reference.project_id:
+        return bool(current.project_id and current.project_id == reference.project_id)
+    current_source = _scan_source(current)
+    reference_source = _scan_source(reference)
+    return bool(current_source and current_source == reference_source)
+
+
+def _baseline_comparable(current: Scan, baseline: dict, snapshot: BaselineSnapshot) -> bool:
+    baseline_project = baseline.get("project_id")
+    if current.project_id or baseline_project:
+        return bool(current.project_id and current.project_id == baseline_project)
+    current_source = _scan_source(current)
+    reference_source = _snapshot_source(snapshot)
+    return bool(current_source and current_source == reference_source)
+
+
+SCAFFOLD_MINIMUM_MATCH_PERCENT = 30
+SCAFFOLD_IGNORED_PARTS = {
+    ".git",
+    ".hg",
+    ".next",
+    ".nuxt",
+    ".svelte-kit",
+    ".turbo",
+    "__pycache__",
+    "build",
+    "coverage",
+    "dist",
+    "node_modules",
+    "out",
+    "target",
+    "vendor",
+}
+
+
+def _repository_scaffold(root: Path, limit: int = 800) -> list[str]:
+    entries: set[str] = set()
+    for path in root.rglob("*"):
+        relative = path.relative_to(root)
+        parts = relative.parts
+        if not parts or any(part in SCAFFOLD_IGNORED_PARTS for part in parts):
+            continue
+        normalized = "/".join(parts)
+        if path.is_dir():
+            entries.add(f"dir:{normalized}")
+        elif path.is_file():
+            entries.add(f"file:{normalized}")
+            if path.parent != root:
+                entries.add(f"dir:{path.parent.relative_to(root).as_posix()}")
+        if len(entries) >= limit:
+            break
+    return sorted(entries)
+
+
+def _scaffold_similarity(current: list[str], reference: list[str]) -> int:
+    current_set = set(current)
+    reference_set = set(reference)
+    if not current_set or not reference_set:
+        return 100
+    return round((len(current_set & reference_set) / len(current_set | reference_set)) * 100)
+
+
+def _latest_project_scaffold(project_id: str, owner_user_id: str | None, exclude_scan_id: str | None = None) -> list[str]:
+    for scan in store.list_scans(owner_user_id):
+        if scan.project_id != project_id or scan.id == exclude_scan_id:
+            continue
+        if scan.repository_scaffold:
+            return scan.repository_scaffold
+    return []
+
+
+def _validate_project_upload(scan: Scan, owner_user_id: str | None, root: Path, force_scaffold: bool) -> None:
+    scan.repository_scaffold = _repository_scaffold(root)
+    scan.repository_scaffold_similarity = None
+    if not scan.project_id:
+        return
+    if not store.user_owns_project(scan.project_id, owner_user_id):
+        raise HTTPException(status_code=404, detail="Project folder not found.")
+    previous_scaffold = _latest_project_scaffold(scan.project_id, owner_user_id, scan.id)
+    if not previous_scaffold:
+        scan.repository_scaffold_similarity = 100
+        return
+    similarity = _scaffold_similarity(scan.repository_scaffold, previous_scaffold)
+    scan.repository_scaffold_similarity = similarity
+    if similarity < SCAFFOLD_MINIMUM_MATCH_PERCENT and not force_scaffold:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"This ZIP only matches this folder by {similarity}%. "
+                "It looks like a different project. Enable the scaffold override to upload anyway."
+            ),
+        )
+
+
 def _comparison_reference(
     current: Scan,
     owner_user_id: str | None,
@@ -154,13 +266,19 @@ def _comparison_reference(
         baseline = store.get_security_baseline(baseline_id, owner_user_id)
         if not baseline:
             raise HTTPException(status_code=404, detail="Baseline not found.")
-        return BaselineSnapshot(**baseline["data"])
+        snapshot = BaselineSnapshot(**baseline["data"])
+        if not _baseline_comparable(current, baseline, snapshot):
+            raise HTTPException(status_code=409, detail="Baseline belongs to a different repository or target.")
+        return snapshot
     if against_scan_id:
-        return _load_scan(against_scan_id, authorization)
+        reference = _load_scan(against_scan_id, authorization)
+        if not _scans_comparable(current, reference):
+            raise HTTPException(status_code=409, detail="Scans belong to different repositories or targets.")
+        return reference
     candidates = [
         scan
         for scan in store.list_scans(owner_user_id)
-        if scan.id != current.id and (not current.project_id or scan.project_id == current.project_id)
+        if scan.id != current.id and _scans_comparable(current, scan)
     ]
     if not candidates:
         raise HTTPException(status_code=409, detail="No previous scan or baseline is available for comparison.")
@@ -513,6 +631,8 @@ async def start_url_scan(request: ScanRequest, authorization: str | None = Heade
     if not request.target_url:
         raise HTTPException(status_code=400, detail="target_url is required.")
     owner_user_id = _require_owner_user_id(authorization)
+    if request.project_id and not store.user_owns_project(request.project_id, owner_user_id):
+        raise HTTPException(status_code=404, detail="Project folder not found.")
     scope = validate_url_scope(str(request.target_url), request.authorization, settings)
     if scope.confirmed_at is None:
         scope.confirmed_at = datetime.now(timezone.utc)
@@ -535,9 +655,12 @@ async def start_repository_scan(
     repository_name: str | None = Form(default="Uploaded ZIP"),
     branch: str | None = Form(default=None),
     commit_sha: str | None = Form(default=None),
+    force_scaffold: bool = Form(False),
     authorization: str | None = Header(default=None),
 ) -> Scan:
     owner_user_id = _require_owner_user_id(authorization)
+    if project_id and not store.user_owns_project(project_id, owner_user_id):
+        raise HTTPException(status_code=404, detail="Project folder not found.")
     scan = Scan(
         project_id=project_id,
         mode=ScanMode.repository,
@@ -547,7 +670,13 @@ async def start_repository_scan(
         commit_sha=commit_sha,
     )
     store.save_scan(scan, owner_user_id)
-    root = await extract_zip(file, scan.id, settings)
+    try:
+        root = await extract_zip(file, scan.id, settings)
+        _validate_project_upload(scan, owner_user_id, root, force_scaffold)
+    except HTTPException:
+        store.delete_scan(scan.id, owner_user_id)
+        shutil.rmtree(settings.temp_root / scan.id, ignore_errors=True)
+        raise
     scan.repository_workspace_path = str(root)
     scan.status = "queued"
     scan.stages.append({"name": "Queued for worker", "status": "queued", "message": "Repository extracted and ready."})
@@ -574,9 +703,12 @@ async def start_full_scan(
     repository_name: str | None = Form(default="Uploaded ZIP"),
     branch: str | None = Form(default=None),
     commit_sha: str | None = Form(default=None),
+    force_scaffold: bool = Form(False),
     authorization: str | None = Header(default=None),
 ) -> Scan:
     owner_user_id = _require_owner_user_id(authorization)
+    if project_id and not store.user_owns_project(project_id, owner_user_id):
+        raise HTTPException(status_code=404, detail="Project folder not found.")
     scope = AuthorizationScope(
         confirmed=authorization_confirmed,
         confirmed_at=datetime.now(timezone.utc) if authorization_confirmed else None,
@@ -593,7 +725,13 @@ async def start_full_scan(
         commit_sha=commit_sha,
     )
     store.save_scan(scan, owner_user_id)
-    root = await extract_zip(file, scan.id, settings)
+    try:
+        root = await extract_zip(file, scan.id, settings)
+        _validate_project_upload(scan, owner_user_id, root, force_scaffold)
+    except HTTPException:
+        store.delete_scan(scan.id, owner_user_id)
+        shutil.rmtree(settings.temp_root / scan.id, ignore_errors=True)
+        raise
     scan.repository_workspace_path = str(root)
     scan.status = "queued"
     scan.stages.append({"name": "Queued for worker", "status": "queued", "message": "Repository extracted and URL scope confirmed."})
