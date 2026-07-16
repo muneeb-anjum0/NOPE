@@ -10,7 +10,6 @@ import {
   ShieldAlert,
   Sparkles,
   TerminalSquare,
-  TriangleAlert,
 } from "lucide-react";
 
 const stages = [
@@ -43,6 +42,14 @@ const coverage = [
   ["Dynamic testing", "runtime checks"],
 ];
 
+const principles = [
+  "Frontend route protection is not authorization.",
+  "UUIDs do not prevent IDOR.",
+  "Public Supabase keys require correct RLS.",
+  "Hidden endpoints are not security.",
+  "Scanner scores do not prove application security.",
+];
+
 const methodSteps = [
   ["Repository", GitBranch, "Map files, routes", "and config evidence."],
   ["Authorized URL", LockKeyhole, "Probe headers, cookies", "and public exposure."],
@@ -65,7 +72,7 @@ export default function LandingPage() {
       <header className="landing-nav">
         <div className="container landing-nav-inner">
           <a className="wordmark" href="#top" aria-label="NOPE home">
-            <span>NOPE.</span>
+            <span>NOPE<span className="wordmark-dot">.</span></span>
           </a>
           <nav className="landing-links" aria-label="Landing navigation">
             <a href="#product">Product</a>
@@ -85,7 +92,7 @@ export default function LandingPage() {
       <section id="top" className="container hero">
         <div>
           <h1>
-            NOPE<span>.</span>
+            NOPE<span className="wordmark-dot">.</span>
           </h1>
           <p className="hero-copy">
             Your app works. That does not mean it is secure. Connect your repository,
@@ -101,13 +108,13 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="scan-console" aria-label="Animated demo scan">
+        <div className="scan-console hero-console" aria-label="Animated demo scan">
           <div className="console-header">
             <span>demo/nope-demo</span>
             <span>demonstration data</span>
           </div>
           <div className="console-body">
-            <div className="stage-list">
+            <div className="demo-stages">
               {stages.map((stage, index) => (
                 <div className="stage-row" style={{ animationDelay: `${index * 90}ms` }} key={stage}>
                   <span>{stage}</span>
@@ -115,25 +122,24 @@ export default function LandingPage() {
                 </div>
               ))}
             </div>
-            <div className="stage-row">
-              <span className="mono">2,847 files mapped</span>
-              <span className="mono">43 routes</span>
+            <div className="demo-stats">
+              <span><strong>2,847</strong> files mapped</span>
+              <span><strong>43</strong> routes</span>
             </div>
-            {findings.map(([severity, title]) => (
-              <div className="finding-row" key={title}>
-                <div>
+            <div className="demo-findings">
+              {findings.map(([severity, title]) => (
+                <div className="demo-finding" key={title}>
                   <span className={`severity-pill severity-${severity}`}>{severity}</span>
-                  <div style={{ marginTop: 8 }}>{title}</div>
+                  <span>{title}</span>
                 </div>
-                <TriangleAlert color={`var(--${severity})`} size={18} />
-              </div>
-            ))}
-            <div className="finding-row">
+              ))}
+            </div>
+            <div className="demo-verdict">
+              <ShieldAlert color="var(--critical)" />
               <div>
                 <span className="mono muted">Final demo verdict</span>
-                <h3 style={{ margin: "8px 0 0", fontSize: 28 }}>NOPE. Do not ship this.</h3>
+                <strong>NOPE. Do not ship this.</strong>
               </div>
-              <ShieldAlert color="var(--critical)" />
             </div>
           </div>
         </div>
@@ -143,23 +149,19 @@ export default function LandingPage() {
         <div className="container">
           <p className="section-kicker">Why NOPE exists</p>
           <h2>Vibe-coded software can work while still being wildly unsafe.</h2>
-          <div className="editorial-grid">
-            <div className="editorial-panel">
-              <p className="section-intro" style={{ marginTop: 0 }}>
+          <div className="principle-board">
+            <div>
+              <p className="section-intro">
                 Fast builders need security evidence, not a chatbot that says things sound fine.
                 NOPE looks for server-side authorization gaps, exposed secrets, unsafe RLS,
                 public storage, scanner failures, privacy leakage, and untested areas.
               </p>
             </div>
-            <div className="editorial-panel">
-              <ul className="danger-list">
-                <li>Frontend route protection is not authorization.</li>
-                <li>UUIDs do not prevent IDOR.</li>
-                <li>Public Supabase keys require correct RLS.</li>
-                <li>Hidden endpoints are not security.</li>
-                <li>Scanner scores do not prove application security.</li>
-              </ul>
-            </div>
+            <ol className="principle-list">
+              {principles.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ol>
           </div>
         </div>
       </section>
@@ -196,12 +198,14 @@ export default function LandingPage() {
         <div className="container">
           <p className="section-kicker">Coverage</p>
           <h2>Not tested is not secure.</h2>
-          <div className="coverage-matrix">
+          <div className="coverage-lanes">
             {coverage.map(([item, detail], index) => (
-              <div className="coverage-row" key={item}>
+              <div className="coverage-chip" key={item}>
                 <span className="mono">{String(index + 1).padStart(2, "0")}</span>
-                <strong>{item}</strong>
-                <em>{detail}</em>
+                <div>
+                  <strong>{item}</strong>
+                  <em>{detail}</em>
+                </div>
               </div>
             ))}
           </div>
@@ -213,33 +217,31 @@ export default function LandingPage() {
           <p className="section-kicker">Attack Map showcase</p>
           <h2>Routes, files, data access, and risk hints stay connected.</h2>
           <div className="showcase-grid">
-            <div className="attack-canvas" aria-label="Static attack map showcase">
+            <div className="attack-canvas landing-map" aria-label="Static attack map showcase">
               {[
-                ["entry", "ANY /api/invoices/:id", "entry point", "24px", "28px"],
-                ["file", "app/api/invoices/[id]/route.ts", "handler file", "268px", "116px"],
-                ["db", "prisma.invoice.findUnique", "database", "514px", "208px"],
-                ["risk", "Missing ownership check", "authorization risk", "186px", "300px"],
-              ].map(([id, label, kind, left, top]) => (
-                <div className="attack-node" key={id} style={{ left, top }}>
+                ["entry", "ANY /api/invoices/:id", "entry point"],
+                ["file", "app/api/invoices/[id]/route.ts", "handler file"],
+                ["db", "prisma.invoice.findUnique", "database"],
+                ["risk", "Missing ownership check", "authorization risk"],
+              ].map(([id, label, kind]) => (
+                <div className={`attack-node map-node-${id}`} key={id}>
                   <span className="mono muted">{kind}</span>
                   <strong style={{ display: "block", marginTop: 8 }}>{label}</strong>
                   {id === "risk" ? <p style={{ color: "var(--high)" }}>Risk: high</p> : null}
                 </div>
               ))}
             </div>
-            <div className="scan-console compact">
-              <div className="console-header">
+            <div className="edge-proof">
+              <div className="edge-proof-title">
+                <Network size={16} />
                 <span>graph evidence</span>
-                <Network size={14} />
               </div>
-              <div className="console-body">
-                {["entry point handled by file", "file retrieves data from prisma", "file may reach missing ownership check", "finding detail shows real edges only"].map((item) => (
-                  <div className="stage-row" key={item}>
-                    <span>{item}</span>
-                    <span className="status-dot ok" />
-                  </div>
-                ))}
-              </div>
+              {["entry point handled by file", "file retrieves data from prisma", "file may reach missing ownership check", "finding detail shows real edges only"].map((item) => (
+                <div className="edge-proof-row" key={item}>
+                  <span />
+                  <p>{item}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -259,19 +261,18 @@ export default function LandingPage() {
                 </div>
               ))}
             </div>
-            <div className="scan-console compact">
-              <div className="console-header">
+            <div className="export-rail">
+              <div className="edge-proof-title">
+                <FileText size={16} />
                 <span>report chain</span>
-                <FileText size={14} />
               </div>
-              <div className="console-body">
-                {["JSON for automation", "Markdown for engineers", "SARIF for scanners", "PDF for review"].map((item) => (
-                  <div className="stage-row" key={item}>
-                    <span>{item}</span>
-                    <span className="mono muted">export</span>
-                  </div>
-                ))}
-              </div>
+              {["JSON for automation", "Markdown for engineers", "SARIF for scanners", "PDF for review"].map((item) => (
+                <div className="export-row" key={item}>
+                  <span>{item.split(" ")[0]}</span>
+                  <strong>{item.replace(`${item.split(" ")[0]} `, "")}</strong>
+                  <em>export</em>
+                </div>
+              ))}
             </div>
           </div>
         </div>

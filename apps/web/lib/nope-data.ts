@@ -21,6 +21,20 @@ export async function getScans(): Promise<Scan[]> {
   }
 }
 
+export async function getScan(scanId: string): Promise<Scan | null> {
+  try {
+    return await api<Scan>(`/api/scans/${encodeURIComponent(scanId)}`);
+  } catch {
+    return null;
+  }
+}
+
+export function selectScan(scans: Scan[], scanId?: string | null): Scan | null {
+  if (!scans.length) return null;
+  if (!scanId) return scans[0] ?? null;
+  return scans.find((scan) => scan.id === scanId) ?? scans[0] ?? null;
+}
+
 export async function getProjects(): Promise<Project[]> {
   try {
     return await api<Project[]>("/api/projects");

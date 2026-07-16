@@ -1,36 +1,12 @@
-import { Brain, Command, LogOut, Play, ShieldCheck } from "lucide-react";
-import Link from "next/link";
 import { LineSidebar } from "@/components/line-sidebar";
+import type { Scan } from "@/lib/types";
 
-export function AppShell({ children, userEmail }: Readonly<{ children: React.ReactNode; userEmail: string }>) {
+export function AppShell({ children, userEmail, scans }: Readonly<{ children: React.ReactNode; userEmail: string; scans: Scan[] }>) {
   return (
     <div className="app-layout">
-      <LineSidebar />
+      <LineSidebar scans={scans} />
       <main className="app-main">
-        <header className="app-topbar">
-          <div className="project-chip">
-            <ShieldCheck size={16} color="var(--passed)" />
-            <span>NOPE Local Workspace</span>
-            <span className="mono muted">main</span>
-            <span className="mono muted">{userEmail}</span>
-          </div>
-          <div className="topbar-actions">
-            <button className="button ghost" type="button" aria-label="Open command palette">
-              <Command size={15} /> Command
-            </button>
-            <Link className="button" href="/app/projects/local/settings">
-              <Brain size={15} /> AI status
-            </Link>
-            <Link className="button primary" href="/app/projects/local/scans">
-              <Play size={15} /> Run scan
-            </Link>
-            <form action="/api/auth/logout" method="post">
-              <button className="button ghost" type="submit">
-                <LogOut size={15} /> Sign out
-              </button>
-            </form>
-          </div>
-        </header>
+        <div className="sr-only">Signed in as {userEmail}</div>
         <div className="app-content">{children}</div>
       </main>
     </div>

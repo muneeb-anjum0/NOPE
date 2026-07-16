@@ -21,7 +21,7 @@ export function ScanLauncher() {
   return (
     <form className="app-grid" action="/api/start-scan" method="post" encType="multipart/form-data">
       <label
-        className="dropzone"
+        className={`dropzone${fileName ? " dropzone-selected" : ""}`}
         htmlFor="repository"
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => {
@@ -30,9 +30,9 @@ export function ScanLauncher() {
         }}
       >
         <span>
-          <Upload size={22} />
+          <Upload className="dropzone-icon" size={22} />
           <br />
-          {fileName || "Drop a repository ZIP or choose a file"}
+          <span className={fileName ? "dropzone-file-name" : undefined}>{fileName || "Drop a repository ZIP or choose a file"}</span>
           <br />
           <span className="mono muted">Zip Slip checks, file limits, cleanup</span>
         </span>
@@ -47,6 +47,7 @@ export function ScanLauncher() {
         />
       </label>
       <input className="input-shell" name="targetUrl" type="url" placeholder="https://your-authorized-app.example" />
+      <input name="repositoryName" type="hidden" value={fileName} />
       <select className="select-shell" name="depth" defaultValue="full" aria-label="Scan depth">
         <option value="quick">Quick: secrets, dependencies, headers</option>
         <option value="full">Full: repository, code graph, custom rules, AI review</option>

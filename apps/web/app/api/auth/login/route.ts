@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({ detail: "Login failed." }));
-    return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(data.detail ?? "Login failed.")}`, request.url));
+    return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(data.detail ?? "Login failed.")}`, request.url), 303);
   }
   const data = (await response.json()) as { token: string };
   (await cookies()).set("nope_session", data.token, {
@@ -23,5 +23,5 @@ export async function POST(request: Request) {
     path: "/",
     maxAge: 60 * 60 * 24 * 7,
   });
-  return NextResponse.redirect(new URL("/app/projects/local", request.url));
+  return NextResponse.redirect(new URL("/app/projects/local", request.url), 303);
 }

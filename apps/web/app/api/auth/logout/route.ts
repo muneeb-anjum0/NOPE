@@ -12,5 +12,5 @@ export async function POST(request: Request) {
     }).catch(() => undefined);
   }
   cookieStore.delete("nope_session");
-  return NextResponse.redirect(new URL("/", request.url));
+  return NextResponse.redirect(new URL("/", request.url), 303);
 }

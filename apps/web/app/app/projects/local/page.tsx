@@ -1,62 +1,87 @@
-import { Brain, ListChecks, Radar, TestTube2 } from "lucide-react";
 import { AttackMapPanel } from "@/components/attack-map";
 import { FindingTable } from "@/components/finding-table";
-import { ScanLauncher } from "@/components/scan-launcher";
-import { SeveritySummary } from "@/components/summary";
-import { freshScan, getLatestScan, getScanComparison, getScans } from "@/lib/nope-data";
+import { PinkDotText } from "@/components/pink-dot-text";
+import { freshScan, getScanComparison, getScans, selectScan } from "@/lib/nope-data";
 
-export default async function ProjectOverview() {
+export default async function ProjectOverview({
+  searchParams,
+}: {
+  searchParams?: Promise<{ scan?: string }>;
+}) {
+  const params = (await searchParams) ?? {};
   const scans = await getScans();
-  const scan = scans[0] ?? (await getLatestScan()) ?? freshScan();
-  const previous = scans[1];
+  const scan = selectScan(scans, params.scan) ?? freshScan();
+  const scanIndex = scans.findIndex((item) => item.id === scan.id);
+  const previous = scans.find((item, index) => index > scanIndex && (!scan.project_id || item.project_id === scan.project_id));
   const comparison = previous ? await getScanComparison(scan.id, previous.id) : null;
   const severityCounts = ["critical", "high", "medium", "low"].map((severity) => ({
     severity,
-    count: scan.findings.filter((finding) => finding.severity === severity).length,
+    count: (scan.findings ?? []).filter((finding) => finding.severity === severity).length,
   }));
-  const untested = scan.coverage.filter((record) => record.status === "Not tested" || record.status === "Failed");
+  const coverage = scan.coverage ?? [];
+  const scannerRuns = scan.scanner_runs ?? [];
+  const graphNodes = scan.code_graph?.nodes ?? [];
+  const untested = coverage.filter((record) => record.status === "Not tested" || record.status === "Failed");
   const pipeline = [
     ["Stack", scan.stack?.length ? "completed" : "pending"],
-    ["Attack surface", scan.code_graph.nodes.length ? "completed" : "pending"],
-    ["Scanners", scan.scanner_runs.length ? "completed" : "pending"],
-    ["Qwen", scan.ai_review.status],
+    ["Attack surface", graphNodes.length ? "completed" : "pending"],
+    ["Scanners", scannerRuns.length ? "completed" : "pending"],
+    ["Qwen", scan.ai_review?.status ?? "pending"],
   ];
+  const totalFindings = (scan.findings ?? []).length;
+  const hasRealScan = scan.id !== "fresh_workspace";
+  const activeScanTitle = hasRealScan ? scan.repository_name || "Selected upload" : "No scan";
+  const activeScanMeta = hasRealScan ? scan.id : "Upload ZIP";
+
   return (
     <>
-      <section className="page-header">
+      <section className="dashboard-hero">
         <div>
           <p className="section-kicker">Overview</p>
-          <h1>{scan.verdict}</h1>
-          <p>
-            Repository: <span className="mono">{scan.repository_name ?? "not provided"}</span> / Target:{" "}
-            <span className="mono">{scan.target_url ?? "not tested"}</span>
-          </p>
-        </div>
-        <a className="button primary" href="/app/projects/local/scans">Run scan</a>
-      </section>
-      <section className="dashboard-band">
-        <div className="app-panel verdict-panel">
-          <span className="mono muted">Verdict</span>
-          <h2>{scan.verdict}</h2>
-          <p className="muted">NOPE keeps scanner output, evidence, coverage gaps, and optional Qwen reasoning visible instead of flattening them into a fake all-clear.</p>
-        </div>
-        <div className="app-grid cols-2">
-          <div className="app-panel">
-            <span className="mono muted">Security score</span>
-            <strong className="metric-value">{scan.score}</strong>
-            <p className="muted">{scan.coverage_percent}% coverage</p>
+          <h1><PinkDotText text={scan.verdict} /></h1>
+          <div className="hero-meta-tags" aria-label="Scan target">
+            <span className="mini-tag mini-tag-label">Repository</span>
+            <span className="mini-tag mono">{scan.repository_name ?? "none"}</span>
+            <span className="mini-tag mini-tag-label">Target</span>
+            <span className="mini-tag mono">{scan.target_url ?? "none"}</span>
           </div>
-          <div className="app-panel">
-            <span className="mono muted">Drift</span>
-            <strong className="metric-value">{comparison ? comparison.summary.total_drift_events ?? 0 : 0}</strong>
-            <p className="muted">{comparison ? `${comparison.summary.new ?? 0} new / ${comparison.summary.fixed ?? 0} fixed` : "Needs two scans"}</p>
+        </div>
+        <div className={`dashboard-context${hasRealScan ? "" : " empty"}`}>
+          <div className="active-scan-tags" aria-label="Active scan">
+            <span className="mini-tag mini-tag-label">Active</span>
+            <span className="mini-tag mini-tag-strong">{activeScanTitle}</span>
+            <span className="mini-tag mono">{activeScanMeta}</span>
+            <span className="mini-tag">{hasRealScan ? scan.status : "idle"}</span>
           </div>
         </div>
       </section>
-      <SeveritySummary scan={scan} />
-      <section className="app-grid split">
-        <div className="app-grid">
-          <FindingTable findings={scan.findings.slice(0, 5)} />
+
+      <section className="dashboard-scoreboard" aria-label="Scan summary">
+        <div>
+          <span className="mono muted">Score</span>
+          <strong>{scan.score}</strong>
+          <span>{scan.coverage_percent}% coverage</span>
+        </div>
+        <div>
+          <span className="mono muted">Findings</span>
+          <strong>{totalFindings}</strong>
+          <span>{severityCounts.map((item) => `${item.count} ${item.severity}`).join(" / ")}</span>
+        </div>
+        <div>
+          <span className="mono muted">Drift</span>
+          <strong>{comparison ? comparison.summary.total_drift_events ?? 0 : 0}</strong>
+          <span>{comparison ? `${comparison.summary.new ?? 0} new / ${comparison.summary.fixed ?? 0} fixed` : "Needs two scans"}</span>
+        </div>
+        <div>
+          <span className="mono muted">Pipeline</span>
+          <strong>{scan.status}</strong>
+          <span>{scannerRuns.length} scanner runs</span>
+        </div>
+      </section>
+
+      <section className="dashboard-workspace">
+        <div className="dashboard-primary">
+          <FindingTable findings={(scan.findings ?? []).slice(0, 5)} />
           <div className="app-panel">
             <div className="panel-title">
               <h2>Attack path preview</h2>
@@ -65,13 +90,14 @@ export default async function ProjectOverview() {
             <AttackMapPanel scan={scan} />
           </div>
         </div>
-        <div className="app-grid">
+        <aside className="dashboard-rail">
           <div className="app-panel">
             <div className="panel-title">
-              <h2><ListChecks size={16} /> Scan pipeline</h2>
+              <h2>Evidence status</h2>
               <span className="mono muted">{scan.status}</span>
             </div>
-            <div className="pipeline-list">
+            <div className="status-section">
+              <span className="mono muted">Pipeline</span>
               {pipeline.map(([label, status], index) => (
                 <div className="pipeline-step" key={label}>
                   <span>{String(index + 1).padStart(2, "0")}</span>
@@ -80,42 +106,25 @@ export default async function ProjectOverview() {
                 </div>
               ))}
             </div>
-          </div>
-          <div className="app-panel">
-            <div className="panel-title">
-              <h2><Radar size={16} /> Scanner status</h2>
-              <span className="mono muted">{scan.scanner_runs.length} runs</span>
-            </div>
-            <div className="status-list">
-              {scan.scanner_runs.slice(0, 5).map((run) => (
+            <div className="status-section">
+              <span className="mono muted">Scanners ({scannerRuns.length})</span>
+              {scannerRuns.slice(0, 5).map((run) => (
                 <div className="status-item" key={`${run.scanner}-${run.status}`}>
                   <span>{run.scanner}</span>
                   <span className={`severity-pill severity-${run.status === "failed" ? "critical" : "info"}`}>{run.status}</span>
                 </div>
               ))}
-              {scan.scanner_runs.length === 0 ? <p className="muted">No scanner runs yet.</p> : null}
+              {scannerRuns.length === 0 ? <p className="muted">No scanner runs yet.</p> : null}
             </div>
-          </div>
-          <div className="app-panel">
-            <div className="panel-title">
-              <h2>Launch scan</h2>
-              <span className="mono muted">local demo</span>
+            <div className="status-section">
+              <span className="mono muted">Qwen</span>
+              <div className="status-item">
+                <span>{scan.ai_review?.message ?? "Waiting for scan evidence."}</span>
+                <span className="severity-pill severity-info">{scan.ai_review?.status ?? "pending"}</span>
+              </div>
             </div>
-            <ScanLauncher />
-          </div>
-          <div className="app-panel">
-            <div className="panel-title">
-              <h2><Brain size={16} /> Qwen status</h2>
-              <span className="severity-pill severity-info">{scan.ai_review.status}</span>
-            </div>
-            <p className="muted">{scan.ai_review.message}</p>
-          </div>
-          <div className="app-panel">
-            <div className="panel-title">
-              <h2><TestTube2 size={16} /> Untested areas</h2>
-              <span className="mono muted">{untested.length} domains</span>
-            </div>
-            <div className="status-list">
+            <div className="status-section">
+              <span className="mono muted">Untested / failed ({untested.length})</span>
               {untested.slice(0, 5).map((record) => (
                 <div className="status-item" key={record.domain}>
                   <span>{record.domain}</span>
@@ -125,16 +134,7 @@ export default async function ProjectOverview() {
               {untested.length === 0 ? <p className="muted">Every configured coverage domain has been exercised or marked not applicable.</p> : null}
             </div>
           </div>
-        </div>
-      </section>
-      <section className="app-grid cols-4">
-        {severityCounts.map(({ severity, count }) => (
-          <div className="app-panel" key={severity}>
-            <span className="mono muted">{severity}</span>
-            <strong className="metric-value" style={{ color: `var(--${severity})` }}>{count}</strong>
-            <p className="muted">latest findings</p>
-          </div>
-        ))}
+        </aside>
       </section>
     </>
   );

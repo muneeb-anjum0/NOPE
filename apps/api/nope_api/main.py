@@ -275,6 +275,18 @@ def get_scan(scan_id: str, authorization: str | None = Header(default=None)) -> 
     return _load_scan(scan_id, authorization)
 
 
+@app.delete("/api/scans/{scan_id}")
+async def delete_scan(scan_id: str, authorization: str | None = Header(default=None)) -> dict:
+    owner_user_id = _require_owner_user_id(authorization)
+    scan = _load_scan(scan_id, authorization)
+    await request_scan_cancel(settings, scan_id)
+    deleted = store.delete_scan(scan_id, owner_user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Scan not found.")
+    store.record_audit_log("scan.deleted", owner_user_id, project_id=scan.project_id, data={"scan_id": scan.id})
+    return {"ok": True, "scan_id": scan_id}
+
+
 @app.get("/api/scans/{scan_id}/findings")
 def get_findings(
     scan_id: str,

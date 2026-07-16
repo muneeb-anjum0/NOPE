@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { API_BASE } from "@/lib/api";
 
 function redirectWithError(request: Request, message: string) {
-  return NextResponse.redirect(new URL(`/app/projects/local/scans?error=${encodeURIComponent(message)}`, request.url));
+  return NextResponse.redirect(new URL(`/app/projects/local/scans?error=${encodeURIComponent(message)}`, request.url), 303);
 }
 
 async function forwardScan(request: Request, path: string, init: RequestInit) {
@@ -15,19 +15,27 @@ async function forwardScan(request: Request, path: string, init: RequestInit) {
     const detail = await response.text();
     return redirectWithError(request, detail || `Scan request failed with ${response.status}.`);
   }
-  return NextResponse.redirect(new URL("/app/projects/local", request.url));
+  const payload = (await response.json().catch(() => null)) as { id?: string } | null;
+  const next = new URL("/app/projects/local/scans", request.url);
+  if (payload?.id) next.searchParams.set("scan", payload.id);
+  return NextResponse.redirect(next, 303);
 }
 
 export async function POST(request: Request) {
   const form = await request.formData();
   const file = form.get("repository");
   const targetUrl = String(form.get("targetUrl") ?? "");
+  const repositoryName =
+    String(form.get("repositoryName") ?? "") ||
+    (file instanceof File && file.name ? file.name : "") ||
+    "Uploaded ZIP";
   const confirmed = form.get("confirmed") === "on";
 
   if (file instanceof File && file.size > 0 && targetUrl) {
     const full = new FormData();
     full.append("file", file);
     full.append("target_url", targetUrl);
+    full.append("repository_name", repositoryName);
     full.append("authorization_confirmed", String(confirmed));
     const host = new URL(targetUrl).hostname;
     full.append("approved_hosts", host);
@@ -35,6 +43,7 @@ export async function POST(request: Request) {
   } else if (file instanceof File && file.size > 0) {
     const repo = new FormData();
     repo.append("file", file);
+    repo.append("repository_name", repositoryName);
     return forwardScan(request, "/api/scans/repository", { method: "POST", body: repo });
   } else if (targetUrl) {
     return forwardScan(request, "/api/scans/url", {

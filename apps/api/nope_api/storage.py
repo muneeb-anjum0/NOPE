@@ -179,9 +179,24 @@ class PostgresStore:
             )
         return snapshot
 
+    def _ensure_deleted_scans_table(self, conn) -> None:
+        conn.execute(
+            """
+            create table if not exists deleted_scans (
+              scan_id text primary key,
+              owner_user_id text,
+              deleted_at timestamptz not null default now()
+            )
+            """
+        )
+
     def save_scan(self, scan: Scan, owner_user_id: str | None = None) -> Scan:
         self.migrate()
         with connect(self.settings) as conn:
+            self._ensure_deleted_scans_table(conn)
+            deleted = conn.execute("select 1 from deleted_scans where scan_id = %s", (scan.id,)).fetchone()
+            if deleted:
+                return scan
             self._prepare_finding_lifecycle(conn, scan)
             data = scan.model_dump(mode="json")
             conn.execute(
@@ -288,6 +303,28 @@ class PostgresStore:
                 "select 1 from scans where id = %s and owner_user_id = %s",
                 (scan_id, owner_user_id),
             ).fetchone()
+        return row is not None
+
+    def delete_scan(self, scan_id: str, owner_user_id: str | None = None) -> bool:
+        self.migrate()
+        query = "delete from scans where id = %s"
+        params: tuple[Any, ...] = (scan_id,)
+        if owner_user_id:
+            query += " and owner_user_id = %s"
+            params = (scan_id, owner_user_id)
+        with connect(self.settings) as conn:
+            self._ensure_deleted_scans_table(conn)
+            conn.execute(
+                """
+                insert into deleted_scans (scan_id, owner_user_id)
+                values (%s, %s)
+                on conflict (scan_id) do update set deleted_at = now(), owner_user_id = excluded.owner_user_id
+                """,
+                (scan_id, owner_user_id),
+            )
+            conn.execute("delete from uploaded_artifacts where scan_id = %s", (scan_id,))
+            conn.execute("delete from repository_snapshots where id = %s", (f"snap_{scan_id}",))
+            row = conn.execute(query + " returning id", params).fetchone()
         return row is not None
 
     def user_owns_project(self, project_id: str, owner_user_id: str | None) -> bool:

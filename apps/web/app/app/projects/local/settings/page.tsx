@@ -1,4 +1,7 @@
 import { revalidatePath } from "next/cache";
+import { LogOut } from "lucide-react";
+import { PinkDotText } from "@/components/pink-dot-text";
+import { SettingsCollapseReset } from "@/components/settings-collapse-reset";
 import { SettingsForms } from "@/components/settings-forms";
 import { api } from "@/lib/api";
 import { getAIHealth, getGitHubStatus, getModelSettings, getProjectSettings, getProjects, getSystemSettings } from "@/lib/nope-data";
@@ -141,20 +144,38 @@ export default async function SettingsPage() {
 
   return (
     <>
+      <SettingsCollapseReset />
       <section className="page-header">
         <div>
           <p className="section-kicker">Settings</p>
-          <h1>Local policy, scanner, and Qwen controls.</h1>
-          <p>Qwen is a reasoning service. It gets focused evidence, not shell access.</p>
+          <h1><PinkDotText text="Settings." /></h1>
         </div>
       </section>
       <div className="collapse-list">
-        {sections.map((section, index) => (
-          <details className="collapse-panel" key={section.title} open={index < 2}>
+        <details className="collapse-panel settings-accordion" name="settings-sections">
+          <summary>
+            <span>
+              <h2>Account</h2>
+            </span>
+            <span className="mono muted">1 action</span>
+          </summary>
+          <div className="collapse-body">
+            <div className="collapse-row account-action-row">
+              <strong>Sign out</strong>
+              <span className="muted">End session.</span>
+              <form action="/api/auth/logout" method="post">
+                <button className="button ghost compact-logout" type="submit">
+                  <LogOut size={15} /> Sign out
+                </button>
+              </form>
+            </div>
+          </div>
+        </details>
+        {sections.map((section) => (
+          <details className="collapse-panel settings-accordion" name="settings-sections" key={section.title}>
             <summary>
               <span>
                 <h2>{section.title}</h2>
-                <p>{section.summary}</p>
               </span>
               <span className="mono muted">{section.rows.length} settings</span>
             </summary>

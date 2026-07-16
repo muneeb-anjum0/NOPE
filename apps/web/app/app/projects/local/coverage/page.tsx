@@ -1,13 +1,20 @@
-import { freshScan, getLatestScan } from "@/lib/nope-data";
+import { PinkDotText } from "@/components/pink-dot-text";
+import { freshScan, getScans, selectScan } from "@/lib/nope-data";
 
-export default async function CoveragePage() {
-  const scan = (await getLatestScan()) ?? freshScan();
+export default async function CoveragePage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ scan?: string }>;
+}) {
+  const params = (await searchParams) ?? {};
+  const scans = await getScans();
+  const scan = selectScan(scans, params.scan) ?? freshScan();
   return (
     <>
       <section className="page-header">
         <div>
           <p className="section-kicker">Coverage</p>
-          <h1>Not tested does not mean secure.</h1>
+          <h1><PinkDotText text="Not tested does not mean secure." /></h1>
           <p>Scanner failures and untested domains are first-class evidence.</p>
         </div>
       </section>

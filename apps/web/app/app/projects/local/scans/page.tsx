@@ -1,23 +1,29 @@
 import { ScanLauncher } from "@/components/scan-launcher";
-import { getBaselines, getScanComparison, getScans } from "@/lib/nope-data";
+import { PinkDotText } from "@/components/pink-dot-text";
+import { getBaselines, getScanComparison, getScans, selectScan } from "@/lib/nope-data";
 
 export default async function ScansPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; scan?: string }>;
 }) {
   const params = await searchParams;
   const scans = await getScans();
-  const latest = scans[0];
-  const previous = scans[1];
-  const comparison = latest && previous ? await getScanComparison(latest.id, previous.id) : null;
-  const baselines = await getBaselines(latest?.project_id ?? null);
+  const selected = selectScan(scans, params.scan);
+  const selectedIndex = selected ? scans.findIndex((scan) => scan.id === selected.id) : -1;
+  const previous = selected ? scans.find((scan, index) => index > selectedIndex && (!selected.project_id || scan.project_id === selected.project_id)) : null;
+  const comparison = selected && previous ? await getScanComparison(selected.id, previous.id) : null;
+  const baselines = await getBaselines(selected?.project_id ?? null);
+  const labelFor = (scan: NonNullable<typeof selected>, index: number) => {
+    if (scan.repository_name && scan.repository_name !== "Uploaded ZIP") return scan.repository_name;
+    return scan.id || `Upload ${index + 1}`;
+  };
   return (
     <>
       <section className="page-header">
         <div>
           <p className="section-kicker">Scans</p>
-          <h1>Run the thing that tells you no.</h1>
+          <h1><PinkDotText text="Run the thing that tells you no." /></h1>
           <p>Repository, URL, and full scans keep deterministic evidence separate from optional AI reasoning.</p>
         </div>
       </section>
@@ -32,7 +38,17 @@ export default async function ScansPage({
           <table className="table">
             <tbody>
               {scans.map((scan) => (
-                <tr key={scan.id}><td className="mono">{scan.id}</td><td>{scan.status}</td><td>{scan.verdict}</td></tr>
+                <tr className={scan.id === selected?.id ? "selected-row" : ""} key={scan.id}>
+                  <td><a className="mono" href={`/app/projects/local/scans?scan=${encodeURIComponent(scan.id)}`}>{labelFor(scan, scans.indexOf(scan))}</a></td>
+                  <td>{scan.status}</td>
+                  <td>{scan.verdict}</td>
+                  <td>
+                    <form action="/api/delete-scan" method="post">
+                      <input name="scanId" type="hidden" value={scan.id} />
+                      <button className="button ghost danger-button" type="submit">Delete</button>
+                    </form>
+                  </td>
+                </tr>
               ))}
               {scans.length === 0 ? <tr><td>No scans yet.</td></tr> : null}
             </tbody>

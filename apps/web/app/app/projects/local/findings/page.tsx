@@ -1,6 +1,8 @@
 import { AIFindingActions } from "@/components/ai-finding-actions";
+import { FilterSelect } from "@/components/filter-select";
 import { FindingTable } from "@/components/finding-table";
-import { freshScan, getFindingDetail, getFindings, getLatestScan, severityClass } from "@/lib/nope-data";
+import { PinkDotText } from "@/components/pink-dot-text";
+import { freshScan, getFindingDetail, getFindings, getScans, selectScan, severityClass } from "@/lib/nope-data";
 import type { FindingDetail } from "@/lib/types";
 
 type PageProps = {
@@ -34,7 +36,8 @@ function hrefWith(params: URLSearchParams, updates: Record<string, string | numb
 export default async function FindingsPage({ searchParams }: PageProps) {
   const resolved = (await searchParams) ?? {};
   const params = paramsFrom(resolved);
-  const scan = (await getLatestScan()) ?? freshScan();
+  const scans = await getScans();
+  const scan = selectScan(scans, params.get("scan")) ?? freshScan();
   const results = (await getFindings(scan.id, params)) ?? {
     scan_id: scan.id,
     total: scan.findings.length,
@@ -55,38 +58,50 @@ export default async function FindingsPage({ searchParams }: PageProps) {
       <section className="page-header">
         <div>
           <p className="section-kicker">Findings</p>
-          <h1>Evidence, not vibes.</h1>
+          <h1><PinkDotText text="Evidence, not vibes." /></h1>
           <p>Server-backed filters, protected evidence, code context, and real graph flow.</p>
         </div>
       </section>
 
       <form className="filter-bar" action="/app/projects/local/findings">
-        <input name="query" placeholder="Search findings" defaultValue={params.get("query") ?? ""} />
-        <select name="severity" defaultValue={params.get("severity") ?? ""}>
-          <option value="">Severity</option>
-          {["critical", "high", "medium", "low", "info"].map((value) => <option key={value} value={value}>{value}</option>)}
-        </select>
-        <select name="confidence" defaultValue={params.get("confidence") ?? ""}>
-          <option value="">Confidence</option>
-          {["confirmed", "high", "medium", "low", "uncertain"].map((value) => <option key={value} value={value}>{value}</option>)}
-        </select>
-        <select name="status" defaultValue={params.get("status") ?? ""}>
-          <option value="">Status</option>
-          {["new", "confirmed", "fixing", "fixed", "verified", "false_positive", "accepted_risk", "suppressed", "reopened", "reintroduced"].map((value) => <option key={value} value={value}>{value}</option>)}
-        </select>
-        <input name="scanner" placeholder="Scanner" defaultValue={params.get("scanner") ?? ""} />
-        <input name="cwe" placeholder="CWE" defaultValue={params.get("cwe") ?? ""} />
-        <input name="file" placeholder="File" defaultValue={params.get("file") ?? ""} />
-        <input name="route" placeholder="Route" defaultValue={params.get("route") ?? ""} />
-        <select name="sort" defaultValue={params.get("sort") ?? "severity"}>
-          {["severity", "confidence", "status", "scanner", "file", "route", "first_seen", "last_seen", "title"].map((value) => <option key={value} value={value}>Sort: {value}</option>)}
-        </select>
-        <select name="direction" defaultValue={params.get("direction") ?? "asc"}>
-          <option value="asc">Ascending</option>
-          <option value="desc">Descending</option>
-        </select>
-        <button type="submit">Apply</button>
-        <a className="button-secondary" href="/app/projects/local/findings">Clear</a>
+        <input name="scan" type="hidden" value={scan.id} />
+        <div className="filter-primary">
+          <input name="query" placeholder="Search title, file, evidence" defaultValue={params.get("query") ?? ""} />
+          <FilterSelect
+            name="severity"
+            label="Severity"
+            defaultValue={params.get("severity") ?? ""}
+            options={["critical", "high", "medium", "low", "info"].map((value) => ({ label: value, value }))}
+          />
+          <FilterSelect
+            name="status"
+            label="Status"
+            defaultValue={params.get("status") ?? ""}
+            options={["new", "confirmed", "fixing", "fixed", "verified", "false positive", "accepted risk", "suppressed", "reopened", "reintroduced"].map((label) => ({ label, value: label.replaceAll(" ", "_") }))}
+          />
+          <button type="submit">Apply</button>
+          <a className="button-secondary" href={`/app/projects/local/findings?scan=${encodeURIComponent(scan.id)}`}>Clear</a>
+        </div>
+        <details className="filter-advanced">
+          <summary>Advanced filters</summary>
+          <div>
+            <select name="confidence" defaultValue={params.get("confidence") ?? ""}>
+              <option value="">Confidence</option>
+              {["confirmed", "high", "medium", "low", "uncertain"].map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+            <input name="scanner" placeholder="Scanner" defaultValue={params.get("scanner") ?? ""} />
+            <input name="cwe" placeholder="CWE" defaultValue={params.get("cwe") ?? ""} />
+            <input name="file" placeholder="File" defaultValue={params.get("file") ?? ""} />
+            <input name="route" placeholder="Route" defaultValue={params.get("route") ?? ""} />
+            <select name="sort" defaultValue={params.get("sort") ?? "severity"}>
+              {["severity", "confidence", "status", "scanner", "file", "route", "first_seen", "last_seen", "title"].map((value) => <option key={value} value={value}>Sort: {value}</option>)}
+            </select>
+            <select name="direction" defaultValue={params.get("direction") ?? "asc"}>
+              <option value="asc">Ascending</option>
+              <option value="desc">Descending</option>
+            </select>
+          </div>
+        </details>
       </form>
 
       <div className="app-grid split findings-layout">

@@ -1,3 +1,5 @@
+import { PinkDotText } from "@/components/pink-dot-text";
+
 const assetGroups = [
   {
     title: "Routes",
@@ -43,13 +45,13 @@ export default function AssetsPage() {
       <section className="page-header">
         <div>
           <p className="section-kicker">Assets</p>
-          <h1>Inventory the exposed surface.</h1>
+          <h1><PinkDotText text="Inventory the exposed surface." /></h1>
           <p>Routes, frameworks, storage, external calls, scanners, targets, commits, and runtime gaps.</p>
         </div>
       </section>
       <div className="collapse-list">
         {assetGroups.map((group, index) => (
-          <details className="collapse-panel" key={group.title} open={index === 0}>
+          <details className="collapse-panel settings-accordion" name="assets-sections" key={group.title} open={index === 0}>
             <summary>
               <span>
                 <h2>{group.title}</h2>
