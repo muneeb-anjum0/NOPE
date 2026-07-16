@@ -36,6 +36,7 @@ Out of scope for this local build: email, SMTP, payments, subscriptions, product
 
 ```mermaid
 %%{init: {
+  "flowchart": { "curve": "basis", "htmlLabels": true },
   "theme": "base",
   "themeVariables": {
     "background": "#08090a",
@@ -51,39 +52,58 @@ Out of scope for this local build: email, SMTP, payments, subscriptions, product
   }
 }}%%
 flowchart LR
-  user["Operator<br/>authorized user"]
-  browser["NOPE Web<br/>Next.js dashboard"]
-  api["NOPE API<br/>FastAPI orchestration"]
-  auth[("Postgres<br/>users, sessions, projects")]
-  queue[("Redis<br/>scan queue and worker state")]
-  worker["NOPE Worker<br/>scanner pipeline"]
-  objectStore[("MinIO<br/>artifacts and reports")]
-  scanners["Deterministic scanners<br/>Semgrep, Gitleaks, OSV, Trivy, Checkov, Hadolint, Bandit"]
-  sandbox["Optional sandbox<br/>declared workflows and ZAP"]
-  ai["Local Qwen<br/>llama.cpp GGUF runtime"]
-  reports["Reports<br/>JSON, MD, SARIF, PDF"]
+  subgraph input["Input and UI"]
+    direction TB
+    user["Operator<br/>authorized user"]
+    web["NOPE Web<br/>Next.js dashboard"]
+  end
 
-  user -->|"login, upload ZIP, set target"| browser
-  browser -->|"server-side API calls"| api
-  api -->|"auth, settings, scan records"| auth
-  api -->|"persist queued job"| queue
+  subgraph control["Control Plane"]
+    direction TB
+    api["NOPE API<br/>FastAPI orchestration"]
+    queue[("Redis<br/>scan queue")]
+    db[("Postgres<br/>users, sessions,<br/>scans, findings")]
+  end
+
+  subgraph execution["Execution Plane"]
+    direction TB
+    worker["NOPE Worker<br/>pipeline runner"]
+    scanners["Deterministic scanners<br/>Semgrep, Gitleaks, OSV,<br/>Trivy, Checkov, Hadolint, Bandit"]
+    sandbox["Optional sandbox<br/>declared workflows and ZAP"]
+  end
+
+  subgraph intelligence["Reasoning and Storage"]
+    direction TB
+    ai["Local Qwen<br/>llama.cpp GGUF runtime"]
+    minio[("MinIO<br/>raw artifacts<br/>and report blobs")]
+    reports["Reports<br/>JSON, MD, SARIF, PDF"]
+  end
+
+  user -->|"login, upload ZIP, set target"| web
+  web -->|"server-side requests"| api
+  api -->|"session and scan state"| db
+  api -->|"enqueue scan job"| queue
   queue -->|"job payload"| worker
   worker -->|"repository and URL evidence"| scanners
   worker -->|"opt-in dynamic checks"| sandbox
-  worker -->|"raw scanner output"| objectStore
-  worker -->|"normalized findings, coverage, drift"| auth
+  scanners -->|"normalized findings"| worker
+  sandbox -->|"bounded runtime evidence"| worker
+  worker -->|"findings, coverage, drift"| db
+  worker -->|"raw output and generated files"| minio
   worker -->|"focused evidence only"| ai
-  ai -->|"reasoned review, never source of truth"| worker
-  auth -->|"findings and scan state"| api
-  objectStore -->|"artifact links"| api
-  api -->|"exports"| reports
-  reports --> browser
-  api -->|"dashboard data"| browser
+  ai -->|"review suggestions"| worker
+  db -->|"dashboard data"| api
+  minio -->|"artifact links"| api
+  api -->|"export requests"| reports
+  reports -->|"download links"| web
+  api -->|"scan state and findings"| web
 
-  classDef hotpink fill:#101211,stroke:#f02a56,stroke-width:2px,color:#f5f7f5;
+  classDef lane fill:#0d0f0e,stroke:#f02a56,stroke-width:1.5px,color:#f5f7f5;
+  classDef service fill:#101211,stroke:#f02a56,stroke-width:2px,color:#f5f7f5;
   classDef store fill:#141716,stroke:#f02a56,stroke-width:1.5px,color:#f5f7f5;
-  class user,browser,api,worker,scanners,sandbox,ai,reports hotpink;
-  class auth,queue,objectStore store;
+  class input,control,execution,intelligence lane;
+  class user,web,api,worker,scanners,sandbox,ai,reports service;
+  class db,queue,minio store;
 ```
 
 ---
@@ -309,11 +329,3 @@ See [`docs/SECURITY_MODEL.md`](docs/SECURITY_MODEL.md).
 | [`docs/SANDBOX.md`](docs/SANDBOX.md) | Opt-in dynamic workflow execution |
 | [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Common local Docker and runtime issues |
 | [`docs/FEATURE_STATUS.md`](docs/FEATURE_STATUS.md) | Current implementation state |
-
----
-
-## Maintenance
-
-Keep this README current whenever ports, services, run commands, scanner support, AI settings, verification results, or limitations change.
-
-Do not mark a capability complete unless it is implemented, verified, and accurately represented in the documentation.
