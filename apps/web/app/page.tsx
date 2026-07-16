@@ -8,9 +8,9 @@ import {
   Network,
   Radar,
   ShieldAlert,
-  Sparkles,
   TerminalSquare,
 } from "lucide-react";
+import AttackMapConnector from "./AttackMapConnector";
 
 const stages = [
   "Repository mapped",
@@ -108,7 +108,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="scan-console hero-console" aria-label="Animated demo scan">
+        <div className="scan-console hero-console demo-console" aria-label="Animated demo scan">
           <div className="console-header">
             <span>demo/nope-demo</span>
             <span>demonstration data</span>
@@ -216,29 +216,51 @@ export default function LandingPage() {
         <div className="container">
           <p className="section-kicker">Attack Map showcase</p>
           <h2>Routes, files, data access, and risk hints stay connected.</h2>
-          <div className="showcase-grid">
-            <div className="attack-canvas landing-map" aria-label="Static attack map showcase">
-              {[
-                ["entry", "ANY /api/invoices/:id", "entry point"],
-                ["file", "app/api/invoices/[id]/route.ts", "handler file"],
-                ["db", "prisma.invoice.findUnique", "database"],
-                ["risk", "Missing ownership check", "authorization risk"],
-              ].map(([id, label, kind]) => (
-                <div className={`attack-node map-node-${id}`} key={id}>
-                  <span className="mono muted">{kind}</span>
-                  <strong style={{ display: "block", marginTop: 8 }}>{label}</strong>
-                  {id === "risk" ? <p style={{ color: "var(--high)" }}>Risk: high</p> : null}
-                </div>
-              ))}
+          <div className="attack-showcase">
+            <div className="attack-map-panel">
+              <div className="attack-map-toolbar">
+                <span className="mono">route</span>
+                <span className="mono">file</span>
+                <span className="mono">data</span>
+              </div>
+              <div className="attack-canvas landing-map" aria-label="Static attack map showcase">
+                <AttackMapConnector />
+                {[
+                  ["entry", "ANY /api/invoices/:id", "entry point"],
+                  ["file", "app/api/invoices/[id]/route.ts", "handler file"],
+                  ["db", "prisma.invoice.findUnique", "database"],
+                  ["risk", "Missing ownership check", "authorization risk"],
+                ].map(([id, label, kind]) => (
+                  <div className={`attack-node map-node-${id}`} key={id}>
+                    {["top", "right", "bottom", "left"].map((side) => (
+                      <span
+                        aria-hidden="true"
+                        className={`attack-anchor attack-anchor-${side} ${
+                          (id === "entry" && side === "bottom") ||
+                          (id === "db" && side === "left") ||
+                          (id === "file" && side === "bottom") ||
+                          (id === "risk" && side === "right")
+                            ? "is-connected"
+                            : ""
+                        }`}
+                        key={side}
+                      />
+                    ))}
+                    <span className="mono muted">{kind}</span>
+                    <strong>{label}</strong>
+                    {id === "risk" ? <p>Risk: high</p> : null}
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="edge-proof">
               <div className="edge-proof-title">
                 <Network size={16} />
                 <span>graph evidence</span>
               </div>
-              {["entry point handled by file", "file retrieves data from prisma", "file may reach missing ownership check", "finding detail shows real edges only"].map((item) => (
+              {["entry point handled by file", "file retrieves data from prisma", "file may reach missing ownership check", "finding detail shows real edges only"].map((item, index) => (
                 <div className="edge-proof-row" key={item}>
-                  <span />
+                  <span className="mono">{String(index + 1).padStart(2, "0")}</span>
                   <p>{item}</p>
                 </div>
               ))}
@@ -289,19 +311,24 @@ export default function LandingPage() {
               not arbitrary shell access and not whole repositories.
             </p>
           </div>
-          <div className="scan-console">
-            <div className="console-header">
+          <div className="export-rail ai-rail">
+            <div className="edge-proof-title">
+              <Brain size={16} />
               <span>nope-ai</span>
-              <span>llama.cpp</span>
             </div>
-            <div className="console-body">
-              {["Read-only model mount", "Bounded context", "Timeout enforced", "Failure-safe scans"].map((item) => (
-                <div className="stage-row" key={item}>
-                  <span>{item}</span>
-                  <span className="status-dot ok" />
-                </div>
-              ))}
-            </div>
+            {[
+              ["llama.cpp", "local runtime", "service"],
+              ["Read-only", "model mount", "enforced"],
+              ["Bounded", "context", "scoped"],
+              ["Timeout", "enforced", "guarded"],
+              ["Failure-safe", "scans", "default"],
+            ].map(([label, detail, status]) => (
+              <div className="export-row ai-rail-row" key={label}>
+                <span>{label}</span>
+                <strong>{detail}</strong>
+                <em>{status}</em>
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -315,11 +342,6 @@ export default function LandingPage() {
             and permissions are configured. The local pipeline already produces findings,
             evidence, coverage, and exportable reports.
           </p>
-          <div className="hero-actions">
-            <a className="button primary" href="/login">
-              Open local workspace <Sparkles size={15} />
-            </a>
-          </div>
         </div>
       </section>
 
@@ -327,7 +349,6 @@ export default function LandingPage() {
         <div className="container landing-footer-inner">
           <strong>NOPE.</strong>
           <span>Rules first. Local AI second. Evidence always.</span>
-          <a href="/login">Open dashboard</a>
         </div>
       </footer>
     </main>
