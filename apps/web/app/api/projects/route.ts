@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { API_BASE } from "@/lib/api";
+import { ACTIVE_PROJECT_COOKIE } from "@/lib/active-project";
 
 function detailMessage(detail: string, fallback: string) {
   try {
@@ -43,5 +44,14 @@ export async function POST(request: Request) {
     return NextResponse.redirect(next, 303);
   }
 
+  const project = (await response.json().catch(() => null)) as { id?: string } | null;
+  if (project?.id) {
+    (await cookies()).set(ACTIVE_PROJECT_COOKIE, project.id, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+    });
+  }
   return NextResponse.redirect(next, 303);
 }

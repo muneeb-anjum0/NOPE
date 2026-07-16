@@ -43,8 +43,9 @@ export default async function ScansPage({
 }
 
 function FolderLink({ project, count }: { project: Project; count: number }) {
+  const href = `/api/active-project?projectId=${encodeURIComponent(project.id)}&returnTo=${encodeURIComponent(`/app/projects/local/scans/${project.id}`)}`;
   return (
-    <Link className="folder-link" href={`/app/projects/local/scans/${encodeURIComponent(project.id)}`}>
+    <Link className="folder-link" href={href}>
       <span>
         <strong>{project.name}</strong>
         <small>{project.repository || project.target_url || "folder workspace"}</small>

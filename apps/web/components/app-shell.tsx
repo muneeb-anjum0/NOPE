@@ -1,9 +1,15 @@
 import { LineSidebar } from "@/components/line-sidebar";
+import type { Project } from "@/lib/types";
 
-export function AppShell({ children, userEmail }: Readonly<{ children: React.ReactNode; userEmail: string }>) {
+export function AppShell({
+  children,
+  userEmail,
+  projects,
+  activeProjectId,
+}: Readonly<{ children: React.ReactNode; userEmail: string; projects: Project[]; activeProjectId?: string | null }>) {
   return (
     <div className="app-layout">
-      <LineSidebar />
+      <LineSidebar projects={projects} activeProjectId={activeProjectId} />
       <main className="app-main">
         <div className="sr-only">Signed in as {userEmail}</div>
         <div className="app-content">{children}</div>

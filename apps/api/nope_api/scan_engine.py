@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from typing import Awaitable, Callable
 
@@ -82,6 +83,11 @@ async def _checkpoint(
         raise ScanCancelled("Scan was cancelled.")
 
 
+async def _execute_scanner_plugin(plugin, root: Path, settings: Settings, semaphore: asyncio.Semaphore) -> tuple[ScannerRun, list]:
+    async with semaphore:
+        return await asyncio.to_thread(plugin.execute, root, settings)
+
+
 async def run_repository_scan(
     scan: Scan,
     root: Path,
@@ -118,15 +124,25 @@ async def run_repository_scan(
     await _checkpoint(scan, progress_callback, cancellation_checker)
 
     scan.stages.append({"name": "Running scanner plugins", "status": "running"})
-    for plugin in scanner_plugins():
-        await _checkpoint(scan, progress_callback, cancellation_checker)
-        run, plugin_findings = plugin.execute(root, settings)
-        scan.scanner_runs.append(run)
-        findings.extend(plugin_findings)
-        if run.status == "failed":
-            scan.stages[-1]["status"] = "partial"
-            scan.status = "partial"
-        await _checkpoint(scan, progress_callback, cancellation_checker)
+    plugins = scanner_plugins()
+    concurrency = max(1, min(settings.scanner_concurrency, len(plugins) or 1))
+    semaphore = asyncio.Semaphore(concurrency)
+    tasks = [asyncio.create_task(_execute_scanner_plugin(plugin, root, settings, semaphore)) for plugin in plugins]
+    try:
+        for task in asyncio.as_completed(tasks):
+            await _checkpoint(scan, progress_callback, cancellation_checker)
+            run, plugin_findings = await task
+            scan.scanner_runs.append(run)
+            findings.extend(plugin_findings)
+            if run.status == "failed":
+                scan.stages[-1]["status"] = "partial"
+                scan.status = "partial"
+            await _checkpoint(scan, progress_callback, cancellation_checker)
+    except ScanCancelled:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
     if scan.stages[-1]["status"] != "partial":
         scan.stages[-1]["status"] = "completed"
     await _checkpoint(scan, progress_callback, cancellation_checker)

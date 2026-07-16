@@ -5,30 +5,138 @@
 ![AI optional](https://img.shields.io/badge/Qwen-optional-f02a56?style=for-the-badge&labelColor=101211)
 ![Docker](https://img.shields.io/badge/runtime-Docker-f02a56?style=for-the-badge&labelColor=101211)
 
-**NOPE is a local-first application security orchestration platform for evidence-driven scans.**
+**NOPE is a local-first application security scanning dashboard for evidence-driven reviews.**
 
-It accepts authorized repository ZIPs and URLs, runs deterministic scanner evidence first, normalizes findings, tracks untested areas, produces reports, and can optionally ask local Qwen through llama.cpp for focused reasoning over retrieved evidence.
+It accepts authorized repository ZIPs and URLs, runs deterministic scanner evidence first, tracks what was and was not tested, produces reports, and can optionally ask local Qwen through llama.cpp to reason over focused evidence.
 
-NOPE does **not** claim that an application is fully secure, unhackable, compliant, or safe to ship. It shows what was checked, what failed, what was found, and what remains untested.
+NOPE does **not** claim an app is fully secure, compliant, or safe to ship. It shows findings, evidence, coverage gaps, scanner failures, and untested areas.
 
 ---
 
-## What It Does
+## Quick Q/A
 
-| Area | Capability |
+### What does the pipeline do?
+
+The pipeline is the main scan engine.
+
+It:
+
+- validates ZIPs, URLs, project folders, and authorization scope
+- extracts repository ZIPs safely
+- queues work in Redis
+- runs the worker pipeline
+- detects stack/frameworks
+- builds attack surface and code graph evidence
+- runs NOPE rules and bundled scanners
+- optionally runs sandbox workflows
+- normalizes and deduplicates findings
+- calculates coverage, score, and verdict
+- persists scans, findings, stages, scanner runs, reports, baselines, and drift data
+
+In short: **the pipeline does the security scanning work.**
+
+### What does RAG do?
+
+RAG does **not** scan the app by itself.
+
+RAG retrieves focused context for Qwen after the pipeline has findings and evidence. It gathers:
+
+- the selected finding
+- scanner evidence
+- source snippets near affected files
+- route and attack-surface context
+- code graph edges
+- stack evidence
+- scanner run metadata
+- category-specific security guidance
+
+RAG redacts secrets, marks repository text as untrusted data, removes duplicate chunks, and enforces file/chunk/token limits. It does not currently use embeddings or vector search; it uses deterministic metadata, keyword, route, file, import, and graph scoring.
+
+In short: **RAG prepares focused evidence for AI.**
+
+### What does the AI do?
+
+AI is optional. When enabled, local Qwen runs through the `nope-ai` llama.cpp container.
+
+Qwen can:
+
+- explain a finding
+- challenge whether a finding is well-supported
+- suggest a fix direction
+- suggest regression/security tests
+- add an AI review message after a scan
+
+Qwen cannot:
+
+- replace deterministic scanners
+- silently downgrade findings
+- prove the app is secure
+- run the scan by itself
+- receive the whole repository as raw context
+
+If Qwen fails, deterministic scan results are preserved.
+
+In short: **AI is the reviewer/explainer layer, not the scanner engine.**
+
+### How do folders work?
+
+Folders are project workspaces. Each folder owns its own ZIP uploads, scan history, findings, reports, baselines, and drift comparisons.
+
+When you switch the active folder in the sidebar, dashboard pages use that folder by default:
+
+- Overview
+- Findings
+- Attack Map
+- Coverage
+- Assets
+- Reports
+- Scans
+
+Different folders do not mix findings or scan history.
+
+### How does drift work?
+
+Drift compares scans inside the same folder/project. It can compare:
+
+- latest scan vs previous matching scan
+- scan vs baseline
+- explicit scan vs scan
+
+Different project folders are not compared. ZIP scaffold similarity is checked before accepting a new upload into an existing folder; low-similarity ZIPs require an explicit override.
+
+### What does NOPE check?
+
+NOPE combines custom rules, local Semgrep rules, external scanner adapters, URL checks, and optional sandbox checks.
+
+Custom NOPE rules currently check for:
+
+- hardcoded credentials and private keys
+- database lookups by ID that may lack owner/tenant scope
+- client-provided role, owner, tenant, or admin fields being trusted
+- wildcard CORS configuration
+- exposed Supabase service-role or server-only keys
+- AI calls without nearby rate, token, timeout, or budget controls
+
+Local Semgrep rules currently check for:
+
+- hardcoded secret-like assignments
+- wildcard CORS header patterns
+
+Bundled scanner adapters:
+
+| Scanner | Main coverage |
 | --- | --- |
-| Authentication | Local users and sessions backed by Postgres |
-| Ingestion | Repository ZIP uploads with archive safety checks |
-| URL scope | Authorized URL scanning with private-network blocking by default |
-| Queueing | Redis-backed scan jobs, retry metadata, and worker execution |
-| Scanners | Semgrep, Gitleaks, OSV-Scanner, Trivy, Checkov, Hadolint, Bandit |
-| Dynamic checks | Optional sandbox workflows and internal ZAP baseline scans via `.nope/sandbox.json` |
-| Findings | Canonical findings, deduplication, lifecycle history, baselines, drift, coverage |
-| Reports | JSON, Markdown, SARIF, and PDF exports |
-| AI review | Optional local Qwen via llama.cpp CPU/GPU profiles |
-| Storage | Postgres for structured data, MinIO for artifacts and report blobs |
+| Semgrep | Injection, authorization, authentication, secrets |
+| Gitleaks | Secrets |
+| OSV-Scanner | Vulnerable dependencies |
+| Trivy | Dependencies, containers, CI/CD, secrets, misconfigurations |
+| Checkov | Infrastructure, CI/CD, containers |
+| Hadolint | Dockerfile/container hygiene |
+| Bandit | Python injection and secret patterns |
+| NOPE URL scanner | Security headers, staging exposure, URL scope, privacy hints |
+| NOPE sandbox / ZAP | Optional dynamic testing when `.nope/sandbox.json` declares safe workflows |
 
-Out of scope for this local build: email, SMTP, payments, subscriptions, production cloud deployment, and formal compliance certification.
+Scanner failures are not hidden. They are recorded as failed or not-applicable coverage.
 
 ---
 
@@ -122,23 +230,6 @@ flowchart LR
 
 ---
 
-## Requirements
-
-- Docker Desktop with Docker Compose.
-- Node.js 22+ or 24+ for local web development.
-- pnpm 10+ for local web development.
-- Python 3.11+ for local API tests.
-- Optional NVIDIA container support for GPU Qwen.
-- Optional GGUF model file, verified locally at:
-
-```text
-D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf
-```
-
-Do not commit the GGUF model, `.env`, scanner artifacts, local workspaces, MinIO data, or benchmark output.
-
----
-
 ## Local URLs
 
 | Surface | URL |
@@ -158,11 +249,9 @@ username: nope
 password: nope-development-password
 ```
 
-Except for `GET /health` and `POST /api/auth/login`, API routes require `Authorization: Bearer <token>`. The web dashboard forwards the HttpOnly local session cookie server-side.
-
 ---
 
-## Docker Startup
+## Run Locally
 
 ### Core stack, no AI
 
@@ -200,7 +289,7 @@ Use `docker compose down -v` only when you intentionally want to remove local Po
 
 ---
 
-## Verified AI Settings
+## Verified Local AI Settings
 
 | Setting | Value |
 | --- | --- |
@@ -210,23 +299,7 @@ Use `docker compose down -v` only when you intentionally want to remove local Po
 | GPU layers | `28` |
 | GPU memory target | `5000 MB` |
 
-The verified local GPU setting is 28 layers under the 5 GB VRAM target. Thirty layers previously failed to fit, so 28 is the cap-safe setting for this development machine.
-
----
-
-## Scanner Runtime
-
-The Docker API image bundles the verified scanner toolchain:
-
-- Semgrep
-- Gitleaks
-- OSV-Scanner
-- Trivy
-- Checkov
-- Hadolint
-- Bandit
-
-OWASP ZAP baseline runs only through the sandbox dynamic path when a repository declares a safe internal target. Static repository scans mark ZAP as not applicable instead of fabricating results.
+The verified local GPU setting is 28 layers under the 5 GB VRAM target. Thirty layers previously failed to fit on the development machine.
 
 ---
 
@@ -245,78 +318,32 @@ Frontend:
 ```powershell
 pnpm --dir apps/web lint
 pnpm --dir apps/web typecheck
-pnpm --dir apps/web test
 pnpm --dir apps/web build
 ```
 
-Docker and security:
+Docker:
 
 ```powershell
 docker compose config --quiet
 docker compose build nope-api nope-worker nope-web
-docker compose run --rm --no-deps nope-api gitleaks detect --no-git --redact --source /app/apps/api/nope_api
 ```
 
 ---
 
-## API Highlights
-
-- `GET /health`
-- `POST /api/auth/login`
-- `GET /api/auth/me`
-- `GET /api/projects`
-- `GET /api/scans`
-- `POST /api/scans/url`
-- `POST /api/scans/repository`
-- `POST /api/scans/full`
-- `DELETE /api/scans/{scan_id}`
-- `POST /api/scans/{scan_id}/cancel`
-- `POST /api/scans/{scan_id}/retry`
-- `GET /api/scans/{scan_id}/events`
-- `GET /api/scans/{scan_id}/findings`
-- `GET /api/scans/{scan_id}/findings/{finding_id}`
-- `GET /api/scans/{scan_id}/report.{format}`
-- `POST /api/scans/{scan_id}/baseline`
-- `GET /api/scans/{scan_id}/compare`
-- `GET /api/queue/status`
-- `GET /api/worker/health`
-- `GET /api/scanners/capabilities`
-- `GET /api/settings/system`
-- `GET /api/github/status`
-
-See [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md).
-
----
-
-## Security Model
-
-NOPE treats every uploaded repository and scanned target as potentially hostile.
+## Security Notes
 
 - Scan only repositories and URLs you own or are explicitly authorized to test.
 - ZIP uploads pass archive safety checks before extraction.
 - Private-network URL targets are blocked by default.
 - Qwen receives focused evidence only, not whole repositories.
-- Qwen cannot override deterministic scanner evidence.
+- Repository text is treated as untrusted data in RAG prompts.
 - Sandbox workflows are opt-in through `.nope/sandbox.json`.
 - Sandbox containers do not receive NOPE service secrets, host home directories, or the Docker socket.
 - GitHub private access remains blocked until real credentials are supplied and verified.
 
-See [`docs/SECURITY_MODEL.md`](docs/SECURITY_MODEL.md).
-
 ---
 
-## Limitations
-
-- Local Docker is the verified deployment target.
-- URL-only scans are non-destructive and do not prove runtime security.
-- Scanner coverage gaps remain visible as untested or failed areas.
-- Qwen is optional and may fail without blocking deterministic scans.
-- Formal compliance certification is out of scope.
-- Private GitHub repository access is intentionally blocked until credentials are configured.
-
----
-
-## Documentation
+## Docs
 
 | Document | Purpose |
 | --- | --- |
@@ -328,4 +355,3 @@ See [`docs/SECURITY_MODEL.md`](docs/SECURITY_MODEL.md).
 | [`docs/SCANNERS.md`](docs/SCANNERS.md) | Scanner behavior and evidence handling |
 | [`docs/SANDBOX.md`](docs/SANDBOX.md) | Opt-in dynamic workflow execution |
 | [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Common local Docker and runtime issues |
-| [`docs/FEATURE_STATUS.md`](docs/FEATURE_STATUS.md) | Current implementation state |

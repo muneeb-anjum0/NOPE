@@ -1,6 +1,7 @@
 import { PinkDotText } from "@/components/pink-dot-text";
 import { PUBLIC_API_BASE } from "@/lib/api";
-import { getScans, selectScan } from "@/lib/nope-data";
+import { getActiveProjectId, scansForProject } from "@/lib/active-project";
+import { getProjects, getScans, selectScan } from "@/lib/nope-data";
 
 const reportSections = [
   {
@@ -35,7 +36,10 @@ export default async function ReportsPage({
   searchParams?: Promise<{ scan?: string }>;
 }) {
   const params = (await searchParams) ?? {};
-  const scans = await getScans();
+  const [projects, allScans] = await Promise.all([getProjects(), getScans()]);
+  const activeProjectId = await getActiveProjectId(projects);
+  const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
+  const scans = scansForProject(allScans, activeProjectId);
   const scan = selectScan(scans, params.scan);
   return (
     <>
@@ -43,7 +47,7 @@ export default async function ReportsPage({
         <div>
           <p className="section-kicker">Reports</p>
           <h1><PinkDotText text="Evidence exports without the attitude." /></h1>
-          <p>Formal reports avoid sarcasm and preserve reproducibility metadata.</p>
+          <p>{activeProject ? `${activeProject.name}: formal reports preserve reproducibility metadata.` : "Choose an active folder to export reports."}</p>
         </div>
       </section>
       <div className="collapse-list">

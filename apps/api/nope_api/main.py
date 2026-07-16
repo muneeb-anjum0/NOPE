@@ -822,6 +822,8 @@ def model_settings(authorization: str | None = Header(default=None)) -> dict:
         "maximum_repository_tokens_per_task": settings.ai_max_repository_tokens,
         "rag": {
             "maximum_files": settings.ai_rag_max_files,
+            "maximum_repository_files_considered": settings.ai_rag_max_repository_files,
+            "maximum_file_bytes_considered": settings.ai_rag_max_file_bytes,
             "maximum_tokens": settings.ai_rag_max_tokens,
             "maximum_graph_depth": settings.ai_rag_graph_depth,
             "chunk_characters": settings.ai_rag_chunk_chars,

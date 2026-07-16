@@ -3,6 +3,7 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import type { Project } from "@/lib/types";
 
 const FALLOFF_CURVES = {
   linear: (p: number) => p,
@@ -196,10 +197,11 @@ function BitsLineSidebar({
   );
 }
 
-export function LineSidebar() {
+export function LineSidebar({ projects, activeProjectId }: Readonly<{ projects: Project[]; activeProjectId?: string | null }>) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const currentPath = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
   const activeIndex = Math.max(
     0,
     routeItems.findIndex((item) => pathname === item.href || (item.href !== "/app/projects/local" && pathname.startsWith(item.href))),
@@ -230,6 +232,25 @@ export function LineSidebar() {
         fontSize={1.05}
         onItemClick={(index) => router.push(hrefFor(routeItems[index]?.href ?? "/app/projects/local"))}
       />
+      <form className="sidebar-folder-context" action="/api/active-project" method="post">
+        <label htmlFor="active-folder">Active folder</label>
+        <input name="returnTo" type="hidden" value={currentPath} />
+        <div className="sidebar-folder-select">
+          <select
+            id="active-folder"
+            name="projectId"
+            value={activeProjectId ?? ""}
+            onChange={(event) => event.currentTarget.form?.requestSubmit()}
+            disabled={projects.length === 0}
+          >
+            {projects.length === 0 ? <option value="">No folders yet</option> : null}
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>{project.name}</option>
+            ))}
+          </select>
+        </div>
+        <span className="mono muted">{projects.find((project) => project.id === activeProjectId)?.repository || "folder scoped"}</span>
+      </form>
     </aside>
   );
 }

@@ -2,7 +2,8 @@ import { AIFindingActions } from "@/components/ai-finding-actions";
 import { FilterSelect } from "@/components/filter-select";
 import { FindingTable } from "@/components/finding-table";
 import { PinkDotText } from "@/components/pink-dot-text";
-import { freshScan, getFindingDetail, getFindings, getScans, selectScan, severityClass } from "@/lib/nope-data";
+import { getActiveProjectId, scansForProject } from "@/lib/active-project";
+import { freshScan, getFindingDetail, getFindings, getProjects, getScans, selectScan, severityClass } from "@/lib/nope-data";
 import type { FindingDetail } from "@/lib/types";
 
 type PageProps = {
@@ -36,7 +37,10 @@ function hrefWith(params: URLSearchParams, updates: Record<string, string | numb
 export default async function FindingsPage({ searchParams }: PageProps) {
   const resolved = (await searchParams) ?? {};
   const params = paramsFrom(resolved);
-  const scans = await getScans();
+  const [projects, allScans] = await Promise.all([getProjects(), getScans()]);
+  const activeProjectId = await getActiveProjectId(projects);
+  const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
+  const scans = scansForProject(allScans, activeProjectId);
   const scan = selectScan(scans, params.get("scan")) ?? freshScan();
   const results = (await getFindings(scan.id, params)) ?? {
     scan_id: scan.id,
@@ -59,7 +63,7 @@ export default async function FindingsPage({ searchParams }: PageProps) {
         <div>
           <p className="section-kicker">Findings</p>
           <h1><PinkDotText text="Evidence, not vibes." /></h1>
-          <p>Server-backed filters, protected evidence, code context, and real graph flow.</p>
+          <p>{activeProject ? `${activeProject.name}: server-backed filters, protected evidence, code context, and real graph flow.` : "Choose an active folder to inspect findings."}</p>
         </div>
       </section>
 

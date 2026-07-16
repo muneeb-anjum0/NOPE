@@ -34,6 +34,24 @@ DEPENDENCY_FILES = {
     "Gemfile",
     "Gemfile.lock",
 }
+ALWAYS_CONSIDER_FILES = {"readme.md", "security.md", "package.json", "pyproject.toml", "docker-compose.yml", "dockerfile"}
+SECURITY_PATH_TOKENS = {
+    "api",
+    "auth",
+    "authorization",
+    "middleware",
+    "policy",
+    "policies",
+    "rls",
+    "security",
+    "supabase",
+    "prisma",
+    "db",
+    "database",
+    "storage",
+    "route",
+    "routes",
+}
 
 FUNCTION_RE = re.compile(
     r"(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)|"
@@ -63,6 +81,8 @@ class RagChunk(BaseModel):
 class RagLimits(BaseModel):
     max_chunks: int
     max_files: int
+    max_repository_files: int
+    max_file_bytes: int
     max_tokens: int
     max_graph_depth: int
     chunk_chars: int
@@ -104,8 +124,14 @@ def _truncate(value: str, limit: int) -> tuple[str, bool]:
     return redacted[:limit].rstrip() + "\n[truncated]", True
 
 
-def _safe_read(path: Path) -> str:
-    return path.read_text(encoding="utf-8", errors="ignore")
+def _safe_read(path: Path, max_bytes: int | None = None) -> str:
+    if max_bytes is None:
+        return path.read_text(encoding="utf-8", errors="ignore")
+    with path.open("r", encoding="utf-8", errors="ignore") as handle:
+        text = handle.read(max_bytes + 1)
+    if len(text) > max_bytes:
+        return text[:max_bytes].rstrip() + "\n[truncated before RAG chunking]"
+    return text
 
 
 def _iter_repository_files(root: Path) -> list[Path]:
@@ -119,6 +145,67 @@ def _iter_repository_files(root: Path) -> list[Path]:
         if path.suffix.lower() in SOURCE_SUFFIXES or path.name in DEPENDENCY_FILES:
             files.append(path)
     return sorted(files, key=lambda item: item.relative_to(root).as_posix())
+
+
+def _route_file_candidates(route: str) -> set[str]:
+    cleaned = route.strip("/")
+    if not cleaned:
+        return set()
+    bracketed = "/".join(f"[{part[1:]}]" if part.startswith(":") else part for part in cleaned.split("/"))
+    return {
+        f"app/api/{bracketed}/route.ts",
+        f"app/api/{bracketed}/route.tsx",
+        f"app/api/{bracketed}/route.js",
+        f"pages/api/{bracketed}.ts",
+        f"pages/api/{bracketed}.js",
+    }
+
+
+def _repository_file_score(path: Path, root: Path, terms: set[str], files: set[str], routes: set[str], findings: list[Finding]) -> int:
+    rel = path.relative_to(root).as_posix()
+    lowered = rel.lower()
+    name = path.name.lower()
+    parts = {part.lower() for part in Path(rel).parts}
+    score = 0
+    route_candidates = {candidate for route in routes for candidate in _route_file_candidates(route)}
+
+    if rel in files:
+        score += 220
+    if rel in route_candidates or _route_from_rel(rel) in routes:
+        score += 180
+    if name in ALWAYS_CONSIDER_FILES:
+        score += 60
+    if path.name in DEPENDENCY_FILES:
+        score += 55 if any(finding.category.lower() == "dependencies" or finding.package or finding.cve for finding in findings) else 20
+    if path.suffix.lower() == ".sql" or {"supabase", "migrations", "rls", "policies"} & parts:
+        score += 70 if any(finding.category.lower() in {"supabase", "authorization"} for finding in findings) else 30
+    if SECURITY_PATH_TOKENS & parts:
+        score += 35
+    if any(token in lowered for token in ("middleware", "auth", "owner", "tenant", "prisma", "supabase", "storage", "route")):
+        score += 20
+    for term in terms:
+        if len(term) >= 4 and term in lowered:
+            score += 6
+    return score
+
+
+def _focused_repository_files(root: Path, limits: RagLimits, findings: list[Finding]) -> list[Path]:
+    terms = _query_terms(findings)
+    files = _target_files(findings)
+    routes = _target_routes(findings)
+    scored: list[tuple[int, str, Path]] = []
+    for path in _iter_repository_files(root):
+        rel = path.relative_to(root).as_posix()
+        score = _repository_file_score(path, root, terms, files, routes, findings)
+        if score > 0 or len(scored) < max(12, limits.max_files * 2):
+            scored.append((score, rel, path))
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    selected = [path for _, _, path in scored[: limits.max_repository_files]]
+    target_paths = [root / file for file in sorted(files)]
+    for path in target_paths:
+        if path.exists() and path.is_file() and path not in selected:
+            selected.insert(0, path)
+    return selected[: limits.max_repository_files]
 
 
 def _line_for_offset(text: str, offset: int) -> int:
@@ -216,11 +303,11 @@ def _chunk_from_text(
     )
 
 
-def _repository_chunks(root: Path, limits: RagLimits) -> list[RagChunk]:
+def _repository_chunks(root: Path, limits: RagLimits, findings: list[Finding]) -> list[RagChunk]:
     chunks: list[RagChunk] = []
-    for path in _iter_repository_files(root):
+    for path in _focused_repository_files(root, limits, findings):
         rel = path.relative_to(root).as_posix()
-        text = _safe_read(path)
+        text = _safe_read(path, limits.max_file_bytes)
         route = _route_from_rel(rel)
         kind = _file_kind(rel, path, text)
         imports = _import_targets(root, path, text)
@@ -574,6 +661,8 @@ def rag_limits(settings: Settings) -> RagLimits:
     return RagLimits(
         max_chunks=max(1, settings.ai_max_retrieved_chunks),
         max_files=max(1, settings.ai_rag_max_files),
+        max_repository_files=max(settings.ai_rag_max_files, settings.ai_rag_max_repository_files),
+        max_file_bytes=max(16 * 1024, settings.ai_rag_max_file_bytes),
         max_tokens=max(256, min(settings.ai_rag_max_tokens, settings.ai_max_repository_tokens, settings.effective_qwen_context_size * 3)),
         max_graph_depth=max(0, settings.ai_rag_graph_depth),
         chunk_chars=max(400, settings.ai_rag_chunk_chars),
@@ -600,7 +689,7 @@ def retrieve_context(
         candidates.extend(_stack_chunks(scan.stack, limits))
         candidates.extend(_scanner_run_chunks(scan.scanner_runs, limits))
     if root and root.exists():
-        candidates.extend(_repository_chunks(root, limits))
+        candidates.extend(_repository_chunks(root, limits, findings))
     candidates.extend(_security_guidance_chunks(findings, limits))
 
     terms = _query_terms(findings)

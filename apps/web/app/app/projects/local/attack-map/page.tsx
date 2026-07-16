@@ -1,6 +1,7 @@
 import { AttackMapPanel } from "@/components/attack-map";
 import { PinkDotText } from "@/components/pink-dot-text";
-import { freshScan, getScans, selectScan } from "@/lib/nope-data";
+import { getActiveProjectId, scansForProject } from "@/lib/active-project";
+import { freshScan, getProjects, getScans, selectScan } from "@/lib/nope-data";
 
 export default async function AttackMapPage({
   searchParams,
@@ -8,7 +9,9 @@ export default async function AttackMapPage({
   searchParams?: Promise<{ scan?: string }>;
 }) {
   const params = (await searchParams) ?? {};
-  const scans = await getScans();
+  const [projects, allScans] = await Promise.all([getProjects(), getScans()]);
+  const activeProjectId = await getActiveProjectId(projects);
+  const scans = scansForProject(allScans, activeProjectId);
   const scan = selectScan(scans, params.scan) ?? freshScan();
   return (
     <>

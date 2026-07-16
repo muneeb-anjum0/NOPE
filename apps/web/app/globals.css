@@ -980,6 +980,69 @@ textarea:focus-visible {
   color: var(--brand-primary);
 }
 
+.sidebar-folder-context {
+  display: grid;
+  gap: 7px;
+  margin-top: auto;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 14px;
+  min-width: 0;
+}
+
+.sidebar-folder-context label {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.sidebar-folder-select {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(240, 42, 86, 0.3);
+  border-radius: var(--radius-sm);
+  background: rgba(16, 18, 17, 0.72);
+}
+
+.sidebar-folder-select::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--brand-primary);
+  border-bottom: 1.5px solid var(--brand-primary);
+  pointer-events: none;
+  transform: translateY(-62%) rotate(45deg);
+}
+
+.sidebar-folder-select select {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  padding: 8px 28px 8px 10px;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  appearance: none;
+  outline: none;
+}
+
+.sidebar-folder-select option {
+  background: var(--background-surface-1);
+  color: var(--text-primary);
+}
+
+.sidebar-folder-context > span {
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .line-sidebar {
   --accent-color: var(--brand-primary);
   --text-color: var(--text-secondary);

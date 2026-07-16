@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     max_file_count: int = 8000
     max_scan_seconds: int = 900
     max_scanner_seconds: int = 180
+    scanner_concurrency: int = 3
     max_scanner_output_bytes: int = 2 * 1024 * 1024
     allow_private_url_targets: bool = False
     allow_localhost_url_targets: bool = False
@@ -81,6 +82,8 @@ class Settings(BaseSettings):
     ai_max_retrieved_chunks: int = 8
     ai_max_repository_tokens: int = 24000
     ai_rag_max_files: int = 8
+    ai_rag_max_repository_files: int = 96
+    ai_rag_max_file_bytes: int = 240 * 1024
     ai_rag_max_tokens: int = 6000
     ai_rag_graph_depth: int = 2
     ai_rag_chunk_chars: int = 1600

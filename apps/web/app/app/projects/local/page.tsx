@@ -1,7 +1,8 @@
 import { AttackMapPanel } from "@/components/attack-map";
 import { FindingTable } from "@/components/finding-table";
 import { PinkDotText } from "@/components/pink-dot-text";
-import { freshScan, getScanComparison, getScans, selectScan } from "@/lib/nope-data";
+import { getActiveProjectId, scansForProject } from "@/lib/active-project";
+import { freshScan, getProjects, getScanComparison, getScans, selectScan } from "@/lib/nope-data";
 import { scansAreComparable } from "@/lib/scan-identity";
 
 export default async function ProjectOverview({
@@ -10,7 +11,10 @@ export default async function ProjectOverview({
   searchParams?: Promise<{ scan?: string }>;
 }) {
   const params = (await searchParams) ?? {};
-  const scans = await getScans();
+  const [projects, allScans] = await Promise.all([getProjects(), getScans()]);
+  const activeProjectId = await getActiveProjectId(projects);
+  const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
+  const scans = scansForProject(allScans, activeProjectId);
   const scan = selectScan(scans, params.scan) ?? freshScan();
   const scanIndex = scans.findIndex((item) => item.id === scan.id);
   const previous = scans.find((item, index) => index > scanIndex && scansAreComparable(scan, item));
@@ -41,6 +45,8 @@ export default async function ProjectOverview({
           <p className="section-kicker">Overview</p>
           <h1><PinkDotText text={scan.verdict} /></h1>
           <div className="hero-meta-tags" aria-label="Scan target">
+            <span className="mini-tag mini-tag-label">Folder</span>
+            <span className="mini-tag mono">{activeProject?.name ?? "none"}</span>
             <span className="mini-tag mini-tag-label">Repository</span>
             <span className="mini-tag mono">{scan.repository_name ?? "none"}</span>
             <span className="mini-tag mini-tag-label">Target</span>

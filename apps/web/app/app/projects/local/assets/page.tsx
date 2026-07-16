@@ -1,4 +1,6 @@
 import { PinkDotText } from "@/components/pink-dot-text";
+import { getActiveProjectId } from "@/lib/active-project";
+import { getProjects } from "@/lib/nope-data";
 
 const assetGroups = [
   {
@@ -39,14 +41,17 @@ const assetGroups = [
   },
 ];
 
-export default function AssetsPage() {
+export default async function AssetsPage() {
+  const projects = await getProjects();
+  const activeProjectId = await getActiveProjectId(projects);
+  const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
   return (
     <>
       <section className="page-header">
         <div>
           <p className="section-kicker">Assets</p>
           <h1><PinkDotText text="Inventory the exposed surface." /></h1>
-          <p>Routes, frameworks, storage, external calls, scanners, targets, commits, and runtime gaps.</p>
+          <p>{activeProject ? `${activeProject.name}: routes, frameworks, storage, targets, commits, and runtime gaps.` : "Choose an active folder to inventory its exposed surface."}</p>
         </div>
       </section>
       <div className="collapse-list">

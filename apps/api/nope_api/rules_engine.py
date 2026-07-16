@@ -31,6 +31,9 @@ TEXT_SUFFIXES = {
     ".txt",
 }
 
+SKIP_DIRS = {".git", ".next", "node_modules", "__pycache__", ".pytest_cache", "dist", "build", "coverage"}
+MAX_RULE_FILE_BYTES = 512 * 1024
+
 
 def load_rules() -> list[dict[str, Any]]:
     path = Path(__file__).resolve().parents[3] / "security-packs" / "nope-core-rules.json"
@@ -48,8 +51,11 @@ def run_rules(root: Path) -> list[Finding]:
     for file in root.rglob("*"):
         if not file.is_file() or file.suffix.lower() not in TEXT_SUFFIXES:
             continue
+        if set(file.relative_to(root).parts) & SKIP_DIRS:
+            continue
         rel = file.relative_to(root).as_posix()
-        text = file.read_text(encoding="utf-8", errors="ignore")
+        with file.open("r", encoding="utf-8", errors="ignore") as handle:
+            text = handle.read(MAX_RULE_FILE_BYTES)
         lower_text = text.lower()
         lines = text.splitlines()
         for rule in rules:
