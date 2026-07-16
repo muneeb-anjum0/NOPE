@@ -352,6 +352,21 @@ def put_project_settings(project_id: str, payload: ProjectSettings, authorizatio
     return ProjectSettings(**sanitize_project_settings_payload(saved["value"]))
 
 
+@app.delete("/api/projects/{project_id}")
+async def delete_project(project_id: str, authorization: str | None = Header(default=None)) -> dict:
+    owner_user_id = _require_owner_user_id(authorization)
+    if not store.user_owns_project(project_id, owner_user_id):
+        raise HTTPException(status_code=404, detail="Project not found.")
+    for scan in store.list_scans(owner_user_id):
+        if scan.project_id == project_id:
+            await request_scan_cancel(settings, scan.id)
+    store.record_audit_log("project.deleted", owner_user_id, project_id=project_id, data={"project_id": project_id})
+    deleted = store.delete_project(project_id, owner_user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    return {"ok": True, "project_id": project_id}
+
+
 @app.get("/api/github/status")
 def get_github_status(authorization: str | None = Header(default=None)):
     owner_user_id = _require_owner_user_id(authorization)

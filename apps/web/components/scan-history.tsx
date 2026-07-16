@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Scan } from "@/lib/types";
@@ -101,40 +102,33 @@ export function ScanHistory({ scans, selectedId, projectId }: { scans: Scan[]; s
   }, [activeKey, router]);
 
   return (
-    <table className="table scan-history-table">
-      <tbody>
-        {scans.map((scan, index) => {
-          const state = live[scan.id] ?? { status: scan.status, progress: initialProgress(scan) };
-          return (
-            <tr className={scan.id === selectedId ? "selected-row" : ""} key={scan.id}>
-              <td>
-                <a
-                  className="mono"
-                  href={`${projectId ? `/app/projects/local/scans/${encodeURIComponent(projectId)}` : "/app/projects/local/scans"}?scan=${encodeURIComponent(scan.id)}`}
-                >
-                  {labelFor(scan, index)}
-                </a>
-                <div className="scan-progress-wrap" aria-label={`${state.progress}% complete`}>
-                  <div className="scan-progress-bar">
-                    <span style={{ width: `${state.progress}%` }} />
-                  </div>
-                  <span className="scan-progress-percent">{state.progress}%</span>
-                </div>
-              </td>
-              <td><span className={`scan-status scan-status-${state.status}`}>{state.status}</span></td>
-              <td>{scan.verdict}</td>
-              <td>
-                <form action="/api/delete-scan" method="post">
-                  <input name="scanId" type="hidden" value={scan.id} />
-                  {projectId ? <input name="projectId" type="hidden" value={projectId} /> : null}
-                  <button className="button ghost danger-button" type="submit">Delete</button>
-                </form>
-              </td>
-            </tr>
-          );
-        })}
-        {scans.length === 0 ? <tr><td>No scans yet.</td></tr> : null}
-      </tbody>
-    </table>
+    <div className="scan-history-list">
+      {scans.map((scan, index) => {
+        const state = live[scan.id] ?? { status: scan.status, progress: initialProgress(scan) };
+        const progressStyle = { "--scan-progress": `${state.progress}%` } as CSSProperties;
+        return (
+          <article className={`scan-history-row${scan.id === selectedId ? " selected-row" : ""}`} key={scan.id} style={progressStyle}>
+            <a
+              className="scan-history-main"
+              href={`${projectId ? `/app/projects/local/scans/${encodeURIComponent(projectId)}` : "/app/projects/local/scans"}?scan=${encodeURIComponent(scan.id)}`}
+            >
+              <span className="scan-history-title mono">{labelFor(scan, index)}</span>
+              <span className={`scan-status scan-status-${state.status}`}>{state.status}</span>
+              <span className="scan-history-verdict">{scan.verdict}</span>
+              <span className="scan-progress-orb" aria-label={`${state.progress}% complete`}>
+                {state.progress}
+                <small>%</small>
+              </span>
+            </a>
+            <form action="/api/delete-scan" method="post">
+              <input name="scanId" type="hidden" value={scan.id} />
+              {projectId ? <input name="projectId" type="hidden" value={projectId} /> : null}
+              <button className="button ghost danger-button" type="submit">Delete</button>
+            </form>
+          </article>
+        );
+      })}
+      {scans.length === 0 ? <p className="muted scan-history-empty">No scans yet.</p> : null}
+    </div>
   );
 }

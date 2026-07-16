@@ -1284,6 +1284,7 @@ textarea:focus-visible {
 
 .folder-create-card,
 .folder-link {
+  position: relative;
   min-height: 118px;
   display: flex;
   align-items: center;
@@ -1331,6 +1332,86 @@ textarea:focus-visible {
   min-width: 0;
   display: grid;
   gap: 6px;
+}
+
+.folder-card {
+  padding: 0;
+}
+
+.folder-card-main {
+  min-width: 0;
+  flex: 1;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  color: inherit;
+  padding: 16px 56px 16px 16px;
+}
+
+.folder-card-menu {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 3;
+}
+
+.folder-card-menu summary {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text-secondary);
+  cursor: pointer;
+  list-style: none;
+}
+
+.folder-card-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.folder-card-menu[open] summary,
+.folder-card-menu summary:hover {
+  border-color: rgba(240, 42, 86, 0.5);
+  color: var(--brand-primary);
+  background: rgba(240, 42, 86, 0.08);
+}
+
+.folder-card-menu-panel {
+  position: absolute;
+  top: 38px;
+  right: 0;
+  min-width: 166px;
+  border: 1px solid rgba(240, 42, 86, 0.28);
+  border-radius: var(--radius-sm);
+  background: rgba(8, 9, 10, 0.96);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.42);
+  padding: 6px;
+}
+
+.folder-delete-action {
+  width: 100%;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--critical);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.folder-delete-action:hover {
+  background: rgba(255, 59, 79, 0.1);
 }
 
 .folder-link strong,
@@ -2002,42 +2083,92 @@ textarea:focus-visible {
   background: var(--passed);
 }
 
-.scan-history-table td:first-child {
-  min-width: 190px;
-}
-
-.scan-progress-wrap {
+.scan-history-list {
   display: grid;
-  grid-template-columns: minmax(86px, 1fr) auto;
-  align-items: center;
-  gap: 9px;
-  max-width: 180px;
-  margin-top: 8px;
+  gap: 8px;
 }
 
-.scan-progress-bar {
-  height: 6px;
+.scan-history-row {
+  --scan-progress: 0%;
+  position: relative;
+  isolation: isolate;
   overflow: hidden;
-  border: 1px solid rgba(240, 42, 86, 0.28);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 74px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.025);
+  padding: 12px;
+}
+
+.scan-history-row::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: -1;
+  width: var(--scan-progress);
+  background:
+    linear-gradient(90deg, rgba(240, 42, 86, 0.16), rgba(240, 42, 86, 0.06)),
+    rgba(240, 42, 86, 0.08);
+  box-shadow: 22px 0 46px rgba(240, 42, 86, 0.1);
+  transition: width 260ms ease;
+}
+
+.scan-history-row.selected-row {
+  border-color: rgba(240, 42, 86, 0.36);
+  background: rgba(240, 42, 86, 0.045);
+}
+
+.scan-history-main {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto minmax(160px, 1.2fr) 58px;
+  align-items: center;
+  gap: 16px;
+  color: var(--text-primary);
+}
+
+.scan-history-title,
+.scan-history-verdict {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-history-verdict {
+  color: var(--text-primary);
+}
+
+.scan-progress-orb {
+  width: 50px;
+  height: 50px;
+  display: inline-grid;
+  place-items: center;
+  justify-self: end;
+  border: 1px solid rgba(240, 42, 86, 0.38);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.055);
-}
-
-.scan-progress-bar span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, rgba(240, 42, 86, 0.72), var(--brand-primary));
-  transition: width 220ms ease;
-}
-
-.scan-progress-percent {
-  display: inline-flex;
-  min-width: 36px;
-  justify-content: flex-end;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(240, 42, 86, 0.14), transparent 58%),
+    rgba(8, 9, 10, 0.7);
   color: var(--brand-primary);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.scan-progress-orb small {
+  margin-top: -12px;
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.scan-history-empty {
+  margin: 0;
+  padding: 14px 0;
 }
 
 .scan-status {

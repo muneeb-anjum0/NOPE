@@ -327,6 +327,43 @@ class PostgresStore:
             row = conn.execute(query + " returning id", params).fetchone()
         return row is not None
 
+    def delete_project(self, project_id: str, owner_user_id: str | None = None) -> bool:
+        self.migrate()
+        query = "delete from projects where id = %s"
+        params: tuple[Any, ...] = (project_id,)
+        if owner_user_id:
+            query += " and owner_user_id = %s"
+            params = (project_id, owner_user_id)
+        with connect(self.settings) as conn:
+            self._ensure_deleted_scans_table(conn)
+            scan_ids = [
+                row["id"]
+                for row in conn.execute(
+                    "select id from scans where project_id = %s" + (" and owner_user_id = %s" if owner_user_id else ""),
+                    (project_id, owner_user_id) if owner_user_id else (project_id,),
+                ).fetchall()
+            ]
+            for scan_id in scan_ids:
+                conn.execute(
+                    """
+                    insert into deleted_scans (scan_id, owner_user_id)
+                    values (%s, %s)
+                    on conflict (scan_id) do update set deleted_at = now(), owner_user_id = excluded.owner_user_id
+                    """,
+                    (scan_id, owner_user_id),
+                )
+            conn.execute("delete from uploaded_artifacts where project_id = %s", (project_id,))
+            if scan_ids:
+                conn.execute("delete from uploaded_artifacts where scan_id = any(%s)", (scan_ids,))
+            conn.execute("delete from repository_snapshots where project_id = %s", (project_id,))
+            conn.execute("delete from scans where project_id = %s" + (" and owner_user_id = %s" if owner_user_id else ""), (project_id, owner_user_id) if owner_user_id else (project_id,))
+            conn.execute(
+                "delete from application_settings where owner_user_id is not distinct from %s and key = %s",
+                (owner_user_id, f"project:{project_id}"),
+            )
+            row = conn.execute(query + " returning id", params).fetchone()
+        return row is not None
+
     def user_owns_project(self, project_id: str, owner_user_id: str | None) -> bool:
         self.migrate()
         query = "select 1 from projects where id = %s"

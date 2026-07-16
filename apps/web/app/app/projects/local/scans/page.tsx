@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MoreHorizontal, Trash2 } from "lucide-react";
 import { FolderCreateModal } from "@/components/folder-create-modal";
 import { PinkDotText } from "@/components/pink-dot-text";
 import { getProjects, getScans } from "@/lib/nope-data";
@@ -45,12 +46,28 @@ export default async function ScansPage({
 function FolderLink({ project, count }: { project: Project; count: number }) {
   const href = `/api/active-project?projectId=${encodeURIComponent(project.id)}&returnTo=${encodeURIComponent(`/app/projects/local/scans/${project.id}`)}`;
   return (
-    <Link className="folder-link" href={href}>
-      <span>
-        <strong>{project.name}</strong>
-        <small>{project.repository || project.target_url || "folder workspace"}</small>
-      </span>
-      <span className="folder-count">{count}</span>
-    </Link>
+    <article className="folder-link folder-card">
+      <Link className="folder-card-main" href={href}>
+        <span>
+          <strong>{project.name}</strong>
+          <small>{project.repository || project.target_url || "folder workspace"}</small>
+        </span>
+        <span className="folder-count">{count}</span>
+      </Link>
+      <details className="folder-card-menu">
+        <summary aria-label={`Open ${project.name} folder actions`}>
+          <MoreHorizontal size={18} />
+        </summary>
+        <div className="folder-card-menu-panel">
+          <form action="/api/delete-project" method="post">
+            <input name="projectId" type="hidden" value={project.id} />
+            <button className="folder-delete-action" type="submit">
+              <Trash2 size={15} />
+              Delete project
+            </button>
+          </form>
+        </div>
+      </details>
+    </article>
   );
 }
