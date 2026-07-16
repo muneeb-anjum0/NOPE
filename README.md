@@ -1,58 +1,106 @@
-# NOPE
+# NOPE<span style="color:#f02a56">.</span>
 
-Your app works. That does not mean it is secure.
+![Local first](https://img.shields.io/badge/local--first-yes-f02a56?style=for-the-badge&labelColor=101211)
+![Rules first](https://img.shields.io/badge/rules--first-evidence-f02a56?style=for-the-badge&labelColor=101211)
+![AI optional](https://img.shields.io/badge/Qwen-optional-f02a56?style=for-the-badge&labelColor=101211)
+![Docker](https://img.shields.io/badge/runtime-Docker-f02a56?style=for-the-badge&labelColor=101211)
 
-NOPE is a local-first, rules-first, AI-assisted application security orchestration platform. It accepts authorized repository ZIPs and URLs, runs deterministic scanner evidence first, connects that evidence through the pipeline, optionally asks local Qwen for focused reasoning, and reports what is verified, partial, failed, or untested.
+**NOPE is a local-first application security orchestration platform for evidence-driven scans.**
 
-NOPE does not claim an app is fully secure, guaranteed safe, unhackable, or formally compliant.
+It accepts authorized repository ZIPs and URLs, runs deterministic scanner evidence first, normalizes findings, tracks untested areas, produces reports, and can optionally ask local Qwen through llama.cpp for focused reasoning over retrieved evidence.
 
-## Supported Scope
+NOPE does **not** claim that an application is fully secure, unhackable, compliant, or safe to ship. It shows what was checked, what failed, what was found, and what remains untested.
 
-NOPE currently supports:
+---
 
-- Local login with Postgres-backed users and sessions.
-- Repository ZIP ingestion with archive safety checks.
-- Authorized URL checks with private-network blocking by default.
-- Full scans that combine repository and URL evidence.
-- Redis-backed queueing and worker execution.
-- Stack detection, attack-surface mapping, and lightweight code graph creation.
-- Real scanner execution for Semgrep, Gitleaks, OSV-Scanner, Trivy, Checkov, Hadolint, and Bandit in the API image.
-- Optional sandbox workflows and internal ZAP baseline scans through `.nope/sandbox.json`.
-- Canonical findings, deduplication, lifecycle history, baselines, drift, and coverage.
-- Reports in JSON, Markdown, SARIF, and PDF.
-- Optional local Qwen through llama.cpp Docker, with CPU and GPU profiles.
-- Local GitHub contract settings, with private repository access honestly blocked until real credentials are supplied and verified.
+## What It Does
+
+| Area | Capability |
+| --- | --- |
+| Authentication | Local users and sessions backed by Postgres |
+| Ingestion | Repository ZIP uploads with archive safety checks |
+| URL scope | Authorized URL scanning with private-network blocking by default |
+| Queueing | Redis-backed scan jobs, retry metadata, and worker execution |
+| Scanners | Semgrep, Gitleaks, OSV-Scanner, Trivy, Checkov, Hadolint, Bandit |
+| Dynamic checks | Optional sandbox workflows and internal ZAP baseline scans via `.nope/sandbox.json` |
+| Findings | Canonical findings, deduplication, lifecycle history, baselines, drift, coverage |
+| Reports | JSON, Markdown, SARIF, and PDF exports |
+| AI review | Optional local Qwen via llama.cpp CPU/GPU profiles |
+| Storage | Postgres for structured data, MinIO for artifacts and report blobs |
 
 Out of scope for this local build: email, SMTP, payments, subscriptions, production cloud deployment, and formal compliance certification.
 
-## Architecture
+---
 
-Services:
+## Data Flow Diagram
 
-- `NOPE` / `nope-web`: Next.js landing page and dashboard.
-- `nope-api`: FastAPI orchestration API.
-- `nope-worker`: Redis worker for queued scans.
-- `nope-postgres`: local auth, projects, scans, findings, settings, reports, baselines, and drift.
-- `nope-redis`: queue, cancellation flags, processing tracking, and worker heartbeat.
-- `nope-minio`: raw scanner artifacts and PDF report artifacts.
-- `nope-ai`: optional llama.cpp server for local Qwen inference.
+```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "#08090a",
+    "primaryColor": "#101211",
+    "primaryTextColor": "#f5f7f5",
+    "primaryBorderColor": "#f02a56",
+    "lineColor": "#f02a56",
+    "secondaryColor": "#141716",
+    "tertiaryColor": "#191c1b",
+    "clusterBkg": "#101211",
+    "clusterBorder": "#f02a56",
+    "fontFamily": "Inter, Segoe UI, sans-serif"
+  }
+}}%%
+flowchart LR
+  user["Operator<br/>authorized user"]
+  browser["NOPE Web<br/>Next.js dashboard"]
+  api["NOPE API<br/>FastAPI orchestration"]
+  auth[("Postgres<br/>users, sessions, projects")]
+  queue[("Redis<br/>scan queue and worker state")]
+  worker["NOPE Worker<br/>scanner pipeline"]
+  objectStore[("MinIO<br/>artifacts and reports")]
+  scanners["Deterministic scanners<br/>Semgrep, Gitleaks, OSV, Trivy, Checkov, Hadolint, Bandit"]
+  sandbox["Optional sandbox<br/>declared workflows and ZAP"]
+  ai["Local Qwen<br/>llama.cpp GGUF runtime"]
+  reports["Reports<br/>JSON, MD, SARIF, PDF"]
 
-Main flow:
+  user -->|"login, upload ZIP, set target"| browser
+  browser -->|"server-side API calls"| api
+  api -->|"auth, settings, scan records"| auth
+  api -->|"persist queued job"| queue
+  queue -->|"job payload"| worker
+  worker -->|"repository and URL evidence"| scanners
+  worker -->|"opt-in dynamic checks"| sandbox
+  worker -->|"raw scanner output"| objectStore
+  worker -->|"normalized findings, coverage, drift"| auth
+  worker -->|"focused evidence only"| ai
+  ai -->|"reasoned review, never source of truth"| worker
+  auth -->|"findings and scan state"| api
+  objectStore -->|"artifact links"| api
+  api -->|"exports"| reports
+  reports --> browser
+  api -->|"dashboard data"| browser
 
-```text
-Login
-  -> create project
-  -> upload ZIP and/or authorize URL
-  -> persist queued scan
-  -> enqueue Redis job
-  -> worker executes stack, graph, rules, scanners, sandbox, URL checks
-  -> normalize and deduplicate findings
-  -> focused RAG and optional Qwen review
-  -> coverage, score, verdict, reports, baseline, drift
-  -> dashboard and API exports
+  classDef hotpink fill:#101211,stroke:#f02a56,stroke-width:2px,color:#f5f7f5;
+  classDef store fill:#141716,stroke:#f02a56,stroke-width:1.5px,color:#f5f7f5;
+  class user,browser,api,worker,scanners,sandbox,ai,reports hotpink;
+  class auth,queue,objectStore store;
 ```
 
-See `docs/ARCHITECTURE.md` and `docs/PIPELINE.md`.
+---
+
+## Services
+
+| Service | Container | Purpose |
+| --- | --- | --- |
+| Web | `NOPE` / `nope-web` | Landing page, login, dashboard |
+| API | `nope-api` | Auth, orchestration, settings, reports, scan APIs |
+| Worker | `nope-worker` | Redis consumer and scanner execution pipeline |
+| Database | `nope-postgres` | Users, sessions, scans, findings, reports, settings |
+| Queue | `nope-redis` | Scan queue, cancellation flags, worker heartbeat |
+| Object storage | `nope-minio` | Raw scanner artifacts and binary report artifacts |
+| AI runtime | `nope-ai` | Optional llama.cpp server for local Qwen |
+
+---
 
 ## Requirements
 
@@ -61,49 +109,68 @@ See `docs/ARCHITECTURE.md` and `docs/PIPELINE.md`.
 - pnpm 10+ for local web development.
 - Python 3.11+ for local API tests.
 - Optional NVIDIA container support for GPU Qwen.
-- Optional local GGUF model file at `D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf`.
+- Optional GGUF model file, verified locally at:
 
-Do not commit the GGUF model, `.env`, scanner artifacts, or local benchmark output.
+```text
+D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf
+```
 
-## Endpoints
+Do not commit the GGUF model, `.env`, scanner artifacts, local workspaces, MinIO data, or benchmark output.
 
-- Web UI: `http://localhost:3000`
-- Login: `http://localhost:3000/login`
-- Dashboard: `http://localhost:3000/app/projects/local`
-- API: `http://localhost:8000`
-- API docs: `http://localhost:8000/docs`
-- MinIO UI: `http://localhost:9001`
-- llama.cpp debug endpoint: `http://localhost:8081` when an AI profile is enabled
+---
 
-Except for `GET /health` and `POST /api/auth/login`, API routes require `Authorization: Bearer <token>`. The dashboard forwards the local HttpOnly session cookie server-side.
+## Local URLs
+
+| Surface | URL |
+| --- | --- |
+| Web UI | `http://localhost:3000` |
+| Login | `http://localhost:3000/login` |
+| Dashboard | `http://localhost:3000/app/projects/local` |
+| API | `http://localhost:8000` |
+| API docs | `http://localhost:8000/docs` |
+| MinIO console | `http://localhost:9001` |
+| llama.cpp health/debug | `http://localhost:8081` |
+
+Default MinIO development credentials:
+
+```text
+username: nope
+password: nope-development-password
+```
+
+Except for `GET /health` and `POST /api/auth/login`, API routes require `Authorization: Bearer <token>`. The web dashboard forwards the HttpOnly local session cookie server-side.
+
+---
 
 ## Docker Startup
 
-Core mode without AI:
+### Core stack, no AI
 
 ```powershell
 docker compose up --build -d
 ```
 
-GPU Qwen mode:
+### Full GPU stack with local Qwen
 
 ```powershell
-$env:NOPE_MODEL_HOST_DIR='D:/Desktop/Model'
+$env:NOPE_MODEL_HOST_DIR='D:\Desktop\Model'
 $env:NOPE_MODEL_FILE='Qwen3-8B-Q4_K_M.gguf'
 $env:NOPE_QWEN_GPU_LAYERS='28'
 $env:NOPE_QWEN_GPU_MEMORY_TARGET_MB='5000'
-docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml up --build -d
+
+docker compose -f docker-compose.yml -f docker-compose.ai-gpu.yml --profile ai-gpu up --build -d
 ```
 
-CPU fallback:
+### CPU fallback
 
 ```powershell
-$env:NOPE_MODEL_HOST_DIR='D:/Desktop/Model'
+$env:NOPE_MODEL_HOST_DIR='D:\Desktop\Model'
 $env:NOPE_MODEL_FILE='Qwen3-8B-Q4_K_M.gguf'
-docker compose --profile ai-cpu -f docker-compose.yml -f docker-compose.ai-cpu.yml up --build -d
+
+docker compose -f docker-compose.yml -f docker-compose.ai-cpu.yml --profile ai-cpu up --build -d
 ```
 
-Shutdown:
+### Shutdown
 
 ```powershell
 docker compose down
@@ -111,25 +178,25 @@ docker compose down
 
 Use `docker compose down -v` only when you intentionally want to remove local Postgres, Redis, MinIO, and workspace volumes.
 
-## Model Path
+---
 
-Verified local model:
+## Verified AI Settings
 
-```text
-D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf
-```
+| Setting | Value |
+| --- | --- |
+| Runtime | llama.cpp |
+| Host model path | `D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf` |
+| Container model path | `/models/Qwen3-8B-Q4_K_M.gguf` |
+| GPU layers | `28` |
+| GPU memory target | `5000 MB` |
 
-Container path:
+The verified local GPU setting is 28 layers under the 5 GB VRAM target. Thirty layers previously failed to fit, so 28 is the cap-safe setting for this development machine.
 
-```text
-/models/Qwen3-8B-Q4_K_M.gguf
-```
+---
 
-The verified GPU setting is 28 layers with a 5000 MiB target. On the local GTX 1060 Max-Q, the CUDA container measured 4485 MiB used out of 6144 MiB during Phase 15/16 verification. Thirty layers previously failed to fit, so 28 is the stable cap-safe setting.
+## Scanner Runtime
 
-## Scanner Setup
-
-The Docker API image bundles:
+The Docker API image bundles the verified scanner toolchain:
 
 - Semgrep
 - Gitleaks
@@ -139,24 +206,11 @@ The Docker API image bundles:
 - Hadolint
 - Bandit
 
-OWASP ZAP baseline runs only through the sandbox dynamic path when a repository declares a safe internal target. Static repository scans mark ZAP not applicable instead of fabricating results.
+OWASP ZAP baseline runs only through the sandbox dynamic path when a repository declares a safe internal target. Static repository scans mark ZAP as not applicable instead of fabricating results.
 
-Local host scanner CLIs are optional for development. Docker is the verified scanner runtime.
+---
 
-## Migrations
-
-The API applies SQL migrations at startup through `nope_api.db.run_migrations()`. Alembic wrappers are also available for explicit checks:
-
-```powershell
-alembic -c apps/api/alembic.ini upgrade head
-alembic -c apps/api/alembic.ini current
-```
-
-Use downgrade checks only against disposable data.
-
-See `docs/DATABASE.md`.
-
-## Tests
+## Development Checks
 
 Backend:
 
@@ -183,32 +237,19 @@ docker compose build nope-api nope-worker nope-web
 docker compose run --rm --no-deps nope-api gitleaks detect --no-git --redact --source /app/apps/api/nope_api
 ```
 
-## Benchmarks
-
-Scanner-only:
-
-```powershell
-$env:PYTHONPATH='apps/api'
-python -m nope_api.benchmarks --mode scanner-only --output .nope-benchmark-results/scanner-only.json
-```
-
-Scanner plus Qwen:
-
-```powershell
-$env:PYTHONPATH='apps/api'
-python -m nope_api.benchmarks --mode scanner-plus-qwen --output .nope-benchmark-results/scanner-plus-qwen.json
-```
-
-See `docs/BENCHMARKS.md`.
+---
 
 ## API Highlights
 
 - `GET /health`
 - `POST /api/auth/login`
 - `GET /api/auth/me`
+- `GET /api/projects`
+- `GET /api/scans`
 - `POST /api/scans/url`
 - `POST /api/scans/repository`
 - `POST /api/scans/full`
+- `DELETE /api/scans/{scan_id}`
 - `POST /api/scans/{scan_id}/cancel`
 - `POST /api/scans/{scan_id}/retry`
 - `GET /api/scans/{scan_id}/events`
@@ -223,40 +264,56 @@ See `docs/BENCHMARKS.md`.
 - `GET /api/settings/system`
 - `GET /api/github/status`
 
-See `docs/API_REFERENCE.md`.
+See [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md).
+
+---
+
+## Security Model
+
+NOPE treats every uploaded repository and scanned target as potentially hostile.
+
+- Scan only repositories and URLs you own or are explicitly authorized to test.
+- ZIP uploads pass archive safety checks before extraction.
+- Private-network URL targets are blocked by default.
+- Qwen receives focused evidence only, not whole repositories.
+- Qwen cannot override deterministic scanner evidence.
+- Sandbox workflows are opt-in through `.nope/sandbox.json`.
+- Sandbox containers do not receive NOPE service secrets, host home directories, or the Docker socket.
+- GitHub private access remains blocked until real credentials are supplied and verified.
+
+See [`docs/SECURITY_MODEL.md`](docs/SECURITY_MODEL.md).
+
+---
 
 ## Limitations
 
-- Private GitHub repository access is blocked until real GitHub App/OAuth credentials are supplied and verified. NOPE does not fake repositories.
+- Local Docker is the verified deployment target.
 - URL-only scans are non-destructive and do not prove runtime security.
-- Sandbox dynamic testing requires an explicit `.nope/sandbox.json` manifest.
-- Qwen is optional and cannot override deterministic scanner evidence.
-- Benchmarks include known false negatives so scanner gaps stay visible.
-- This repository is configured for local Docker, not production cloud deployment.
+- Scanner coverage gaps remain visible as untested or failed areas.
+- Qwen is optional and may fail without blocking deterministic scans.
+- Formal compliance certification is out of scope.
+- Private GitHub repository access is intentionally blocked until credentials are configured.
 
-## Authorized-Use Notice
+---
 
-Only scan repositories and URLs that you own or are explicitly authorized to test. NOPE enforces local scope checks, but authorization remains the operator's responsibility.
+## Documentation
 
-## Documentation Map
+| Document | Purpose |
+| --- | --- |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System structure and service boundaries |
+| [`docs/PIPELINE.md`](docs/PIPELINE.md) | Scan lifecycle from input to reports |
+| [`docs/SECURITY_MODEL.md`](docs/SECURITY_MODEL.md) | Threat model and local safety boundaries |
+| [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md) | API routes and contracts |
+| [`docs/LOCAL_AI.md`](docs/LOCAL_AI.md) | Qwen and llama.cpp setup |
+| [`docs/SCANNERS.md`](docs/SCANNERS.md) | Scanner behavior and evidence handling |
+| [`docs/SANDBOX.md`](docs/SANDBOX.md) | Opt-in dynamic workflow execution |
+| [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Common local Docker and runtime issues |
+| [`docs/FEATURE_STATUS.md`](docs/FEATURE_STATUS.md) | Current implementation state |
 
-- `docs/ARCHITECTURE.md`
-- `docs/SECURITY_MODEL.md`
-- `docs/DEVELOPMENT.md`
-- `docs/DEPLOYMENT.md`
-- `docs/API_REFERENCE.md`
-- `docs/LOCAL_AI.md`
-- `docs/DATABASE.md`
-- `docs/PIPELINE.md`
-- `docs/SCANNERS.md`
-- `docs/SANDBOX.md`
-- `docs/BENCHMARKS.md`
-- `docs/DESIGN_SYSTEM.md`
-- `docs/TROUBLESHOOTING.md`
-- `docs/FEATURE_STATUS.md`
-- `docs/PHASE_RECONCILIATION.md`
-- `docs/IMPLEMENTATION_WORKLOG.md`
+---
 
-## README Maintenance
+## Maintenance
 
-Keep this README current whenever ports, services, run commands, scanner support, AI settings, verification results, or limitations change. Do not mark a capability complete unless it is implemented and verified.
+Keep this README current whenever ports, services, run commands, scanner support, AI settings, verification results, or limitations change.
+
+Do not mark a capability complete unless it is implemented, verified, and accurately represented in the documentation.
