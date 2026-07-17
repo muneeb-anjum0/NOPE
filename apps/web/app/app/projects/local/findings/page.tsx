@@ -136,7 +136,10 @@ function FindingDetailPanel({ detail, tab, params }: { detail: FindingDetail | n
       <summary className="finding-detail-summary">
         <div>
           <p className="detail-eyebrow">Finding detail</p>
-          <h2>{finding.title}</h2>
+          <div className="detail-title-row">
+            <h2>{finding.title}</h2>
+            <span className="detail-sign" aria-hidden="true" />
+          </div>
         </div>
         <div className="detail-summary-actions">
           <span className={severityClass(finding.severity)}>{finding.severity}</span>

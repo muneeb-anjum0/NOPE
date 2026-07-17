@@ -2665,15 +2665,48 @@ textarea:focus-visible {
 }
 
 .finding-detail-summary::after {
-  font-size: 24px;
-  width: 22px;
-  text-align: center;
+  display: none;
 }
 
-.finding-detail-summary h2 {
-  margin: 3px 0 0;
+.detail-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 3px;
+  max-width: 100%;
+}
+
+.detail-title-row h2 {
+  margin: 0;
   font-size: clamp(18px, 2vw, 25px);
   line-height: 1.12;
+}
+
+.detail-sign {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  color: var(--brand-primary);
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+  transform-origin: center;
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.detail-sign::before {
+  content: "+";
+}
+
+.finding-detail-panel[open] .detail-sign {
+  transform: rotate(180deg);
+}
+
+.finding-detail-panel[open] .detail-sign::before {
+  content: "-";
 }
 
 .detail-eyebrow {
