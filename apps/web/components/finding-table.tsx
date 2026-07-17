@@ -13,12 +13,11 @@ function lineFor(finding: Finding) {
   return finding.start_line ?? finding.evidence?.find((item) => item.line)?.line ?? null;
 }
 
-function locationFor(finding: Finding) {
-  const location = finding.affected_file ?? finding.affected_route ?? "n/a";
+function lineRangeFor(finding: Finding) {
   const line = lineFor(finding);
-  if (!line) return location;
-  if (finding.end_line && finding.end_line !== line) return `${location}:${line}-${finding.end_line}`;
-  return `${location}:${line}`;
+  if (!line) return null;
+  if (finding.end_line && finding.end_line !== line) return `lines ${line}-${finding.end_line}`;
+  return `line ${line}`;
 }
 
 export function FindingTable({
@@ -37,13 +36,13 @@ export function FindingTable({
   const search = useMemo(() => new URLSearchParams(searchQuery), [searchQuery]);
   const requestedVisible = Number(search.get("shown") ?? BATCH_SIZE);
   const initialVisibleCount = Number.isFinite(requestedVisible) ? Math.max(BATCH_SIZE, requestedVisible) : BATCH_SIZE;
-  const [visibleCount, setVisibleCount] = useState(initialVisibleCount);
+  const [shownCount, setShownCount] = useState(initialVisibleCount);
   const [newBatchStart, setNewBatchStart] = useState<number | null>(null);
 
   useEffect(() => {
-    setVisibleCount(initialVisibleCount);
+    setShownCount(initialVisibleCount);
     setNewBatchStart(null);
-  }, [initialVisibleCount, searchQuery]);
+  }, [initialVisibleCount, findings]);
 
   const hrefFor = (finding: Finding) => {
     const params = new URLSearchParams(search.toString());
@@ -52,8 +51,8 @@ export function FindingTable({
     params.delete("detail");
     return `/app/projects/local/findings?${params.toString()}`;
   };
-  const clampedVisibleCount = Math.min(visibleCount, findings.length);
-  const visibleFindings = useMemo(() => findings.slice(0, clampedVisibleCount), [findings, clampedVisibleCount]);
+  const clampedShownCount = Math.min(shownCount, findings.length);
+  const visibleFindings = useMemo(() => findings.slice(0, clampedShownCount), [findings, clampedShownCount]);
   const resultTotal = total ?? findings.length;
   const canLoadMore = visibleFindings.length < findings.length;
 
@@ -63,14 +62,9 @@ export function FindingTable({
   }
 
   function loadMore() {
-    const nextCount = Math.min(visibleCount + BATCH_SIZE, findings.length);
-    const params = new URLSearchParams(search.toString());
-    if (scanId) params.set("scan", scanId);
-    if (selectedId) params.set("finding", selectedId);
-    params.set("shown", String(nextCount));
-    setNewBatchStart(visibleFindings.length);
-    setVisibleCount(nextCount);
-    window.history.replaceState(null, "", `/app/projects/local/findings?${params.toString()}`);
+    const currentCount = Math.min(shownCount, findings.length);
+    setNewBatchStart(currentCount);
+    setShownCount(Math.min(currentCount + BATCH_SIZE, findings.length));
   }
 
   return (
@@ -122,9 +116,9 @@ export function FindingTable({
                 <td className="finding-title-cell">
                   <strong>{finding.title}</strong>
                   <br />
-                  <span className="muted">{finding.category} / {finding.confidence}{lineFor(finding) ? ` / line ${lineFor(finding)}` : ""}</span>
+                  <span className="muted">{finding.category} / {finding.confidence}{lineRangeFor(finding) ? ` / ${lineRangeFor(finding)}` : ""}</span>
                 </td>
-                <td className="mono location-cell">{locationFor(finding)}</td>
+                <td className="mono location-cell">{finding.affected_file ?? finding.affected_route ?? "n/a"}</td>
                 <td>{finding.scanner_sources.join(" + ") || finding.raw_artifact_id || "Evidence"}</td>
                 <td>{finding.status}</td>
               </tr>
