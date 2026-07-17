@@ -5,6 +5,7 @@ from typing import Awaitable, Callable
 from nope_api.ai import run_ai_review
 from nope_api.attack_surface import build_attack_surface, build_code_graph
 from nope_api.config import Settings
+from nope_api.finding_validation import validate_findings, validation_counts
 from nope_api.models import CoverageRecord, CoverageStatus, Scan, ScanMode, ScannerRun, now_utc
 from nope_api.rules_engine import dedupe_findings, run_rules
 from nope_api.sandbox import run_sandbox_assessment
@@ -88,6 +89,31 @@ async def _execute_scanner_plugin(plugin, root: Path, settings: Settings, semaph
         return await asyncio.to_thread(plugin.execute, root, settings)
 
 
+def _promote_validated_findings(scan: Scan, findings: list, root: Path | None) -> list:
+    candidates = dedupe_findings(findings)
+    promoted, decisions = validate_findings(candidates, root)
+    counts = validation_counts(decisions)
+    scan.stages.append(
+        {
+            "name": "Validating candidate findings",
+            "status": "completed",
+            "message": (
+                f"{counts['promoted']} promoted, "
+                f"{counts['needs_context']} need more context, "
+                f"{counts['rejected']} rejected before Findings."
+            ),
+            "data": {
+                "candidate_count": len(candidates),
+                "promoted": counts["promoted"],
+                "needs_context": counts["needs_context"],
+                "rejected": counts["rejected"],
+                "candidates": decisions[:50],
+            },
+        }
+    )
+    return promoted
+
+
 async def run_repository_scan(
     scan: Scan,
     root: Path,
@@ -159,7 +185,7 @@ async def run_repository_scan(
         scan.status = "partial"
     await _checkpoint(scan, progress_callback, cancellation_checker)
 
-    scan.findings = dedupe_findings(findings)
+    scan.findings = _promote_validated_findings(scan, findings, root)
     scan.coverage = merge_coverage(default_coverage(), sandbox_coverage, scan.scanner_runs)
     await _checkpoint(scan, progress_callback, cancellation_checker)
     scan.ai_review = await run_ai_review(settings, scan.findings, root=root, scan=scan)
@@ -191,15 +217,15 @@ async def run_url_only_scan(
     scan.stages.append({"name": "Running non-destructive URL checks", "status": "running"})
     await _checkpoint(scan, progress_callback, cancellation_checker)
     findings, runs, coverage_updates = await scan_url(scan.target_url or "")
-    scan.findings = findings
+    scan.stages[-1]["status"] = "completed" if runs and runs[0].status == "passed" else "failed"
+    scan.findings = _promote_validated_findings(scan, findings, None)
     scan.scanner_runs = runs
     scan.coverage = merge_coverage(default_coverage(), coverage_updates, runs)
     scan.ai_review = await run_ai_review(settings, scan.findings, scan=scan)
     scan.coverage_percent = coverage_percent(scan.coverage)
     scan.score = calculate_score(scan.findings, scan.coverage)
     scan.verdict = verdict(scan.score, scan.coverage_percent, scan.findings)
-    scan.stages[-1]["status"] = "completed" if runs and runs[0].status == "passed" else "failed"
-    scan.status = "completed" if scan.stages[-1]["status"] == "completed" else "partial"
+    scan.status = "completed" if runs and runs[0].status == "passed" else "partial"
     scan.completed_at = now_utc()
     await _checkpoint(scan, progress_callback, cancellation_checker)
     return scan
@@ -217,11 +243,16 @@ async def run_full_scan(
         scan.stages.append({"name": "Running URL checks", "status": "running"})
         await _checkpoint(scan, progress_callback, cancellation_checker)
         url_findings, url_runs, coverage_updates = await scan_url(scan.target_url)
-        scan.findings = dedupe_findings(scan.findings + url_findings)
+        scan.stages[-1]["status"] = (
+            "completed" if url_runs and url_runs[0].status == "passed" else "partial"
+        )
+        scan.stages[-1]["message"] = (
+            url_runs[0].message if url_runs else "URL checks did not produce a scanner run."
+        )
+        promoted_url_findings = _promote_validated_findings(scan, url_findings, None)
+        scan.findings = dedupe_findings(scan.findings + promoted_url_findings)
         scan.scanner_runs.extend(url_runs)
         scan.coverage = merge_coverage(scan.coverage, coverage_updates, url_runs)
-        scan.stages[-1]["status"] = "completed" if url_runs and url_runs[0].status == "passed" else "partial"
-        scan.stages[-1]["message"] = url_runs[0].message if url_runs else "URL checks did not produce a scanner run."
         await _checkpoint(scan, progress_callback, cancellation_checker)
     scan.coverage_percent = coverage_percent(scan.coverage)
     scan.score = calculate_score(scan.findings, scan.coverage)

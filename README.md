@@ -29,23 +29,54 @@ It:
 - builds attack surface and code graph evidence
 - runs NOPE rules and bundled scanners
 - optionally runs sandbox workflows
-- normalizes and deduplicates findings
+- normalizes and deduplicates raw candidate findings
+- expands source context around each candidate
+- promotes only evidence-backed findings into the Findings view
+- keeps weak, generated, contradicted, or under-context candidates out of scoring
 - calculates coverage, score, and verdict
 - persists scans, findings, stages, scanner runs, reports, baselines, and drift data
 
 In short: **the pipeline does the security scanning work.**
 
+### When does a scanner hit become a finding?
+
+A scanner hit starts as a **candidate**, not a dashboard finding.
+
+Before promotion, NOPE now runs an evidence gate that checks:
+
+- whether the affected file is source code, generated output, dependency output, or a build artifact
+- whether the matched snippet actually supports the rule category
+- nearby source context around the matched line
+- rule-specific signals, such as data access plus caller-controlled IDs for IDOR checks
+- contradiction signals, such as nearby owner, tenant, authenticated-user, policy, or RLS scope
+- structured scanner identity, such as package plus CVE for dependency findings
+
+Promoted findings are used for the Findings page, score, verdict, reports, baselines, drift, and Qwen review. Weak candidates remain recorded in the scan stage audit as `needs_context` or `rejected`, but they do not count as real findings.
+
+In short: **raw scanner output is evidence; Findings are promoted evidence.**
+
+### How does NOPE avoid inconclusive findings?
+
+NOPE rejects or withholds findings when the local evidence does not prove the claim well enough.
+
+For example, an authorization rule hit inside `.svelte-kit/output/server/chunks/server.js` is no longer promoted just because a generated bundle contains suspicious text. For an IDOR-style finding to be promoted, NOPE expects source-route or server-file context, a data-access sink, a caller-controlled identifier, and no nearby owner or tenant scope.
+
+Secrets and dependency CVEs are handled differently: generated bundles can still expose real secrets, and dependency findings are anchored by package/CVE identity.
+
+In short: **the pipeline is stricter where heuristics used to be noisy, without hiding high-signal evidence.**
+
 ### What does RAG do?
 
 RAG does **not** scan the app by itself.
 
-RAG retrieves focused context for Qwen after the pipeline has findings and evidence. It gathers:
+RAG retrieves focused context for Qwen after the pipeline has promoted findings and evidence. It gathers:
 
 - the selected finding
 - scanner evidence
 - source snippets near affected files
 - route and attack-surface context
 - code graph edges
+- evidence-gate promotion reasons
 - stack evidence
 - scanner run metadata
 - category-specific security guidance
@@ -70,6 +101,7 @@ Qwen cannot:
 
 - replace deterministic scanners
 - silently downgrade findings
+- promote weak candidates into findings
 - prove the app is secure
 - run the scan by itself
 - receive the whole repository as raw context
@@ -138,6 +170,8 @@ Bundled scanner adapters:
 
 Scanner failures are not hidden. They are recorded as failed or not-applicable coverage.
 
+Raw candidate findings that fail evidence validation are also not hidden. The scan stage audit records how many candidates were promoted, withheld for more context, or rejected before the dashboard Findings view was populated.
+
 ---
 
 ## Data Flow Diagram
@@ -178,11 +212,13 @@ flowchart LR
     worker["NOPE Worker<br/>pipeline runner"]
     scanners["Deterministic scanners<br/>Semgrep, Gitleaks, OSV,<br/>Trivy, Checkov, Hadolint, Bandit"]
     sandbox["Optional sandbox<br/>declared workflows and ZAP"]
+    gate["Evidence gate<br/>context expansion and promotion"]
   end
 
   subgraph intelligence["Reasoning and Storage"]
     direction TB
     ai["Local Qwen<br/>llama.cpp GGUF runtime"]
+    candidates["Candidate audit<br/>needs context or rejected"]
     minio[("MinIO<br/>raw artifacts<br/>and report blobs")]
     reports["Reports<br/>JSON, MD, SARIF, PDF"]
   end
@@ -194,12 +230,16 @@ flowchart LR
   queue -->|"job payload"| worker
   worker -->|"repository and URL evidence"| scanners
   worker -->|"opt-in dynamic checks"| sandbox
-  scanners -->|"normalized findings"| worker
+  scanners -->|"raw candidates"| worker
   sandbox -->|"bounded runtime evidence"| worker
-  worker -->|"findings, coverage, drift"| db
+  worker -->|"deduped candidates"| gate
+  gate -->|"promoted findings"| worker
+  gate -->|"needs_context / rejected audit"| candidates
+  worker -->|"promoted findings, coverage, drift"| db
   worker -->|"raw output and generated files"| minio
   worker -->|"focused evidence only"| ai
   ai -->|"review suggestions"| worker
+  candidates -->|"candidate audit trail"| db
   db -->|"dashboard data"| api
   minio -->|"artifact links"| api
   api -->|"export requests"| reports
@@ -210,7 +250,7 @@ flowchart LR
   classDef service fill:#101211,stroke:#f02a56,stroke-width:2px,color:#f5f7f5;
   classDef store fill:#141716,stroke:#f02a56,stroke-width:1.5px,color:#f5f7f5;
   class input,control,execution,intelligence lane;
-  class user,web,api,worker,scanners,sandbox,ai,reports service;
+  class user,web,api,worker,scanners,sandbox,gate,ai,candidates,reports service;
   class db,queue,minio store;
 ```
 
