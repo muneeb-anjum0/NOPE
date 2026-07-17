@@ -56,7 +56,7 @@ export function AIFindingActions({ finding }: { finding: Finding }) {
     <div className="ai-actions">
       <div className="button-row">
         {actionLabels.map(([action, label]) => (
-          <button className="button" key={action} type="button" onClick={() => runAction(action)} disabled={activeAction !== null}>
+          <button className="button ai-action-button" key={action} type="button" onClick={() => runAction(action)} disabled={activeAction !== null}>
             {activeAction === action ? "Running..." : label}
           </button>
         ))}

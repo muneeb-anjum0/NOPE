@@ -22,20 +22,34 @@ export function FindingTable({
   search?: URLSearchParams;
   total?: number;
 }) {
-  const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
+  const requestedVisible = Number(search?.get("shown") ?? BATCH_SIZE);
+  const initialVisible = Number.isFinite(requestedVisible) ? Math.max(BATCH_SIZE, requestedVisible) : BATCH_SIZE;
+  const [visibleCount, setVisibleCount] = useState(initialVisible);
   const hrefFor = (finding: Finding) => {
     const params = new URLSearchParams(search?.toString());
     if (scanId) params.set("scan", scanId);
     params.set("finding", finding.id);
+    params.delete("detail");
     return `/app/projects/local/findings?${params.toString()}`;
   };
-  const visibleFindings = useMemo(() => findings.slice(0, visibleCount), [findings, visibleCount]);
+  const clampedVisibleCount = Math.min(visibleCount, findings.length);
+  const visibleFindings = useMemo(() => findings.slice(0, clampedVisibleCount), [findings, clampedVisibleCount]);
   const resultTotal = total ?? findings.length;
   const canLoadMore = visibleFindings.length < findings.length;
 
   function openFinding(finding: Finding) {
     if (!scanId) return;
     window.location.assign(hrefFor(finding));
+  }
+
+  function loadMore() {
+    const nextCount = Math.min(visibleCount + BATCH_SIZE, findings.length);
+    setVisibleCount(nextCount);
+    const params = new URLSearchParams(search?.toString());
+    if (scanId) params.set("scan", scanId);
+    if (selectedId) params.set("finding", selectedId);
+    params.set("shown", String(nextCount));
+    window.history.replaceState(null, "", `/app/projects/local/findings?${params.toString()}`);
   }
 
   return (
@@ -94,7 +108,7 @@ export function FindingTable({
         <div className="finding-table-footer">
           <span className="mono muted">{visibleFindings.length} shown{resultTotal > findings.length ? ` / ${findings.length} loaded from ${resultTotal}` : ""}</span>
           {canLoadMore ? (
-            <button className="button-secondary" type="button" onClick={() => setVisibleCount((count) => Math.min(count + BATCH_SIZE, findings.length))}>
+            <button className="button-secondary" type="button" onClick={loadMore}>
               Load more
             </button>
           ) : null}

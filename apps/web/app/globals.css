@@ -2630,26 +2630,95 @@ textarea:focus-visible {
 }
 
 .tab-row a {
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.095);
+  border-radius: 999px;
   color: var(--text-muted);
-  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.022);
+  padding: 7px 12px;
   text-decoration: none;
   transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
 }
 
 .tab-row a:hover {
   color: var(--text-primary);
-  border-color: var(--border-strong);
+  border-color: rgba(240, 42, 86, 0.34);
+  background: rgba(255, 255, 255, 0.045);
 }
 
 .tab-row a.active-tab {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(240, 42, 86, 0.42);
+  background: rgba(240, 42, 86, 0.105);
 }
 
 .finding-detail-panel {
   min-width: 0;
+}
+
+.finding-detail-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.finding-detail-summary h2 {
+  margin: 3px 0 0;
+  font-size: clamp(18px, 2vw, 25px);
+  line-height: 1.12;
+}
+
+.detail-eyebrow {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.detail-summary-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.detail-toggle {
+  min-width: 88px;
+}
+
+.finding-detail-body {
+  margin-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 14px;
+}
+
+.detail-collapsed {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.034), rgba(255, 255, 255, 0.014));
+}
+
+.detail-tab-row {
+  margin-top: 0;
+}
+
+.ai-action-button {
+  min-height: 34px;
+  border-radius: 999px;
+  border-color: rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text-primary);
+}
+
+.ai-action-button:hover {
+  border-color: rgba(240, 42, 86, 0.38);
+  background: rgba(240, 42, 86, 0.09);
+}
+
+.ai-action-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+  transform: none;
 }
 
 .detail-stack {
