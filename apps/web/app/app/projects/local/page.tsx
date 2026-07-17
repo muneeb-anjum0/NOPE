@@ -31,6 +31,11 @@ export default async function ProjectOverview({
     ["Scanners", scannerRuns.length ? "completed" : "pending"],
     ["Qwen", scan.ai_review?.status ?? "pending"],
   ];
+  const scannerSummary = {
+    passed: scannerRuns.filter((run) => run.status === "passed").length,
+    failed: scannerRuns.filter((run) => run.status === "failed").length,
+    skipped: scannerRuns.filter((run) => run.status === "skipped").length,
+  };
   const totalFindings = (scan.findings ?? []).length;
   const hasRealScan = scan.id !== "fresh_workspace";
   const activeScanTitle = hasRealScan ? scan.repository_name || "Selected upload" : "No scan";
@@ -85,48 +90,45 @@ export default async function ProjectOverview({
       </section>
 
       <section className="dashboard-workspace overview-status-grid">
-        <aside className="dashboard-rail">
-          <div className="app-panel">
+        <aside className="dashboard-rail overview-evidence-rail">
+          <div className="app-panel evidence-ribbon">
             <div className="panel-title">
               <h2>Evidence status</h2>
               <span className="mono muted">{scan.status}</span>
             </div>
-            <div className="status-section">
-              <span className="mono muted">Pipeline</span>
-              {pipeline.map(([label, status], index) => (
-                <div className="pipeline-step" key={label}>
-                  <span>{String(index + 1).padStart(2, "0")}</span>
-                  <strong>{label}</strong>
-                  <span className="severity-pill severity-info">{status}</span>
-                </div>
-              ))}
-            </div>
-            <div className="status-section">
-              <span className="mono muted">Scanners ({scannerRuns.length})</span>
-              {scannerRuns.slice(0, 5).map((run) => (
-                <div className="status-item" key={`${run.scanner}-${run.status}`}>
-                  <span>{run.scanner}</span>
-                  <span className={`severity-pill severity-${run.status === "failed" ? "critical" : "info"}`}>{run.status}</span>
-                </div>
-              ))}
-              {scannerRuns.length === 0 ? <p className="muted">No scanner runs yet.</p> : null}
-            </div>
-            <div className="status-section">
-              <span className="mono muted">Qwen</span>
-              <div className="status-item">
-                <span>{scan.ai_review?.message ?? "Waiting for scan evidence."}</span>
-                <span className="severity-pill severity-info">{scan.ai_review?.status ?? "pending"}</span>
+            <div className="evidence-ribbon-grid">
+              <div className="evidence-ribbon-main" aria-label="Pipeline evidence stages">
+                {pipeline.map(([label, status], index) => (
+                  <div className={`evidence-chip ${status === "pending" ? "is-waiting" : "is-ready"}`} key={label}>
+                    <span className="mono">{String(index + 1).padStart(2, "0")}</span>
+                    <strong>{label}</strong>
+                    <em>{status}</em>
+                  </div>
+                ))}
               </div>
-            </div>
-            <div className="status-section">
-              <span className="mono muted">Untested / failed ({untested.length})</span>
-              {untested.slice(0, 5).map((record) => (
-                <div className="status-item" key={record.domain}>
-                  <span>{record.domain}</span>
-                  <span className={`severity-pill severity-${record.status === "Failed" ? "critical" : "medium"}`}>{record.status}</span>
+              <div className="evidence-ribbon-side">
+                <div className="evidence-metric">
+                  <span className="mono muted">Scanners</span>
+                  <strong>{scannerRuns.length}</strong>
+                  <p>{scannerSummary.passed} passed / {scannerSummary.failed} failed / {scannerSummary.skipped} skipped</p>
                 </div>
-              ))}
-              {untested.length === 0 ? <p className="muted">Every configured coverage domain has been exercised or marked not applicable.</p> : null}
+                <div className="evidence-metric">
+                  <span className="mono muted">Qwen</span>
+                  <strong>{scan.ai_review?.status ?? "pending"}</strong>
+                  <p>{scan.ai_review?.provider && scan.ai_review.provider !== "none" ? scan.ai_review.provider : "focused review"}</p>
+                </div>
+                <div className="evidence-metric evidence-metric-wide">
+                  <span className="mono muted">Untested / failed</span>
+                  <strong>{untested.length}</strong>
+                  <div className="evidence-mini-tags">
+                    {untested.slice(0, 4).map((record) => (
+                      <span className={record.status === "Failed" ? "is-failed" : ""} key={record.domain}>{record.domain}</span>
+                    ))}
+                    {untested.length > 4 ? <span>+{untested.length - 4} more</span> : null}
+                    {untested.length === 0 ? <span>All covered</span> : null}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </aside>
