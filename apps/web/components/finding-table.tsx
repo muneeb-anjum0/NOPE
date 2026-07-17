@@ -13,20 +13,21 @@ export function FindingTable({
   findings,
   scanId,
   selectedId,
-  search,
+  searchQuery,
   total,
 }: {
   findings: Finding[];
   scanId?: string;
   selectedId?: string;
-  search?: URLSearchParams;
+  searchQuery?: string;
   total?: number;
 }) {
-  const requestedVisible = Number(search?.get("shown") ?? BATCH_SIZE);
+  const search = useMemo(() => new URLSearchParams(searchQuery), [searchQuery]);
+  const requestedVisible = Number(search.get("shown") ?? BATCH_SIZE);
   const initialVisible = Number.isFinite(requestedVisible) ? Math.max(BATCH_SIZE, requestedVisible) : BATCH_SIZE;
   const [visibleCount, setVisibleCount] = useState(initialVisible);
   const hrefFor = (finding: Finding) => {
-    const params = new URLSearchParams(search?.toString());
+    const params = new URLSearchParams(search.toString());
     if (scanId) params.set("scan", scanId);
     params.set("finding", finding.id);
     params.delete("detail");
@@ -45,7 +46,7 @@ export function FindingTable({
   function loadMore() {
     const nextCount = Math.min(visibleCount + BATCH_SIZE, findings.length);
     setVisibleCount(nextCount);
-    const params = new URLSearchParams(search?.toString());
+    const params = new URLSearchParams(search.toString());
     if (scanId) params.set("scan", scanId);
     if (selectedId) params.set("finding", selectedId);
     params.set("shown", String(nextCount));

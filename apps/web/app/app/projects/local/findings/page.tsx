@@ -113,7 +113,7 @@ export default async function FindingsPage({ searchParams }: PageProps) {
 
       <div className="findings-stack">
         <FindingDetailPanel detail={detail} tab={tab} params={params} />
-        <FindingTable findings={results.items} scanId={scan.id} selectedId={selectedId} search={params} total={results.total} />
+        <FindingTable findings={results.items} scanId={scan.id} selectedId={selectedId} searchQuery={params.toString()} total={results.total} />
       </div>
     </>
   );
