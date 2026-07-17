@@ -1621,6 +1621,10 @@ textarea:focus-visible {
   align-items: start;
 }
 
+.overview-status-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .dashboard-primary,
 .dashboard-rail {
   display: grid;
@@ -1630,6 +1634,10 @@ textarea:focus-visible {
 .dashboard-rail {
   position: sticky;
   top: 18px;
+}
+
+.overview-status-grid .dashboard-rail {
+  position: static;
 }
 
 .scan-panel .app-grid {
@@ -1996,15 +2004,80 @@ textarea:focus-visible {
   overflow: hidden;
 }
 
+.attack-canvas-empty {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  text-align: center;
+}
+
+.attack-canvas-empty > div {
+  max-width: 560px;
+  display: grid;
+  gap: 10px;
+}
+
+.attack-canvas-empty strong {
+  font-size: 22px;
+}
+
+.attack-canvas-empty p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.attack-edges {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.attack-edges path {
+  fill: none;
+  stroke: var(--brand-primary);
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.84;
+  filter: drop-shadow(0 0 8px rgba(240, 42, 86, 0.24));
+}
+
+.attack-edges text {
+  fill: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  paint-order: stroke;
+  stroke: var(--background-surface-1);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
 .attack-node {
   position: absolute;
+  z-index: 2;
   min-width: 178px;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  background: var(--background-elevated);
+  background: rgba(30, 34, 32, 0.88);
+  backdrop-filter: blur(10px);
   padding: 10px;
   box-shadow: var(--shadow-elevated);
   overflow-wrap: anywhere;
+}
+
+.attack-node strong {
+  display: block;
+  margin-top: 8px;
+  line-height: 1.25;
+}
+
+.attack-node p {
+  margin: 10px 0 0;
+  color: var(--high);
 }
 
 .attack-showcase {

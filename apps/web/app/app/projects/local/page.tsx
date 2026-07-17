@@ -1,4 +1,3 @@
-import { AttackMapPanel } from "@/components/attack-map";
 import { PinkDotText } from "@/components/pink-dot-text";
 import { getActiveProjectId, scansForProject } from "@/lib/active-project";
 import { freshScan, getProjects, getScanComparison, getScans, selectScan } from "@/lib/nope-data";
@@ -85,16 +84,7 @@ export default async function ProjectOverview({
         </div>
       </section>
 
-      <section className="dashboard-workspace">
-        <div className="dashboard-primary">
-          <div className="app-panel">
-            <div className="panel-title">
-              <h2>Attack path preview</h2>
-              <span className="mono muted">route / file / data</span>
-            </div>
-            <AttackMapPanel scan={scan} />
-          </div>
-        </div>
+      <section className="dashboard-workspace overview-status-grid">
         <aside className="dashboard-rail">
           <div className="app-panel">
             <div className="panel-title">

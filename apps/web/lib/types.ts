@@ -128,7 +128,10 @@ export type Scan = {
   coverage: CoverageRecord[];
   stack?: Array<{ technology: string; category: string; confidence?: string; evidence?: string[] }>;
   scanner_runs: Array<{ scanner: string; status: string; message: string; findings_count: number; coverage_categories: string[] }>;
-  code_graph: { nodes: Array<{ id: string; label: string; kind: string; file?: string | null; risk?: Severity | null }> };
+  code_graph: {
+    nodes: Array<{ id: string; label: string; kind: string; file?: string | null; risk?: Severity | null }>;
+    edges?: Array<{ source: string; target: string; relationship: string }>;
+  };
   ai_review: { status: string; provider: string; model?: string | null; message: string };
 };
 

@@ -145,7 +145,7 @@ export function freshScan(): Scan {
       { domain: "Dynamic testing", status: "Not tested", scanners: [], notes: "No authorized runtime target has been tested yet." },
     ],
     scanner_runs: [],
-    code_graph: { nodes: [] },
+    code_graph: { nodes: [], edges: [] },
     ai_review: { status: "Not tested", provider: "none", message: "Run a scan to generate focused evidence for Qwen review." },
   };
 }
@@ -213,6 +213,10 @@ export function demoScan(): Scan {
         { id: "route", label: "ANY /api/invoices/:id", kind: "entry point" },
         { id: "file", label: "route.ts", kind: "file" },
         { id: "db", label: "prisma.invoice.findUnique", kind: "database", risk: "high" },
+      ],
+      edges: [
+        { source: "route", target: "file", relationship: "handled by" },
+        { source: "file", target: "db", relationship: "retrieves data from" },
       ],
     },
     ai_review: { status: "Not tested", provider: "none", message: "AI provider is disabled." },
