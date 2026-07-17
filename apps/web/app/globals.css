@@ -1852,6 +1852,10 @@ textarea:focus-visible {
   color: var(--brand-primary);
 }
 
+.findings-stack .brand-hot {
+  color: inherit;
+}
+
 .location-cell {
   line-height: 1.35;
 }
@@ -2884,6 +2888,10 @@ textarea:focus-visible {
 .ai-generated-label {
   color: var(--brand-primary);
   font-weight: 760;
+}
+
+.findings-stack .ai-generated-label {
+  color: var(--brand-primary);
 }
 
 .answer-reveal-text {

@@ -125,7 +125,7 @@ export default async function FindingsPage({ searchParams }: PageProps) {
         </details>
       </form>
 
-      <div className="findings-stack">
+      <div className="findings-stack" data-brand-skip>
         <FindingDetailPanel detail={detail} tab={tab} params={params} />
         <FindingTable findings={results.items} scanId={scan.id} selectedId={selectedId} searchQuery={params.toString()} total={results.total} />
       </div>
