@@ -124,6 +124,8 @@ export type Scan = {
   repository_scaffold_similarity?: number | null;
   branch?: string | null;
   commit_sha?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
   findings: Finding[];
   coverage: CoverageRecord[];
   stack?: Array<{ technology: string; category: string; confidence?: string; evidence?: string[] }>;

@@ -1,4 +1,5 @@
 import { AIFindingActions } from "@/components/ai-finding-actions";
+import { FindingDetailFocus } from "@/components/finding-detail-focus";
 import { FilterSelect } from "@/components/filter-select";
 import { FindingTable } from "@/components/finding-table";
 import { PinkDotText } from "@/components/pink-dot-text";
@@ -126,6 +127,7 @@ export default async function FindingsPage({ searchParams }: PageProps) {
       </form>
 
       <div className="findings-stack" data-brand-skip>
+        <FindingDetailFocus />
         <FindingDetailPanel detail={detail} tab={tab} params={params} />
         <FindingTable findings={results.items} scanId={scan.id} selectedId={selectedId} searchQuery={params.toString()} total={results.total} />
       </div>

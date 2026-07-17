@@ -14,7 +14,7 @@ export default async function LoginPage({
     <main className="login-shell">
       <section className="login-panel">
         <Link className="wordmark login-wordmark" href="/">
-          NOPE.
+          NOPE<span className="wordmark-dot">.</span>
         </Link>
         <p className="section-kicker">Local workspace login</p>
         <h1>Open your own fresh dashboard.</h1>

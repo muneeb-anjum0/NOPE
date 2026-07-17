@@ -8,7 +8,7 @@ export function AppShell({
   activeProjectId,
 }: Readonly<{ children: React.ReactNode; userEmail: string; projects: Project[]; activeProjectId?: string | null }>) {
   return (
-    <div className="app-layout">
+    <div className="app-layout" data-brand-skip>
       <LineSidebar projects={projects} activeProjectId={activeProjectId} />
       <main className="app-main">
         <div className="sr-only">Signed in as {userEmail}</div>

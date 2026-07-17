@@ -1,286 +1,25 @@
+import type { CSSProperties } from "react";
 import type { Scan } from "@/lib/types";
 
 type GraphNode = Scan["code_graph"]["nodes"][number];
 type GraphEdge = NonNullable<Scan["code_graph"]["edges"]>[number];
-type PositionedNode = GraphNode & {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+
+type FlowRow = {
+  id: string;
+  entries: GraphNode[];
+  file?: GraphNode;
+  outcomes: Array<{ node: GraphNode; relationship: string }>;
 };
 
-type Layout = {
-  nodes: PositionedNode[];
-  width: number;
-  height: number;
+const OUTCOME_ORDER: Record<string, number> = {
+  authorization: 0,
+  database: 1,
+  login: 2,
 };
-
-type Anchor = {
-  x: number;
-  y: number;
-  side: "left" | "right" | "top" | "bottom";
-};
-
-type EdgeLabel = {
-  x: number;
-  y: number;
-  textAnchor: "start" | "middle" | "end";
-};
-
-const NODE_WIDTH = 260;
-const NODE_HEIGHT = 118;
-const CANVAS_PADDING = 56;
-const COLUMN_GAP = 78;
-const ROW_GAP = 42;
-const ROW_HEIGHT = NODE_HEIGHT + ROW_GAP;
-const COLUMN_X: Record<string, number> = {
-  "entry point": CANVAS_PADDING,
-  file: CANVAS_PADDING + NODE_WIDTH + COLUMN_GAP,
-  login: CANVAS_PADDING + NODE_WIDTH + COLUMN_GAP,
-  authorization: CANVAS_PADDING + (NODE_WIDTH + COLUMN_GAP) * 2,
-  database: CANVAS_PADDING + (NODE_WIDTH + COLUMN_GAP) * 2,
-};
-
-function nodeColumn(node: GraphNode, index: number) {
-  return COLUMN_X[node.kind] ?? CANVAS_PADDING + (index % 3) * (NODE_WIDTH + COLUMN_GAP);
-}
-
-function positionNodes(nodes: GraphNode[], edges: GraphEdge[]): Layout {
-  const nodeById = new Map(nodes.map((node) => [node.id, node]));
-  const positioned = new Map<string, PositionedNode>();
-  const usedRows = new Map<string, number>();
-
-  function place(node: GraphNode, x: number, y: number) {
-    if (positioned.has(node.id)) return positioned.get(node.id);
-    const placed = { ...node, x, y, width: NODE_WIDTH, height: NODE_HEIGHT };
-    positioned.set(node.id, placed);
-    return placed;
-  }
-
-  function rowY(row: number) {
-    return CANVAS_PADDING + row * ROW_HEIGHT;
-  }
-
-  const routeNodes = nodes.filter((node) => node.kind === "entry point");
-  routeNodes.forEach((routeNode, row) => {
-    const y = rowY(row);
-    place(routeNode, COLUMN_X["entry point"], y);
-    const handledFileIds = edges
-      .filter((edge) => edge.source === routeNode.id && edge.relationship === "handled by")
-      .map((edge) => edge.target);
-    handledFileIds.forEach((fileId) => {
-      const fileNode = nodeById.get(fileId);
-      if (fileNode) {
-        const isNewFilePlacement = !positioned.has(fileId);
-        place(fileNode, COLUMN_X.file, y);
-        if (isNewFilePlacement) {
-          usedRows.set(fileId, row);
-        }
-      }
-    });
-  });
-
-  const counts = new Map<string, number>();
-  nodes.forEach((node, index) => {
-    if (positioned.has(node.id)) return;
-    const parentEdge = edges.find((edge) => edge.target === node.id && usedRows.has(edge.source));
-    if (parentEdge && (node.kind === "database" || node.kind === "authorization" || node.kind === "login")) {
-      const parentRow = usedRows.get(parentEdge.source) ?? 0;
-      const y = rowY(parentRow);
-      place(node, nodeColumn(node, index), y);
-      return;
-    }
-    const group = node.kind || "other";
-    const seen = counts.get(group) ?? 0;
-    counts.set(group, seen + 1);
-    const baseRow = routeNodes.length + seen;
-    place(node, nodeColumn(node, index), rowY(baseRow));
-  });
-
-  const placed = Array.from(positioned.values());
-  const width = Math.max(980, ...placed.map((node) => node.x + node.width + CANVAS_PADDING));
-  const height = Math.max(520, ...placed.map((node) => node.y + node.height + CANVAS_PADDING));
-  return { nodes: placed, width, height };
-}
-
-function anchorFor(node: PositionedNode, side: Anchor["side"]): Anchor {
-  if (side === "left") return { x: node.x, y: node.y + node.height / 2, side };
-  if (side === "right") return { x: node.x + node.width, y: node.y + node.height / 2, side };
-  if (side === "top") return { x: node.x + node.width / 2, y: node.y, side };
-  return { x: node.x + node.width / 2, y: node.y + node.height, side };
-}
-
-function anchorsForEdge(source: PositionedNode, target: PositionedNode): [Anchor, Anchor] {
-  const sourceCenterY = source.y + source.height / 2;
-  const targetCenterY = target.y + target.height / 2;
-
-  if (target.x >= source.x + source.width) {
-    return [anchorFor(source, "right"), anchorFor(target, "left")];
-  }
-  if (source.x >= target.x + target.width) {
-    return [anchorFor(source, "left"), anchorFor(target, "right")];
-  }
-  if (targetCenterY >= sourceCenterY) {
-    return [anchorFor(source, "bottom"), anchorFor(target, "top")];
-  }
-  return [anchorFor(source, "top"), anchorFor(target, "bottom")];
-}
-
-function edgePath(source: PositionedNode, target: PositionedNode) {
-  const [start, end] = anchorsForEdge(source, target);
-  if (start.side === "right" || start.side === "left") {
-    const direction = start.side === "right" ? 1 : -1;
-    const midX = start.x + direction * Math.max(42, Math.abs(end.x - start.x) / 2);
-    return `M ${start.x} ${start.y} H ${midX} V ${end.y} H ${end.x}`;
-  }
-  const direction = start.side === "bottom" ? 1 : -1;
-  const midY = start.y + direction * Math.max(42, Math.abs(end.y - start.y) / 2);
-  return `M ${start.x} ${start.y} V ${midY} H ${end.x} V ${end.y}`;
-}
-
-function edgeLabelPoint(source: PositionedNode, target: PositionedNode): EdgeLabel {
-  const [start, end] = anchorsForEdge(source, target);
-  if (start.side === "right" || start.side === "left") {
-    const direction = start.side === "right" ? 1 : -1;
-    const gap = Math.abs(end.x - start.x);
-    return {
-      x: start.x + direction * Math.min(70, Math.max(34, gap / 3)),
-      y: start.y - 12,
-      textAnchor: start.side === "right" ? "start" : "end",
-    };
-  }
-
-  const direction = start.side === "bottom" ? 1 : -1;
-  const gap = Math.abs(end.y - start.y);
-  return {
-    x: start.x + 16,
-    y: start.y + direction * Math.min(62, Math.max(34, gap / 3)),
-    textAnchor: "start",
-  };
-}
-
-function connectedSides(node: PositionedNode, edges: GraphEdge[], nodeById: Map<string, PositionedNode>) {
-  const sides = new Set<Anchor["side"]>();
-  edges.forEach((edge) => {
-    const source = nodeById.get(edge.source);
-    const target = nodeById.get(edge.target);
-    if (!source || !target) return;
-    const [start, end] = anchorsForEdge(source, target);
-    if (node.id === source.id) sides.add(start.side);
-    if (node.id === target.id) sides.add(end.side);
-  });
-  return sides;
-}
-
-function AnchorDots({ connected }: { connected: Set<Anchor["side"]> }) {
-  return (
-    <>
-      {(["top", "right", "bottom", "left"] as const).map((side) => (
-        <span
-          aria-hidden="true"
-          className={`attack-anchor attack-anchor-${side}${connected.has(side) ? " is-connected" : ""}`}
-          key={side}
-        />
-      ))}
-    </>
-  );
-}
-
-function nodeStyle(node: PositionedNode) {
-  return {
-    left: node.x,
-    top: node.y,
-    width: node.width,
-    height: node.height,
-  };
-}
-
-function canvasStyle(layout: Layout) {
-  return {
-    height: Math.min(Math.max(layout.height, 560), 860),
-  };
-}
-
-function sortedEdges(edges: GraphEdge[]) {
-  return edges.slice().sort((a, b) => {
-    const aKey = `${a.source}:${a.target}:${a.relationship}`;
-    const bKey = `${b.source}:${b.target}:${b.relationship}`;
-    return aKey.localeCompare(bKey);
-  });
-}
-
-function positionedNodeClass(node: PositionedNode) {
-  return `attack-node attack-node-${node.kind.replaceAll(" ", "-")}`;
-}
-
-function edgeKey(edge: GraphEdge) {
-  return `${edge.source}-${edge.relationship}-${edge.target}`;
-}
-
-function edgeText(edge: GraphEdge, source: PositionedNode, target: PositionedNode) {
-  const point = edgeLabelPoint(source, target);
-  return (
-    <text className="attack-edge-label" dominantBaseline="middle" textAnchor={point.textAnchor} x={point.x} y={point.y}>
-      {edge.relationship}
-    </text>
-  );
-}
-
-function edgePathElement(edge: GraphEdge, source: PositionedNode, target: PositionedNode) {
-  return <path d={edgePath(source, target)} />;
-}
-
-function visibleEdges(edges: GraphEdge[], nodeById: Map<string, PositionedNode>) {
-  return sortedEdges(edges).filter((edge) => nodeById.has(edge.source) && nodeById.has(edge.target));
-}
-
-function positionedNode(node: PositionedNode, edges: GraphEdge[], nodeById: Map<string, PositionedNode>) {
-  const connected = connectedSides(node, edges, nodeById);
-  return (
-    <div className={positionedNodeClass(node)} key={node.id} style={nodeStyle(node)}>
-      <AnchorDots connected={connected} />
-      <span className="mono muted">{node.kind}</span>
-      <strong>{node.label}</strong>
-      {node.risk ? <p>Risk: {node.risk}</p> : null}
-    </div>
-  );
-}
-
-function graphEdge(edge: GraphEdge, nodeById: Map<string, PositionedNode>) {
-  const source = nodeById.get(edge.source);
-  const target = nodeById.get(edge.target);
-  if (!source || !target) return null;
-  return (
-    <g key={edgeKey(edge)}>
-      {edgePathElement(edge, source, target)}
-      {edgeText(edge, source, target)}
-    </g>
-  );
-}
-
-function attackMapInnerStyle(layout: Layout) {
-  return {
-    width: layout.width,
-    height: layout.height,
-  };
-}
-
-function AttackMapGraph({ layout, edges }: { layout: Layout; edges: GraphEdge[] }) {
-  const nodeById = new Map(layout.nodes.map((node) => [node.id, node]));
-  const graphEdges = visibleEdges(edges, nodeById);
-  return (
-    <div className="attack-canvas-inner" style={attackMapInnerStyle(layout)}>
-      <svg className="attack-edges" viewBox={`0 0 ${layout.width} ${layout.height}`} aria-hidden="true">
-        {graphEdges.map((edge) => graphEdge(edge, nodeById))}
-      </svg>
-      {layout.nodes.map((node) => positionedNode(node, graphEdges, nodeById))}
-    </div>
-  );
-}
 
 function emptyState() {
   return (
-    <div className="attack-canvas attack-canvas-empty" aria-label="Attack map empty state">
+    <div className="attack-flow-empty" aria-label="Attack map empty state">
       <div>
         <span className="mono muted">No attack map yet</span>
         <strong>Run a repository or full ZIP scan with route files.</strong>
@@ -294,27 +33,163 @@ function emptyState() {
   );
 }
 
-function attackCanvas(layout: Layout, edges: GraphEdge[]) {
+function nodeById(nodes: GraphNode[]) {
+  return new Map(nodes.map((node) => [node.id, node]));
+}
+
+function edgesFrom(edges: GraphEdge[], sourceId: string, relationship?: string) {
+  return edges.filter((edge) => edge.source === sourceId && (!relationship || edge.relationship === relationship));
+}
+
+function sortOutcomes(items: Array<{ node: GraphNode; relationship: string }>) {
+  return items.slice().sort((a, b) => {
+    const kindDelta = (OUTCOME_ORDER[a.node.kind] ?? 9) - (OUTCOME_ORDER[b.node.kind] ?? 9);
+    return kindDelta || a.node.label.localeCompare(b.node.label);
+  });
+}
+
+function uniqueOutcomes(items: Array<{ node: GraphNode; relationship: string }>) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = `${item.relationship}:${item.node.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function buildRows(nodes: GraphNode[], edges: GraphEdge[]): FlowRow[] {
+  const lookup = nodeById(nodes);
+  const rows: FlowRow[] = [];
+  const seenFiles = new Set<string>();
+  const entries = nodes.filter((node) => node.kind === "entry point");
+  const fileGroups = new Map<string, { file: GraphNode; entries: GraphNode[] }>();
+
+  for (const entry of entries) {
+    const handled = edgesFrom(edges, entry.id, "handled by");
+    if (!handled.length) {
+      rows.push({ id: entry.id, entries: [entry], outcomes: [] });
+      continue;
+    }
+    for (const edge of handled) {
+      const file = lookup.get(edge.target);
+      if (!file) continue;
+      seenFiles.add(file.id);
+      const group = fileGroups.get(file.id) ?? { file, entries: [] };
+      group.entries.push(entry);
+      fileGroups.set(file.id, group);
+    }
+  }
+
+  for (const group of fileGroups.values()) {
+    const outcomes = sortOutcomes(
+      uniqueOutcomes(
+        edgesFrom(edges, group.file.id)
+          .map((child) => {
+            const node = lookup.get(child.target);
+            return node ? { node, relationship: child.relationship } : null;
+          })
+          .filter((item): item is { node: GraphNode; relationship: string } => Boolean(item)),
+      ),
+    );
+    rows.push({ id: group.file.id, entries: group.entries, file: group.file, outcomes });
+  }
+
+  const orphanFiles = nodes.filter((node) => node.kind === "file" && !seenFiles.has(node.id));
+  for (const file of orphanFiles) {
+    const outcomes = sortOutcomes(
+      uniqueOutcomes(
+        edgesFrom(edges, file.id)
+          .map((edge) => {
+            const node = lookup.get(edge.target);
+            return node ? { node, relationship: edge.relationship } : null;
+          })
+          .filter((item): item is { node: GraphNode; relationship: string } => Boolean(item)),
+      ),
+    );
+    rows.push({ id: file.id, entries: [], file, outcomes });
+  }
+
+  return rows;
+}
+
+function kindClass(kind?: string) {
+  return `attack-flow-card attack-flow-${(kind ?? "unknown").replaceAll(" ", "-")}`;
+}
+
+function FlowCard({ node, fallback }: { node?: GraphNode; fallback: string }) {
+  if (!node) {
+    return (
+      <div className="attack-flow-card attack-flow-empty-card">
+        <span className="mono muted">{fallback}</span>
+        <strong>not mapped</strong>
+      </div>
+    );
+  }
   return (
-    <div className="attack-canvas attack-canvas-scroll" style={canvasStyle(layout)} aria-label="Attack map">
-      <AttackMapGraph layout={layout} edges={edges} />
+    <div className={kindClass(node.kind)}>
+      <span className="mono muted">{node.kind}</span>
+      <strong>{node.label}</strong>
+      {node.risk ? <em>Risk: {node.risk}</em> : null}
     </div>
   );
 }
 
-function graphData(scan: Scan) {
-  const graph = scan.code_graph ?? { nodes: [], edges: [] };
-  return {
-    nodes: graph.nodes ?? [],
-    edges: graph.edges ?? [],
-  };
+function EntryStack({ entries }: { entries: GraphNode[] }) {
+  if (!entries.length) return <FlowCard fallback="entry point" />;
+  return (
+    <div className="attack-flow-entry-stack">
+      {entries.map((entry) => <FlowCard key={entry.id} node={entry} fallback="entry point" />)}
+    </div>
+  );
+}
+
+function OutcomeStack({ outcomes }: { outcomes: FlowRow["outcomes"] }) {
+  if (!outcomes.length) return null;
+  return (
+    <div className="attack-flow-outcomes">
+      {outcomes.map(({ node, relationship }) => (
+        <div className={kindClass(node.kind)} key={`${relationship}-${node.id}`}>
+          <span className="mono muted">{relationship}</span>
+          <strong>{node.label}</strong>
+          {node.risk ? <em>Risk: {node.risk}</em> : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FlowRowView({ row, index }: { row: FlowRow; index: number }) {
+  const hasOutcomes = row.outcomes.length > 0;
+  return (
+    <article className="attack-flow-row" style={{ "--row-index": index } as CSSProperties}>
+      <EntryStack entries={row.entries} />
+      <span className="attack-flow-link" aria-hidden="true">handled</span>
+      <FlowCard node={row.file} fallback="file" />
+      {hasOutcomes ? <span className="attack-flow-link" aria-hidden="true">reaches</span> : null}
+      {hasOutcomes ? <OutcomeStack outcomes={row.outcomes} /> : null}
+    </article>
+  );
 }
 
 export function AttackMapPanel({ scan }: { scan: Scan }) {
-  const graph = graphData(scan);
-  const layout = positionNodes(graph.nodes, graph.edges);
-  if (!layout.nodes.length) {
-    return emptyState();
-  }
-  return attackCanvas(layout, graph.edges);
+  const graph = scan.code_graph ?? { nodes: [], edges: [] };
+  const nodes = graph.nodes ?? [];
+  const edges = graph.edges ?? [];
+  const rows = buildRows(nodes, edges);
+
+  if (!rows.length) return emptyState();
+
+  return (
+    <section className="attack-flow-board" aria-label="Attack map">
+      <div className="attack-flow-header" aria-hidden="true">
+        <span>entry</span>
+        <span>file</span>
+        <span>data / risk</span>
+      </div>
+      <div className="attack-flow-rows">
+        {rows.map((row, index) => <FlowRowView index={index} key={row.id} row={row} />)}
+      </div>
+    </section>
+  );
 }

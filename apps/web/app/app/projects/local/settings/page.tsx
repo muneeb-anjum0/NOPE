@@ -6,6 +6,12 @@ import { SettingsForms } from "@/components/settings-forms";
 import { api } from "@/lib/api";
 import { getAIHealth, getGitHubStatus, getModelSettings, getProjectSettings, getProjects, getSystemSettings } from "@/lib/nope-data";
 
+function displayStatus(status?: string | null) {
+  if (!status) return "blocked";
+  if (status === "blocked_missing_credentials") return "Credential vault empty";
+  return status.replaceAll("_", " ");
+}
+
 export default async function SettingsPage() {
   const model = await getModelSettings();
   const aiHealth = await getAIHealth();
@@ -126,7 +132,7 @@ export default async function SettingsPage() {
       title: "GitHub",
       summary: "Local contracts without fake private repository access.",
       rows: [
-        ["Credential state", github?.status ?? "blocked_missing_credentials", "Blocked"],
+        ["Credential state", displayStatus(github?.status ?? "blocked_missing_credentials"), "Blocked"],
         ["Callback", github?.callback_url ?? "not configured", "Route"],
         ["Repository", github?.selected_repository ?? "not selected", "Contract"],
       ],
@@ -151,55 +157,70 @@ export default async function SettingsPage() {
           <h1><PinkDotText text="Settings." /></h1>
         </div>
       </section>
-      <div className="collapse-list">
-        <details className="collapse-panel settings-accordion" name="settings-sections">
-          <summary>
-            <span>
-              <h2>Account</h2>
-            </span>
-            <span className="mono muted">1 action</span>
-          </summary>
-          <div className="collapse-body">
-            <div className="collapse-row account-action-row">
-              <strong>Sign out</strong>
-              <span className="muted">End session.</span>
-              <form action="/api/auth/logout" method="post">
-                <button className="button ghost compact-logout" type="submit">
-                  <LogOut size={15} /> Sign out
-                </button>
-              </form>
-            </div>
+      <section className="settings-console">
+        <div className="settings-console-strip">
+          <div>
+            <span className="mono muted">AI</span>
+            <strong>{aiHealth?.status ?? model?.provider ?? "unknown"}</strong>
           </div>
-        </details>
-        {sections.map((section) => (
-          <details className="collapse-panel settings-accordion" name="settings-sections" key={section.title}>
-            <summary>
-              <span>
-                <h2>{section.title}</h2>
-              </span>
-              <span className="mono muted">{section.rows.length} settings</span>
-            </summary>
-            <div className="collapse-body">
-              {section.rows.map(([name, detail, status]) => (
-                <div className="collapse-row" key={name}>
-                  <strong>{name}</strong>
-                  <span className="muted">{detail}</span>
-                  <span className="severity-pill severity-info">{status}</span>
-                </div>
-              ))}
+          <div>
+            <span className="mono muted">GPU</span>
+            <strong>{aiHealth?.gpu?.layers ? `${aiHealth.gpu.layers} layers` : aiHealth?.gpu?.status ?? "unknown"}</strong>
+          </div>
+          <div>
+            <span className="mono muted">GitHub</span>
+            <strong>{displayStatus(github?.status ?? "blocked")}</strong>
+          </div>
+          <form action="/api/auth/logout" method="post">
+            <button className="button ghost compact-logout" type="submit">
+              <LogOut size={15} /> Sign out
+            </button>
+          </form>
+        </div>
+
+        <div className="settings-console-grid">
+          <section className="settings-ledger">
+            <div className="settings-ledger-title">
+              <span>Runtime status</span>
+              <span className="mono muted">{sections.reduce((total, section) => total + section.rows.length, 0)} signals</span>
             </div>
-          </details>
-        ))}
-      </div>
-      <SettingsForms
-        system={system}
-        project={project}
-        projectSettings={projectSettings}
-        github={github}
-        saveSystem={saveSystem}
-        saveProject={saveProject}
-        saveGitHub={saveGitHub}
-      />
+            {sections.map((section) => (
+              <details className="settings-ledger-row" name="settings-sections" key={section.title}>
+                <summary>
+                  <strong>{section.title}</strong>
+                  <span className="muted">{section.summary}</span>
+                  <span className="mono muted">{section.rows.length}</span>
+                </summary>
+                <div className="settings-signal-list">
+                  {section.rows.map(([name, detail, status]) => (
+                    <div className="settings-signal-row" key={name}>
+                      <strong>{name}</strong>
+                      <span>{detail}</span>
+                      <em>{status}</em>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ))}
+          </section>
+
+          <section className="settings-edit-deck">
+            <div className="settings-ledger-title">
+              <span>Edit controls</span>
+              <span className="mono muted">System / Project / GitHub</span>
+            </div>
+            <SettingsForms
+              system={system}
+              project={project}
+              projectSettings={projectSettings}
+              github={github}
+              saveSystem={saveSystem}
+              saveProject={saveProject}
+              saveGitHub={saveGitHub}
+            />
+          </section>
+        </div>
+      </section>
     </>
   );
 }

@@ -10,6 +10,12 @@ type Props = {
   saveGitHub: (formData: FormData) => Promise<void>;
 };
 
+function displayStatus(status?: string | null) {
+  if (!status) return "blocked";
+  if (status === "blocked_missing_credentials") return "Credential vault empty";
+  return status.replaceAll("_", " ");
+}
+
 export function SettingsForms({ system, project, projectSettings, github, saveSystem, saveProject, saveGitHub }: Props) {
   return (
     <div className="settings-form-list">
@@ -136,7 +142,7 @@ export function SettingsForms({ system, project, projectSettings, github, saveSy
       <details className="collapse-panel settings-accordion compact-settings" name="editable-settings">
         <summary>
           <span><h2>GitHub</h2></span>
-          <span className="mono muted">{github?.status ?? "blocked"}</span>
+          <span className="mono muted">{displayStatus(github?.status ?? "blocked")}</span>
         </summary>
         <form className="collapse-body editable-settings-list" action={saveGitHub}>
           <label className="settings-edit-row">
@@ -172,7 +178,7 @@ export function SettingsForms({ system, project, projectSettings, github, saveSy
             <input className="input-shell" name="selected_branch" defaultValue={github?.selected_branch ?? ""} placeholder="e.g. main" />
           </label>
           <div className="settings-edit-actions">
-            <span className="severity-pill severity-info">{github?.status ?? "blocked_missing_credentials"}</span>
+            <span className="severity-pill severity-info">{displayStatus(github?.status ?? "blocked_missing_credentials")}</span>
             <button className="button primary" type="submit">Save</button>
           </div>
         </form>

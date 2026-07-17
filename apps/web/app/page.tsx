@@ -68,7 +68,7 @@ const evidenceLines = [
 
 export default function LandingPage() {
   return (
-    <main className="page-shell">
+    <main className="page-shell" data-brand-decorate>
       <header className="landing-nav">
         <div className="container landing-nav-inner">
           <a className="wordmark" href="#top" aria-label="NOPE home">

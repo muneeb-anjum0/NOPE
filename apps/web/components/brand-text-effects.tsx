@@ -55,20 +55,33 @@ function decorate(root: ParentNode) {
 
 export function BrandTextEffects() {
   useEffect(() => {
-    const root = document.body;
-    decorate(root);
+    const decorateEligible = (root: ParentNode) => {
+      if (root instanceof Element) {
+        if (root.matches("[data-brand-decorate]")) {
+          decorate(root);
+        }
+        root.querySelectorAll("[data-brand-decorate]").forEach((element) => decorate(element));
+        return;
+      }
+      document.querySelectorAll("[data-brand-decorate]").forEach((element) => decorate(element));
+    };
+
+    decorateEligible(document.body);
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
         mutation.addedNodes.forEach((node) => {
           if (node.nodeType === Node.TEXT_NODE) {
-            decorateTextNode(node as Text);
+            const parent = node.parentElement;
+            if (parent?.closest("[data-brand-decorate]")) {
+              decorateTextNode(node as Text);
+            }
           } else if (node.nodeType === Node.ELEMENT_NODE) {
-            decorate(node as Element);
+            decorateEligible(node as Element);
           }
         });
       }
     });
-    observer.observe(root, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true });
     return () => observer.disconnect();
   }, []);
 

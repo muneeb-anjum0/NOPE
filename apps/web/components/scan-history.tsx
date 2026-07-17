@@ -21,6 +21,17 @@ function labelFor(scan: Scan, index: number) {
   return scan.id || `Upload ${index + 1}`;
 }
 
+function formatScanTime(scan: Scan) {
+  const value = scan.started_at ?? scan.completed_at;
+  if (!value) return "time unknown";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
 function initialProgress(scan: Scan) {
   if (TERMINAL_STATUSES.has(scan.status)) return 100;
   const stages = (scan as ScanWithStages).stages ?? [];
@@ -138,14 +149,21 @@ export function ScanHistory({ scans, selectedId, projectId }: { scans: Scan[]; s
       {scans.map((scan, index) => {
         const state = live[scan.id] ?? { status: scan.status, progress: initialProgress(scan) };
         const progressStyle = { "--scan-progress": `${state.progress}%` } as CSSProperties;
+        const isActive = ACTIVE_STATUSES.has(state.status);
         return (
-          <article className={`scan-history-row${scan.id === selectedId ? " selected-row" : ""}`} key={scan.id} style={progressStyle}>
+          <article className={`scan-history-row${scan.id === selectedId ? " selected-row" : ""}${isActive ? " is-active" : ""}`} key={scan.id} style={progressStyle}>
             <a
               className="scan-history-main"
               href={`${projectId ? `/app/projects/local/scans/${encodeURIComponent(projectId)}` : "/app/projects/local/scans"}?scan=${encodeURIComponent(scan.id)}`}
             >
-              <span className="scan-history-title mono">{labelFor(scan, index)}</span>
-              <span className={`scan-status scan-status-${state.status}`}>{state.status}</span>
+              <span className="scan-history-identity">
+                <span className="scan-history-title mono">{labelFor(scan, index)}</span>
+                <span className="scan-history-time mono">{formatScanTime(scan)}</span>
+              </span>
+              <span className="scan-history-state">
+                <span className={`scan-status scan-status-${state.status}`}>{state.status}</span>
+                {isActive ? <span className="scan-progress-rail" aria-hidden="true"><span /></span> : null}
+              </span>
               <span className="scan-history-verdict">{scan.verdict}</span>
             </a>
             <form action="/api/delete-scan" method="post">

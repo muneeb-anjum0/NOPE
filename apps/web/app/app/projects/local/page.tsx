@@ -69,17 +69,17 @@ export default async function ProjectOverview({
       <section className="dashboard-scoreboard" aria-label="Scan summary">
         <div>
           <span className="mono muted">Score</span>
-          <strong>{scan.score}</strong>
+          <strong className="scoreboard-hot-number" data-brand-skip>{scan.score}</strong>
           <span>{scan.coverage_percent}% coverage</span>
         </div>
         <div>
           <span className="mono muted">Findings</span>
-          <strong>{totalFindings}</strong>
+          <strong className="scoreboard-hot-number" data-brand-skip>{totalFindings}</strong>
           <span>{severityCounts.map((item) => `${item.count} ${item.severity}`).join(" / ")}</span>
         </div>
         <div>
           <span className="mono muted">Drift</span>
-          <strong>{comparison ? comparison.summary.total_drift_events ?? 0 : 0}</strong>
+          <strong className="scoreboard-hot-number" data-brand-skip>{comparison ? comparison.summary.total_drift_events ?? 0 : 0}</strong>
           <span>{comparison ? `${comparison.summary.new ?? 0} new / ${comparison.summary.fixed ?? 0} fixed` : "Needs two scans"}</span>
         </div>
         <div>

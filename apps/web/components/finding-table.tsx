@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Finding } from "@/lib/types";
 
 const BATCH_SIZE = 7;
@@ -47,6 +48,7 @@ export function FindingTable({
   searchQuery?: string;
   total?: number;
 }) {
+  const router = useRouter();
   const search = useMemo(() => new URLSearchParams(searchQuery), [searchQuery]);
   const requestedVisible = Number(search.get("shown") ?? BATCH_SIZE);
   const initialVisibleCount = Number.isFinite(requestedVisible) ? Math.max(BATCH_SIZE, requestedVisible) : BATCH_SIZE;
@@ -62,7 +64,7 @@ export function FindingTable({
     const params = new URLSearchParams(search.toString());
     if (scanId) params.set("scan", scanId);
     params.set("finding", finding.id);
-    params.delete("detail");
+    params.set("detail", "open");
     return `/app/projects/local/findings?${params.toString()}`;
   };
   const clampedShownCount = Math.min(shownCount, findings.length);
@@ -72,7 +74,7 @@ export function FindingTable({
 
   function openFinding(finding: Finding) {
     if (!scanId) return;
-    window.location.assign(hrefFor(finding));
+    router.push(hrefFor(finding), { scroll: false });
   }
 
   function loadMore() {

@@ -2,6 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import Link from "next/link";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Project } from "@/lib/types";
 
@@ -201,12 +202,14 @@ export function LineSidebar({ projects, activeProjectId }: Readonly<{ projects: 
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [collapsed, setCollapsed] = useState(false);
   const currentPath = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
   const activeIndex = Math.max(
     0,
     routeItems.findIndex((item) => pathname === item.href || (item.href !== "/app/projects/local" && pathname.startsWith(item.href))),
   );
   const selectedScan = searchParams.get("scan") ?? "";
+  const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
 
   const hrefFor = (href: string, scanId = selectedScan) => {
     const params = new URLSearchParams();
@@ -215,10 +218,20 @@ export function LineSidebar({ projects, activeProjectId }: Readonly<{ projects: 
   };
 
   return (
-    <aside className="sidebar-frame" aria-label="Project navigation">
-      <Link className="sidebar-wordmark" href="/">
-        NOPE<span className="wordmark-dot">.</span>
-      </Link>
+    <aside className={`sidebar-frame${collapsed ? " is-collapsed" : ""}`} aria-label="Project navigation">
+      <div className="sidebar-header">
+        <Link className="sidebar-wordmark" href="/" aria-label="NOPE home">
+          <span className="sidebar-wordmark-text">NOPE</span><span className="wordmark-dot">.</span>
+        </Link>
+        <button
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="sidebar-collapse-button"
+          type="button"
+          onClick={() => setCollapsed((value) => !value)}
+        >
+          {collapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
+        </button>
+      </div>
       <BitsLineSidebar
         items={routeItems.map((item) => item.label)}
         accentColor="#f02a56"
@@ -233,23 +246,34 @@ export function LineSidebar({ projects, activeProjectId }: Readonly<{ projects: 
         onItemClick={(index) => router.push(hrefFor(routeItems[index]?.href ?? "/app/projects/local"))}
       />
       <form className="sidebar-folder-context" action="/api/active-project" method="post">
-        <label htmlFor="active-folder">Active folder</label>
+        <label>Active folder</label>
         <input name="returnTo" type="hidden" value={currentPath} />
-        <div className="sidebar-folder-select">
-          <select
-            id="active-folder"
-            name="projectId"
-            value={activeProjectId ?? ""}
-            onChange={(event) => event.currentTarget.form?.requestSubmit()}
-            disabled={projects.length === 0}
-          >
-            {projects.length === 0 ? <option value="">No folders yet</option> : null}
+        <details className="sidebar-folder-picker">
+          <summary>
+            <span>
+              <strong>{activeProject?.name ?? "No folder selected"}</strong>
+              <small>{activeProject?.repository || activeProject?.target_url || "folder scoped"}</small>
+            </span>
+            <span className="sidebar-folder-count mono">{projects.length}</span>
+          </summary>
+          <div className="sidebar-folder-menu">
+            {projects.length === 0 ? <span className="sidebar-folder-empty">No folders yet</span> : null}
             {projects.map((project) => (
-              <option key={project.id} value={project.id}>{project.name}</option>
+              <button
+                className={project.id === activeProjectId ? "is-active" : ""}
+                key={project.id}
+                name="projectId"
+                type="submit"
+                value={project.id}
+              >
+                <span>
+                  <strong>{project.name}</strong>
+                  <small>{project.repository || project.target_url || "folder workspace"}</small>
+                </span>
+              </button>
             ))}
-          </select>
-        </div>
-        <span className="mono muted">{projects.find((project) => project.id === activeProjectId)?.repository || "folder scoped"}</span>
+          </div>
+        </details>
       </form>
     </aside>
   );
