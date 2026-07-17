@@ -316,6 +316,13 @@ async def run_ai_review(
             provider="none",
             message="AI provider is disabled. Deterministic scanning completed without AI reasoning.",
         )
+    if not findings:
+        return AIReview(
+            status="Not tested",
+            provider=settings.ai_provider,
+            model=settings.ai_model_name,
+            message="No findings required AI review.",
+        )
     context = retrieve_context(findings, settings.ai_max_retrieved_chunks, settings=settings, root=root, scan=scan)
     if not context.chunks:
         return AIReview(status="Not tested", provider=settings.ai_provider, model=settings.ai_model_name, message="No findings required AI review.")

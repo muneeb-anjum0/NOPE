@@ -107,6 +107,19 @@ async def test_ai_review_failure_preserves_deterministic_scan(monkeypatch):
     assert review.evidence_provided
 
 
+@pytest.mark.asyncio
+async def test_ai_review_skips_qwen_when_no_findings(monkeypatch):
+    async def fail_if_called(settings):
+        raise AssertionError("Qwen health should not be checked without findings.")
+
+    monkeypatch.setattr(ai, "check_ai_health", fail_if_called)
+
+    review = await ai.run_ai_review(qwen_settings(), [])
+
+    assert review.status == "Not tested"
+    assert review.message == "No findings required AI review."
+
+
 def test_gpu_target_is_capped_to_5000_mb():
     settings = Settings(qwen_gpu_memory_target_mb=6000, ai_gpu_memory_target_mb=5120)
 
