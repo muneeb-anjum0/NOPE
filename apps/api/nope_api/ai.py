@@ -280,31 +280,31 @@ async def structured_completion(
     action_instruction = {
         "explain": (
             "EXPLAIN MODE. Translate this exact finding into plain engineering language. "
-            "summary: what is happening and where. "
-            "evidence: quote or paraphrase the concrete scanner/file/route signals. "
-            "reasoning: why that evidence implies a security risk. "
-            "recommendation: what to inspect next, not a patch plan."
+            "summary: 2-4 sentences explaining what is happening and where. "
+            "evidence: 3-6 concrete scanner/file/route signals. "
+            "reasoning: explain the security impact with a realistic abuse example. "
+            "recommendation: explain what to inspect next and include one example of the kind of code/configuration to look for, not a patch plan."
         ),
         "challenge": (
             "CHALLENGE MODE. Act as a skeptical reviewer trying to disprove or narrow this finding. "
-            "summary: strongest doubt, duplicate signal, or false-positive angle. "
-            "evidence: list evidence that supports the finding and evidence that is missing. "
-            "reasoning: assumptions that must be true for exploitation. "
-            "recommendation: exact evidence needed to confirm or dismiss it."
+            "summary: 2-4 sentences covering the strongest doubt, duplicate signal, or false-positive angle. "
+            "evidence: 3-6 bullets split between supporting evidence and missing evidence. "
+            "reasoning: describe assumptions that must be true for exploitation and give an example of a benign case that would reduce severity. "
+            "recommendation: exact evidence needed to confirm or dismiss it, with example checks."
         ),
         "fix": (
             "FIX MODE. Produce remediation guidance only. "
-            "summary: safest code/configuration change. "
-            "evidence: the locations or signals the patch must address. "
-            "reasoning: why this change removes the root cause. "
-            "recommendation: concrete patch steps without inventing files or claiming code was changed."
+            "summary: 2-4 sentences naming the safest code/configuration change. "
+            "evidence: 3-6 locations or signals the patch must address. "
+            "reasoning: explain why this change removes the root cause and include a small before/after style example in prose or pseudocode. "
+            "recommendation: concrete patch steps with guardrails, without inventing files or claiming code was changed."
         ),
         "test": (
             "TEST MODE. Produce regression-test guidance only. "
-            "summary: behavior that must be proven after the fix. "
-            "evidence: inputs, routes, files, or scanner signals the test should cover. "
-            "reasoning: positive case, negative case, and abuse case. "
-            "recommendation: concrete test cases and expected outcomes without claiming tests were run."
+            "summary: 2-4 sentences naming the behavior that must be proven after the fix. "
+            "evidence: 3-6 inputs, routes, files, or scanner signals the test should cover. "
+            "reasoning: explain the positive case, negative case, and abuse case with examples. "
+            "recommendation: concrete test cases, fixture examples, assertions, and expected outcomes without claiming tests were run."
         ),
     }[action]
     action_focus = {
@@ -322,7 +322,8 @@ async def structured_completion(
         "summary, evidence, reasoning, recommendation, confidence, risk. "
         "Each key must follow the requested MODE semantics exactly. "
         "Do not reuse wording across modes. Do not answer every mode with a generic vulnerability summary. "
-        "Keep every string concise."
+        "Be specific and useful. Include concrete examples where requested. "
+        "Use enough detail for an engineer to act, but do not invent facts outside the supplied evidence."
     )
     user = (
         f"Task: {action_instruction}\n\n"

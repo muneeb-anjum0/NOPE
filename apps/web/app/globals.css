@@ -542,6 +542,7 @@ textarea:focus-visible {
 
 .ai-result p {
   margin: 4px 0 0;
+  white-space: pre-wrap;
 }
 
 .ai-result-label {
@@ -559,6 +560,7 @@ textarea:focus-visible {
   margin: 4px 0 0;
   padding-left: 18px;
   color: var(--text-secondary);
+  white-space: pre-wrap;
 }
 
 .ai-evidence-list li::marker {

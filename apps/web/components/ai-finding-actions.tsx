@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { Finding } from "@/lib/types";
 
@@ -25,6 +25,14 @@ const actionLabels: Array<[AIAction, string]> = [
   ["fix", "Fix"],
   ["test", "Test"],
 ];
+
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const CACHE_VERSION = "v2";
+
+type CachedResults = {
+  expiresAt: number;
+  results: Partial<Record<AIAction, AIActionResult>>;
+};
 
 const actionCopy: Record<AIAction, { title: string; reasoning: string; recommendation: string; evidence: string }> = {
   explain: {
@@ -58,6 +66,38 @@ export function AIFindingActions({ finding }: { finding: Finding }) {
   const [selectedAction, setSelectedAction] = useState<AIAction | null>(null);
   const [results, setResults] = useState<Partial<Record<AIAction, AIActionResult>>>({});
   const [error, setError] = useState<string | null>(null);
+  const cacheKey = useMemo(() => `nope:ai-finding-actions:${CACHE_VERSION}:${finding.id}:${finding.fingerprint ?? "no-fingerprint"}`, [finding.fingerprint, finding.id]);
+
+  useEffect(() => {
+    try {
+      const cached = window.localStorage.getItem(cacheKey);
+      if (!cached) {
+        setResults({});
+        setSelectedAction(null);
+        return;
+      }
+      const parsed = JSON.parse(cached) as CachedResults;
+      if (!parsed.expiresAt || parsed.expiresAt <= Date.now()) {
+        window.localStorage.removeItem(cacheKey);
+        setResults({});
+        setSelectedAction(null);
+        return;
+      }
+      setResults(parsed.results ?? {});
+      setSelectedAction(null);
+    } catch {
+      setResults({});
+      setSelectedAction(null);
+    }
+  }, [cacheKey]);
+
+  function cacheResults(nextResults: Partial<Record<AIAction, AIActionResult>>) {
+    try {
+      window.localStorage.setItem(cacheKey, JSON.stringify({ expiresAt: Date.now() + CACHE_TTL_MS, results: nextResults }));
+    } catch {
+      // Cache failure should never block the analysis action.
+    }
+  }
 
   async function runAction(action: AIAction) {
     if (results[action]) {
@@ -78,7 +118,11 @@ export function AIFindingActions({ finding }: { finding: Finding }) {
       if (!response.ok || data.status === "Failed") {
         throw new Error(data.message ?? "Qwen action failed.");
       }
-      setResults((current) => ({ ...current, [action]: data }));
+      setResults((current) => {
+        const next = { ...current, [action]: data };
+        cacheResults(next);
+        return next;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Qwen action failed.");
     } finally {
