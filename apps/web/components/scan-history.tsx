@@ -8,11 +8,13 @@ import type { Scan } from "@/lib/types";
 type ScanEventState = {
   status: string;
   progress: number;
+  stages?: Array<{ status?: string }>;
 };
 
 const ACTIVE_STATUSES = new Set(["preparing", "queued", "running"]);
 const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled", "partial"]);
 type ScanWithStages = Scan & { stages?: Array<{ status?: string }> };
+const DONE_STAGE_STATUSES = new Set(["completed", "partial", "failed", "skipped", "cancelled", "timed out"]);
 
 function labelFor(scan: Scan, index: number) {
   if (scan.repository_name && scan.repository_name !== "Uploaded ZIP") return scan.repository_name;
@@ -23,14 +25,32 @@ function initialProgress(scan: Scan) {
   if (TERMINAL_STATUSES.has(scan.status)) return 100;
   const stages = (scan as ScanWithStages).stages ?? [];
   if (scan.status === "running" && stages.length) {
-    const done = stages.filter((stage) => ["completed", "partial", "failed", "skipped", "cancelled", "timed out"].includes(String(stage.status ?? ""))).length;
-    const expected = stages.length > 1 ? stages.length : 8;
-    return Math.max(15, Math.min(99, Math.round((done / expected) * 100)));
+    return progressFromStages(scan.status, stages);
   }
   if (scan.status === "running") return 15;
   if (scan.status === "queued") return 0;
   if (scan.status === "preparing") return 3;
   return 0;
+}
+
+function progressFromStages(status: string, stages: Array<{ status?: string }> = []) {
+  if (TERMINAL_STATUSES.has(status)) return 100;
+  if (status === "queued") return 0;
+  if (status === "preparing") return 3;
+  if (!stages.length) return status === "running" ? 15 : 0;
+  const done = stages.filter((stage) => DONE_STAGE_STATUSES.has(String(stage.status ?? ""))).length;
+  const expected = stages.length > 1 ? stages.length : 8;
+  return Math.max(status === "running" ? 15 : 0, Math.min(99, Math.round((done / expected) * 100)));
+}
+
+function normalizeEvent(event: ScanEventState) {
+  const eventProgress = Number.isFinite(Number(event.progress)) ? Number(event.progress) : 0;
+  const stageProgress = progressFromStages(event.status, event.stages);
+  return {
+    status: event.status,
+    progress: Math.max(0, Math.min(100, Math.max(eventProgress, stageProgress))),
+    stages: event.stages,
+  };
 }
 
 export function ScanHistory({ scans, selectedId, projectId }: { scans: Scan[]; selectedId?: string | null; projectId?: string | null }) {
@@ -65,10 +85,14 @@ export function ScanHistory({ scans, selectedId, projectId }: { scans: Scan[]; s
       const updates = await Promise.all(
         ids.map(async (scanId) => {
           try {
-            const response = await fetch(`/api/scan-events/${encodeURIComponent(scanId)}`, { cache: "no-store" });
+            const response = await fetch(`/api/scan-events/${encodeURIComponent(scanId)}?t=${Date.now()}`, {
+              cache: "no-store",
+              credentials: "same-origin",
+              headers: { "cache-control": "no-cache" },
+            });
             if (!response.ok) return null;
             const event = (await response.json()) as ScanEventState;
-            return [scanId, { status: event.status, progress: Math.max(0, Math.min(100, event.progress ?? 0)) }] as const;
+            return [scanId, normalizeEvent(event)] as const;
           } catch {
             return null;
           }
@@ -102,7 +126,7 @@ export function ScanHistory({ scans, selectedId, projectId }: { scans: Scan[]; s
     }
 
     poll();
-    const timer = window.setInterval(poll, 2000);
+    const timer = window.setInterval(poll, 1000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
