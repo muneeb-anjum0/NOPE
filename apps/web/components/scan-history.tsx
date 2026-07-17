@@ -11,6 +11,8 @@ type ScanEventState = {
 };
 
 const ACTIVE_STATUSES = new Set(["preparing", "queued", "running"]);
+const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled", "partial"]);
+type ScanWithStages = Scan & { stages?: Array<{ status?: string }> };
 
 function labelFor(scan: Scan, index: number) {
   if (scan.repository_name && scan.repository_name !== "Uploaded ZIP") return scan.repository_name;
@@ -18,9 +20,15 @@ function labelFor(scan: Scan, index: number) {
 }
 
 function initialProgress(scan: Scan) {
-  if (["completed", "failed", "cancelled", "partial"].includes(scan.status)) return 100;
-  if (scan.status === "running") return 35;
-  if (scan.status === "queued") return 8;
+  if (TERMINAL_STATUSES.has(scan.status)) return 100;
+  const stages = (scan as ScanWithStages).stages ?? [];
+  if (scan.status === "running" && stages.length) {
+    const done = stages.filter((stage) => ["completed", "partial", "failed", "skipped", "cancelled", "timed out"].includes(String(stage.status ?? ""))).length;
+    const expected = stages.length > 1 ? stages.length : 8;
+    return Math.max(15, Math.min(99, Math.round((done / expected) * 100)));
+  }
+  if (scan.status === "running") return 15;
+  if (scan.status === "queued") return 0;
   if (scan.status === "preparing") return 3;
   return 0;
 }
@@ -116,8 +124,7 @@ export function ScanHistory({ scans, selectedId, projectId }: { scans: Scan[]; s
               <span className={`scan-status scan-status-${state.status}`}>{state.status}</span>
               <span className="scan-history-verdict">{scan.verdict}</span>
               <span className="scan-progress-orb" aria-label={`${state.progress}% complete`}>
-                {state.progress}
-                <small>%</small>
+                {state.progress}<small>%</small>
               </span>
             </a>
             <form action="/api/delete-scan" method="post">

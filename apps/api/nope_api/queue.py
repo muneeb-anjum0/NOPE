@@ -191,7 +191,7 @@ def _progress_percent(scan: Scan) -> int:
     if scan.status == "preparing":
         return 3
     if scan.status == "queued":
-        return 8
+        return 0
     if not scan.stages:
         return 15 if scan.status == "running" else 0
     done = sum(1 for stage in scan.stages if stage.get("status") in {"completed", "partial", "failed", "skipped", "cancelled", "timed out"})
