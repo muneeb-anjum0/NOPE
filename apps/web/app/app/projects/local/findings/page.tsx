@@ -132,36 +132,31 @@ function FindingDetailPanel({ detail, tab, params }: { detail: FindingDetail | n
   const tabs = ["overview", "evidence", "code", "code_flow", "fix", "tests", "history"];
   const expanded = params.get("detail") === "open";
   return (
-    <div className={`app-panel finding-detail-panel${expanded ? " detail-expanded" : " detail-collapsed"}`}>
-      <div className="finding-detail-summary">
+    <details className="collapse-panel finding-detail-panel" open={expanded}>
+      <summary className="finding-detail-summary">
         <div>
           <p className="detail-eyebrow">Finding detail</p>
           <h2>{finding.title}</h2>
         </div>
         <div className="detail-summary-actions">
           <span className={severityClass(finding.severity)}>{finding.severity}</span>
-          <a className="button-secondary detail-toggle" href={hrefWith(params, { detail: expanded ? null : "open" })}>
-            {expanded ? "Collapse" : "Expand"}
-          </a>
         </div>
+      </summary>
+      <div className="collapse-body finding-detail-body">
+        <div className="tab-row detail-tab-row">
+          {tabs.map((name) => (
+            <a key={name} className={tab === name ? "active-tab" : ""} href={hrefWith(params, { tab: name, detail: "open" })}>{name.replace("_", " ")}</a>
+          ))}
+        </div>
+        {tab === "overview" && <Overview detail={detail} />}
+        {tab === "evidence" && <Evidence detail={detail} />}
+        {tab === "code" && <Code detail={detail} />}
+        {tab === "code_flow" && <CodeFlow detail={detail} />}
+        {tab === "fix" && <Fix detail={detail} />}
+        {tab === "tests" && <Tests detail={detail} />}
+        {tab === "history" && <History detail={detail} />}
       </div>
-      {expanded ? (
-        <div className="finding-detail-body">
-          <div className="tab-row detail-tab-row">
-            {tabs.map((name) => (
-              <a key={name} className={tab === name ? "active-tab" : ""} href={hrefWith(params, { tab: name, detail: "open" })}>{name.replace("_", " ")}</a>
-            ))}
-          </div>
-          {tab === "overview" && <Overview detail={detail} />}
-          {tab === "evidence" && <Evidence detail={detail} />}
-          {tab === "code" && <Code detail={detail} />}
-          {tab === "code_flow" && <CodeFlow detail={detail} />}
-          {tab === "fix" && <Fix detail={detail} />}
-          {tab === "tests" && <Tests detail={detail} />}
-          {tab === "history" && <History detail={detail} />}
-        </div>
-      ) : null}
-    </div>
+    </details>
   );
 }
 

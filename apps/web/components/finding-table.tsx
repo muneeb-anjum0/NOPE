@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { Finding } from "@/lib/types";
 
 const BATCH_SIZE = 7;
@@ -24,8 +24,7 @@ export function FindingTable({
 }) {
   const search = useMemo(() => new URLSearchParams(searchQuery), [searchQuery]);
   const requestedVisible = Number(search.get("shown") ?? BATCH_SIZE);
-  const initialVisible = Number.isFinite(requestedVisible) ? Math.max(BATCH_SIZE, requestedVisible) : BATCH_SIZE;
-  const [visibleCount, setVisibleCount] = useState(initialVisible);
+  const visibleCount = Number.isFinite(requestedVisible) ? Math.max(BATCH_SIZE, requestedVisible) : BATCH_SIZE;
   const hrefFor = (finding: Finding) => {
     const params = new URLSearchParams(search.toString());
     if (scanId) params.set("scan", scanId);
@@ -43,14 +42,13 @@ export function FindingTable({
     window.location.assign(hrefFor(finding));
   }
 
-  function loadMore() {
+  function loadMoreHref() {
     const nextCount = Math.min(visibleCount + BATCH_SIZE, findings.length);
-    setVisibleCount(nextCount);
     const params = new URLSearchParams(search.toString());
     if (scanId) params.set("scan", scanId);
     if (selectedId) params.set("finding", selectedId);
     params.set("shown", String(nextCount));
-    window.history.replaceState(null, "", `/app/projects/local/findings?${params.toString()}`);
+    return `/app/projects/local/findings?${params.toString()}`;
   }
 
   return (
@@ -109,9 +107,9 @@ export function FindingTable({
         <div className="finding-table-footer">
           <span className="mono muted">{visibleFindings.length} shown{resultTotal > findings.length ? ` / ${findings.length} loaded from ${resultTotal}` : ""}</span>
           {canLoadMore ? (
-            <button className="button-secondary" type="button" onClick={loadMore}>
+            <a className="button-secondary" href={loadMoreHref()}>
               Load more
-            </button>
+            </a>
           ) : null}
         </div>
       ) : null}

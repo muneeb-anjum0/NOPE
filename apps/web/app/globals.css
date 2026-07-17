@@ -2653,6 +2653,7 @@ textarea:focus-visible {
 
 .finding-detail-panel {
   min-width: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
 .finding-detail-summary {
@@ -2660,6 +2661,13 @@ textarea:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
+  padding: 16px 18px;
+}
+
+.finding-detail-summary::after {
+  font-size: 24px;
+  width: 22px;
+  text-align: center;
 }
 
 .finding-detail-summary h2 {
@@ -2684,18 +2692,9 @@ textarea:focus-visible {
   flex-shrink: 0;
 }
 
-.detail-toggle {
-  min-width: 88px;
-}
-
 .finding-detail-body {
-  margin-top: 14px;
   border-top: 1px solid var(--border-subtle);
-  padding-top: 14px;
-}
-
-.detail-collapsed {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.034), rgba(255, 255, 255, 0.014));
+  padding: 14px 18px 18px;
 }
 
 .detail-tab-row {
