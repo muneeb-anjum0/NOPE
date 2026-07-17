@@ -1838,6 +1838,20 @@ textarea:focus-visible {
   color: var(--brand-primary);
 }
 
+.findings-stack :is(.mono, .line-number, .finding-table-footer, .detail-grid dd, .evidence-card p) {
+  color: var(--text-secondary);
+}
+
+.findings-stack .finding-table .mono,
+.findings-stack .code-viewer .mono,
+.findings-stack .line-number {
+  color: var(--text-muted);
+}
+
+.findings-stack .hot-slash {
+  color: var(--brand-primary);
+}
+
 .location-cell {
   line-height: 1.35;
 }
@@ -2872,29 +2886,26 @@ textarea:focus-visible {
   font-weight: 760;
 }
 
-.typewriter-text {
+.answer-reveal-text {
   white-space: pre-wrap;
-}
-
-.typing-caret {
   display: inline-block;
-  width: 7px;
-  height: 1em;
-  margin-left: 2px;
-  border-right: 2px solid var(--brand-primary);
-  vertical-align: -0.12em;
-  animation: caret-blink 780ms steps(1) infinite;
-}
-
-@keyframes caret-blink {
-  50% {
-    opacity: 0;
-  }
+  animation: answer-reveal 260ms ease both;
 }
 
 .detail-stack {
   display: grid;
   gap: 12px;
+}
+
+@keyframes answer-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .detail-grid {
