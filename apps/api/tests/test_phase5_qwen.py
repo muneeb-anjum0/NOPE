@@ -79,14 +79,50 @@ async def test_structured_completion_validates_qwen_json(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_structured_completion_rejects_invalid_json(monkeypatch):
+async def test_structured_completion_repairs_invalid_json_for_all_actions(monkeypatch):
+    calls: list[tuple[str, str]] = []
+
     async def fake_completion(settings, *, system, user, json_mode=False):
-        return {"content": "not json", "raw": {}}
+        calls.append((system, user))
+        if "repair malformed nope ai output" in system.lower():
+            return {
+                "content": """
+                {
+                  "summary": "Repaired structured summary with a concrete example.",
+                  "evidence": ["The scanner found a redacted token in app/api/route.ts.", "Example check: confirm the token is not a placeholder."],
+                  "reasoning": "A committed token can be copied by anyone with repository access. For example, a leaked provider key could be reused outside the app.",
+                  "recommendation": "Rotate the secret, move it to managed storage, and add a regression check.",
+                  "confidence": "medium",
+                  "risk": "high"
+                }
+                """,
+                "raw": {},
+            }
+        return {"content": "Here is the explanation in prose, but not JSON.", "raw": {}}
 
     monkeypatch.setattr(ai, "llama_chat_completion", fake_completion)
 
-    with pytest.raises(RuntimeError, match="Structured Qwen output failed validation"):
-        await ai.structured_completion(qwen_settings(), "fix", sample_finding())
+    for action in ("explain", "challenge", "fix", "test"):
+        result = await ai.structured_completion(qwen_settings(), action, sample_finding())
+        assert result.summary.startswith("Repaired structured summary")
+        assert result.evidence
+        assert "Example" in result.evidence[1]
+
+    assert len(calls) == 8
+
+
+@pytest.mark.asyncio
+async def test_structured_completion_falls_back_when_repair_fails(monkeypatch):
+    async def fake_completion(settings, *, system, user, json_mode=False):
+        return {"content": "Plain text answer with useful context but no JSON.", "raw": {}}
+
+    monkeypatch.setattr(ai, "llama_chat_completion", fake_completion)
+
+    result = await ai.structured_completion(qwen_settings(), "challenge", sample_finding())
+
+    assert "Hardcoded API key" in result.summary
+    assert result.evidence
+    assert "Raw model text" in result.reasoning
 
 
 @pytest.mark.asyncio

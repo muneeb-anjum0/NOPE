@@ -183,7 +183,7 @@ async def llama_completion(settings: Settings, prompt: str, *, json_mode: bool =
 
     output_tokens = settings.effective_qwen_max_output_tokens
     if json_mode:
-        output_tokens = min(output_tokens, 256)
+        output_tokens = min(output_tokens, 1024)
     payload: dict[str, Any] = {
         "prompt": prompt,
         "n_predict": output_tokens,
@@ -219,7 +219,7 @@ async def llama_chat_completion(settings: Settings, *, system: str, user: str, j
 
     output_tokens = settings.effective_qwen_max_output_tokens
     if json_mode:
-        output_tokens = min(output_tokens, 256)
+        output_tokens = min(output_tokens, 1024)
     user = _fit_chat_prompt(settings, system, user, output_tokens=output_tokens)
     payload: dict[str, Any] = {
         "model": settings.ai_model_name,
@@ -266,6 +266,66 @@ def _extract_json_object(content: str) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError("Completion JSON is not an object.")
     return parsed
+
+
+def _structured_fallback(action: AIAction, finding: Finding, content: str, error: Exception) -> StructuredAIResult:
+    location = finding.affected_file or finding.affected_route or "unknown location"
+    line = f":{finding.start_line}" if finding.start_line else ""
+    evidence = [
+        f"{source} reported this finding at {location}{line}."
+        for source in (finding.scanner_sources or ["Scanner evidence"])
+    ]
+    for item in finding.evidence[:3]:
+        if item.message:
+            evidence.append(_bounded(item.message, 240) or item.message)
+    action_summary = {
+        "explain": f"{finding.title} was reported at {location}{line}. The model response was not valid JSON, so NOPE preserved the finding evidence in a structured explanation.",
+        "challenge": f"{finding.title} needs evidence review at {location}{line}. The model response was not valid JSON, so NOPE preserved the skeptical review request in a structured fallback.",
+        "fix": f"{finding.title} needs remediation at {location}{line}. The model response was not valid JSON, so NOPE preserved safe patch guidance from the finding metadata.",
+        "test": f"{finding.title} needs regression coverage at {location}{line}. The model response was not valid JSON, so NOPE preserved test guidance from the finding metadata.",
+    }[action]
+    action_recommendation = {
+        "explain": "Inspect the listed file, route, and scanner evidence first. Use the raw model text below only as context, not as source of truth.",
+        "challenge": "Confirm whether the affected code path is reachable, whether the reported location is generated/vendor code, and whether ownership or secret handling exists elsewhere.",
+        "fix": finding.remediation or "Patch the affected code path using the scanner evidence, then rerun the scan.",
+        "test": finding.test_guidance or "Add a regression test that fails before the fix, passes after the fix, and covers the affected route or file.",
+    }[action]
+    raw = _bounded(content.strip(), 900) if content.strip() else None
+    reasoning = f"Qwen returned non-JSON output ({error}). NOPE converted the available finding metadata into a structured response so the UI can keep working."
+    if raw:
+        reasoning += f"\n\nRaw model text:\n{raw}"
+    return StructuredAIResult(
+        summary=action_summary,
+        evidence=evidence[:6],
+        reasoning=reasoning,
+        recommendation=action_recommendation,
+        confidence=finding.confidence.value,
+        risk=finding.severity.value,
+    )
+
+
+async def _repair_structured_completion(settings: Settings, action: AIAction, finding: Finding, content: str, parse_error: Exception) -> StructuredAIResult:
+    schema = (
+        '{"summary":"2-4 useful sentences","evidence":["3-6 concrete evidence/example bullets"],'
+        '"reasoning":"detailed reasoning with examples","recommendation":"specific next steps with examples",'
+        '"confidence":"confirmed|high|medium|low|uncertain","risk":"critical|high|medium|low|info"}'
+    )
+    system = (
+        "You repair malformed NOPE AI output. Return only valid JSON. "
+        "Do not wrap in markdown. Do not add prose outside JSON. Preserve useful details and examples."
+    )
+    user = (
+        f"Action: {action}\n"
+        f"Finding: {finding.title}\n"
+        f"Location: {finding.affected_file or finding.affected_route or 'unknown'}"
+        f"{f':{finding.start_line}' if finding.start_line else ''}\n"
+        f"Original parse error: {parse_error}\n\n"
+        f"Required JSON shape:\n{schema}\n\n"
+        "Malformed model output to convert into that JSON shape:\n"
+        + _bounded(content, 5000)
+    )
+    repaired = await llama_chat_completion(settings, system=system, user=user, json_mode=True)
+    return StructuredAIResult(**_extract_json_object(repaired["content"]))
 
 
 async def structured_completion(
@@ -340,7 +400,10 @@ async def structured_completion(
     try:
         return StructuredAIResult(**_extract_json_object(completion["content"]))
     except (ValidationError, ValueError, json.JSONDecodeError) as exc:
-        raise RuntimeError(f"Structured Qwen output failed validation: {exc}") from exc
+        try:
+            return await _repair_structured_completion(settings, action, finding, completion["content"], exc)
+        except Exception:
+            return _structured_fallback(action, finding, completion["content"], exc)
 
 
 async def run_ai_review(
