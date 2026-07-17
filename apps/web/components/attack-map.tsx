@@ -21,6 +21,12 @@ type Anchor = {
   side: "left" | "right" | "top" | "bottom";
 };
 
+type EdgeLabel = {
+  x: number;
+  y: number;
+  textAnchor: "start" | "middle" | "end";
+};
+
 const NODE_WIDTH = 260;
 const NODE_HEIGHT = 118;
 const CANVAS_PADDING = 56;
@@ -132,11 +138,24 @@ function edgePath(source: PositionedNode, target: PositionedNode) {
   return `M ${start.x} ${start.y} V ${midY} H ${end.x} V ${end.y}`;
 }
 
-function edgeLabelPoint(source: PositionedNode, target: PositionedNode) {
+function edgeLabelPoint(source: PositionedNode, target: PositionedNode): EdgeLabel {
   const [start, end] = anchorsForEdge(source, target);
+  if (start.side === "right" || start.side === "left") {
+    const direction = start.side === "right" ? 1 : -1;
+    const gap = Math.abs(end.x - start.x);
+    return {
+      x: start.x + direction * Math.min(70, Math.max(34, gap / 3)),
+      y: start.y - 12,
+      textAnchor: start.side === "right" ? "start" : "end",
+    };
+  }
+
+  const direction = start.side === "bottom" ? 1 : -1;
+  const gap = Math.abs(end.y - start.y);
   return {
-    x: (start.x + end.x) / 2,
-    y: (start.y + end.y) / 2 - 8,
+    x: start.x + 16,
+    y: start.y + direction * Math.min(62, Math.max(34, gap / 3)),
+    textAnchor: "start",
   };
 }
 
@@ -201,7 +220,7 @@ function edgeKey(edge: GraphEdge) {
 function edgeText(edge: GraphEdge, source: PositionedNode, target: PositionedNode) {
   const point = edgeLabelPoint(source, target);
   return (
-    <text x={point.x} y={point.y}>
+    <text className="attack-edge-label" dominantBaseline="middle" textAnchor={point.textAnchor} x={point.x} y={point.y}>
       {edge.relationship}
     </text>
   );

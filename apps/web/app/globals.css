@@ -2070,13 +2070,15 @@ textarea:focus-visible {
 }
 
 .attack-edges text {
-  fill: var(--text-tertiary);
+  fill: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   paint-order: stroke;
-  stroke: var(--background-surface-1);
-  stroke-width: 4px;
+  stroke: rgba(9, 10, 10, 0.94);
+  stroke-width: 7px;
   stroke-linejoin: round;
+  letter-spacing: 0;
+  pointer-events: none;
 }
 
 .attack-node {
