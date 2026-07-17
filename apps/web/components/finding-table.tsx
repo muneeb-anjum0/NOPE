@@ -20,6 +20,20 @@ function lineRangeFor(finding: Finding) {
   return `line ${line}`;
 }
 
+function SlashMeta({ items }: { items: Array<string | null | undefined> }) {
+  const visible = items.filter((item): item is string => Boolean(item));
+  return (
+    <>
+      {visible.map((item, index) => (
+        <span key={`${item}-${index}`}>
+          {index > 0 ? <span className="hot-slash"> / </span> : null}
+          {item}
+        </span>
+      ))}
+    </>
+  );
+}
+
 export function FindingTable({
   findings,
   scanId,
@@ -116,7 +130,9 @@ export function FindingTable({
                 <td className="finding-title-cell">
                   <strong>{finding.title}</strong>
                   <br />
-                  <span className="muted">{finding.category} / {finding.confidence}{lineRangeFor(finding) ? ` / ${lineRangeFor(finding)}` : ""}</span>
+                  <span className="muted">
+                    <SlashMeta items={[finding.category, finding.confidence, lineRangeFor(finding)]} />
+                  </span>
                 </td>
                 <td className="mono location-cell">{finding.affected_file ?? finding.affected_route ?? "n/a"}</td>
                 <td>{finding.scanner_sources.join(" + ") || finding.raw_artifact_id || "Evidence"}</td>

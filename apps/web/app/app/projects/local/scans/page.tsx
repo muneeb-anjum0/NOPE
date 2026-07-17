@@ -33,12 +33,6 @@ export default async function ScansPage({
           />
         ))}
       </section>
-
-      {projects.length === 0 ? (
-        <div className="app-panel empty-folder-panel">
-          <p className="muted">No folders yet. Use the plus card to create the first project workspace.</p>
-        </div>
-      ) : null}
     </>
   );
 }

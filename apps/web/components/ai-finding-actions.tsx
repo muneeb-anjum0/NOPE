@@ -61,6 +61,31 @@ const actionCopy: Record<AIAction, { title: string; reasoning: string; recommend
   },
 };
 
+function TypewriterText({ text, activeKey }: { text: string; activeKey: string }) {
+  const [visible, setVisible] = useState(text.length);
+
+  useEffect(() => {
+    setVisible(0);
+    if (!text) return;
+    const step = Math.max(3, Math.ceil(text.length / 90));
+    const timer = window.setInterval(() => {
+      setVisible((current) => {
+        const next = Math.min(text.length, current + step);
+        if (next >= text.length) window.clearInterval(timer);
+        return next;
+      });
+    }, 14);
+    return () => window.clearInterval(timer);
+  }, [activeKey, text]);
+
+  return (
+    <span className="typewriter-text">
+      {text.slice(0, visible)}
+      {visible < text.length ? <span className="typing-caret" aria-hidden="true" /> : null}
+    </span>
+  );
+}
+
 export function AIFindingActions({ finding }: { finding: Finding }) {
   const [activeAction, setActiveAction] = useState<AIAction | null>(null);
   const [selectedAction, setSelectedAction] = useState<AIAction | null>(null);
@@ -133,13 +158,14 @@ export function AIFindingActions({ finding }: { finding: Finding }) {
   const result = selectedAction ? results[selectedAction] : null;
   const structured = result?.result;
   const labels = selectedAction ? actionCopy[selectedAction] : null;
+  const revealKey = `${selectedAction ?? "none"}:${finding.id}`;
 
   return (
     <div className="ai-actions">
       <div className="button-row">
         {actionLabels.map(([action, label]) => (
           <button className={`button ai-action-button${selectedAction === action ? " active-ai-action" : ""}`} key={action} type="button" onClick={() => runAction(action)} disabled={activeAction !== null}>
-            {activeAction === action ? "Running..." : label}
+            {activeAction === action ? "Thinking..." : label}
           </button>
         ))}
       </div>
@@ -148,14 +174,16 @@ export function AIFindingActions({ finding }: { finding: Finding }) {
         <div className="ai-result">
           <div>
             <span className="ai-result-label">{labels.title}</span>
-            <strong>{structured.summary}</strong>
+            <strong><TypewriterText activeKey={`${revealKey}:summary`} text={structured.summary} /></strong>
           </div>
           {structured.evidence?.length ? (
             <div>
               <span className="ai-result-label">{labels.evidence}</span>
               <ul className="ai-evidence-list">
                 {structured.evidence.slice(0, 4).map((item, index) => (
-                  <li key={`${item}-${index}`}>{item}</li>
+                  <li key={`${item}-${index}`}>
+                    <TypewriterText activeKey={`${revealKey}:evidence:${index}`} text={item} />
+                  </li>
                 ))}
               </ul>
             </div>
@@ -163,12 +191,12 @@ export function AIFindingActions({ finding }: { finding: Finding }) {
           {structured.reasoning ? (
             <div>
               <span className="ai-result-label">{labels.reasoning}</span>
-              <p>{structured.reasoning}</p>
+              <p><TypewriterText activeKey={`${revealKey}:reasoning`} text={structured.reasoning} /></p>
             </div>
           ) : null}
           <div>
             <span className="ai-result-label">{labels.recommendation}</span>
-            <p>{structured.recommendation}</p>
+            <p><TypewriterText activeKey={`${revealKey}:recommendation`} text={structured.recommendation} /></p>
           </div>
           <span className="mono ai-generated-label">Gen. by Qwen</span>
         </div>

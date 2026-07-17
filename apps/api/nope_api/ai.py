@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 import time
@@ -14,6 +15,8 @@ from nope_api.rag import retrieve_context as retrieve_rag_context
 
 
 AIAction = Literal["explain", "challenge", "fix", "test"]
+ACTION_CACHE_TTL_SECONDS = 24 * 60 * 60
+_ACTION_CACHE: dict[str, tuple[float, "StructuredAIResult"]] = {}
 
 SECRET_PATTERNS = [
     re.compile(r"sk-[A-Za-z0-9_-]{12,}"),
@@ -75,6 +78,38 @@ class StructuredAIResult(BaseModel):
         if lowered in {"critical", "high", "medium", "low", "info"}:
             return lowered
         return None
+
+
+def _finding_cache_key(settings: Settings, finding: Finding, action: AIAction) -> str:
+    payload = "|".join(
+        [
+            settings.ai_model_name,
+            action,
+            finding.fingerprint,
+            finding.id,
+            finding.title,
+            finding.severity.value,
+            finding.affected_file or finding.affected_route or "",
+            str(finding.start_line or ""),
+            str(finding.end_line or ""),
+        ]
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _get_cached_action(key: str) -> StructuredAIResult | None:
+    cached = _ACTION_CACHE.get(key)
+    if not cached:
+        return None
+    expires_at, result = cached
+    if expires_at <= time.time():
+        _ACTION_CACHE.pop(key, None)
+        return None
+    return result
+
+
+def _set_cached_action(key: str, result: StructuredAIResult) -> None:
+    _ACTION_CACHE[key] = (time.time() + ACTION_CACHE_TTL_SECONDS, result)
 
 
 def redact_ai_text(value: str) -> str:
@@ -461,11 +496,25 @@ async def finding_action(
     root: Path | None = None,
     scan: Scan | None = None,
 ) -> dict:
-    context = retrieve_context([finding], settings.ai_max_retrieved_chunks, settings=settings, root=root, scan=scan)
     if settings.ai_provider == "none":
         return {"status": "Not tested", "message": "AI provider is disabled.", "action": action, "result": None}
+    cache_key = _finding_cache_key(settings, finding, action)
+    cached = _get_cached_action(cache_key)
+    if cached:
+        return {
+            "status": "Complete",
+            "message": "Qwen returned cached structured output.",
+            "provider": settings.ai_provider,
+            "model": settings.ai_model_name,
+            "action": action,
+            "cached": True,
+            "context_chunks": 0,
+            "result": cached.model_dump(mode="json"),
+        }
+    context = retrieve_context([finding], settings.ai_max_retrieved_chunks, settings=settings, root=root, scan=scan)
     try:
         result = await structured_completion(settings, action, finding, root=root, scan=scan)
+        _set_cached_action(cache_key, result)
         return {
             "status": "Complete",
             "message": "Qwen returned validated structured output.",

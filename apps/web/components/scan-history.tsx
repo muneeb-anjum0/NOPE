@@ -147,9 +147,6 @@ export function ScanHistory({ scans, selectedId, projectId }: { scans: Scan[]; s
               <span className="scan-history-title mono">{labelFor(scan, index)}</span>
               <span className={`scan-status scan-status-${state.status}`}>{state.status}</span>
               <span className="scan-history-verdict">{scan.verdict}</span>
-              <span className="scan-progress-orb" aria-label={`${state.progress}% complete`}>
-                {state.progress}<small>%</small>
-              </span>
             </a>
             <form action="/api/delete-scan" method="post">
               <input name="scanId" type="hidden" value={scan.id} />

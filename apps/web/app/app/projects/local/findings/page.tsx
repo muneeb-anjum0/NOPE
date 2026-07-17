@@ -34,6 +34,20 @@ function hrefWith(params: URLSearchParams, updates: Record<string, string | numb
   return `/app/projects/local/findings?${next.toString()}`;
 }
 
+function SlashMeta({ items }: { items: Array<string | null | undefined> }) {
+  const visible = items.filter((item): item is string => Boolean(item));
+  return (
+    <>
+      {visible.map((item, index) => (
+        <span key={`${item}-${index}`}>
+          {index > 0 ? <span className="hot-slash"> / </span> : null}
+          {item}
+        </span>
+      ))}
+    </>
+  );
+}
+
 export default async function FindingsPage({ searchParams }: PageProps) {
   const resolved = (await searchParams) ?? {};
   const params = paramsFrom(resolved);
@@ -172,7 +186,7 @@ function Overview({ detail }: { detail: FindingDetail }) {
         <div><dt>Confidence</dt><dd>{finding.confidence}</dd></div>
         <div><dt>Status</dt><dd>{finding.status}</dd></div>
         <div><dt>Rule</dt><dd>{finding.nope_rule_id ?? finding.original_rule_id ?? "n/a"}</dd></div>
-        <div><dt>CWE / OWASP</dt><dd>{finding.cwe ?? "n/a"} / {finding.owasp ?? "n/a"}</dd></div>
+        <div><dt>CWE <span className="hot-slash">/</span> OWASP</dt><dd><SlashMeta items={[finding.cwe ?? "n/a", finding.owasp ?? "n/a"]} /></dd></div>
         <div><dt>Location</dt><dd className="mono">{finding.affected_file ?? finding.affected_route ?? "n/a"}</dd></div>
         <div><dt>Scanner</dt><dd>{finding.scanner_sources.join(" + ") || "n/a"}</dd></div>
       </dl>

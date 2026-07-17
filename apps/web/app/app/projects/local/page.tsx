@@ -1,5 +1,4 @@
 import { AttackMapPanel } from "@/components/attack-map";
-import { FindingTable } from "@/components/finding-table";
 import { PinkDotText } from "@/components/pink-dot-text";
 import { getActiveProjectId, scansForProject } from "@/lib/active-project";
 import { freshScan, getProjects, getScanComparison, getScans, selectScan } from "@/lib/nope-data";
@@ -88,7 +87,6 @@ export default async function ProjectOverview({
 
       <section className="dashboard-workspace">
         <div className="dashboard-primary">
-          <FindingTable findings={(scan.findings ?? []).slice(0, 5)} />
           <div className="app-panel">
             <div className="panel-title">
               <h2>Attack path preview</h2>

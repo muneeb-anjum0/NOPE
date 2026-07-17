@@ -607,6 +607,9 @@ textarea:focus-visible {
 }
 
 .severity-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid currentColor;
   border-radius: 999px;
   padding: 3px 7px;
@@ -1798,6 +1801,10 @@ textarea:focus-visible {
   width: 86px;
 }
 
+.finding-table .severity-pill {
+  min-width: 68px;
+}
+
 .finding-table .finding-column {
   width: min(360px, 30%);
 }
@@ -1825,6 +1832,10 @@ textarea:focus-visible {
   max-width: 360px;
   white-space: normal;
   line-height: 1.25;
+}
+
+.hot-slash {
+  color: var(--brand-primary);
 }
 
 .location-cell {
@@ -1866,7 +1877,7 @@ textarea:focus-visible {
 }
 
 .load-more-button .mono {
-  color: var(--brand-primary);
+  color: var(--text-secondary);
   font-size: 11px;
 }
 
@@ -2261,7 +2272,7 @@ textarea:focus-visible {
 .scan-history-main {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) auto minmax(160px, 1.2fr) 58px;
+  grid-template-columns: minmax(120px, 1fr) auto minmax(160px, 1.2fr);
   align-items: center;
   gap: 16px;
   color: var(--text-primary);
@@ -2277,29 +2288,6 @@ textarea:focus-visible {
 
 .scan-history-verdict {
   color: var(--text-primary);
-}
-
-.scan-progress-orb {
-  min-width: 54px;
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  justify-self: end;
-  border: 1px solid rgba(240, 42, 86, 0.38);
-  border-radius: 999px;
-  background: rgba(8, 9, 10, 0.78);
-  color: var(--brand-primary);
-  font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 650;
-  line-height: 1;
-}
-
-.scan-progress-orb small {
-  margin-left: 1px;
-  color: var(--brand-primary);
-  font-size: 11px;
 }
 
 .scan-history-empty {
@@ -2882,6 +2870,26 @@ textarea:focus-visible {
 .ai-generated-label {
   color: var(--brand-primary);
   font-weight: 760;
+}
+
+.typewriter-text {
+  white-space: pre-wrap;
+}
+
+.typing-caret {
+  display: inline-block;
+  width: 7px;
+  height: 1em;
+  margin-left: 2px;
+  border-right: 2px solid var(--brand-primary);
+  vertical-align: -0.12em;
+  animation: caret-blink 780ms steps(1) infinite;
+}
+
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
 }
 
 .detail-stack {
