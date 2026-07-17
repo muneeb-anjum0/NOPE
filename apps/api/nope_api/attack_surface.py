@@ -10,6 +10,20 @@ ROUTE_PATTERNS = [
     re.compile(r"@(app|router)\.(get|post|put|patch|delete)\(['\"]([^'\"]+)['\"]\)\s*\n\s*(?:async\s+)?def\s+([A-Za-z0-9_]+)"),
 ]
 
+SVELTEKIT_ROUTE_FILES = {
+    "+page.svelte",
+    "+page.ts",
+    "+page.js",
+    "+server.ts",
+    "+server.js",
+    "+layout.svelte",
+    "+layout.ts",
+    "+layout.js",
+}
+
+ROUTE_FILE_SUFFIXES = {".js", ".ts", ".tsx", ".py", ".svelte"}
+HTTP_METHOD_EXPORT = re.compile(r"export\s+(?:const|async\s+function|function)\s+(GET|POST|PUT|PATCH|DELETE)", re.IGNORECASE)
+
 
 def route_from_file(root: Path, path: Path) -> tuple[str, str] | None:
     rel = path.relative_to(root).as_posix()
@@ -21,20 +35,26 @@ def route_from_file(root: Path, path: Path) -> tuple[str, str] | None:
         route = "/" + rel.split("pages/api/", 1)[1].rsplit(".", 1)[0]
         route = route.replace("[", ":").replace("]", "")
         return route, "ANY"
+    if "/src/routes/" in f"/{rel}" and path.name in SVELTEKIT_ROUTE_FILES:
+        route = _sveltekit_route_from_path(rel)
+        if route:
+            return route, "ANY"
     return None
 
 
 def build_attack_surface(root: Path) -> list[AttackSurfaceItem]:
     items: list[AttackSurfaceItem] = []
+    seen: set[tuple[str, str, str]] = set()
     for path in root.rglob("*"):
-        if not path.is_file() or path.suffix.lower() not in {".js", ".ts", ".tsx", ".py"}:
+        if not path.is_file() or path.suffix.lower() not in ROUTE_FILE_SUFFIXES:
             continue
         text = path.read_text(encoding="utf-8", errors="ignore")
         rel = path.relative_to(root).as_posix()
         file_route = route_from_file(root, path)
         if file_route:
             route, method = file_route
-            items.append(_surface_from_text(route, method, rel, text))
+            for inferred_method in _methods_for_file(path, text, method):
+                _append_unique(items, seen, _surface_from_text(route, inferred_method, rel, text))
 
         for pattern in ROUTE_PATTERNS:
             for match in pattern.finditer(text):
@@ -48,13 +68,50 @@ def build_attack_surface(root: Path) -> list[AttackSurfaceItem]:
                     handler = match.group(3) or None
                 item = _surface_from_text(route, method, rel, text)
                 item.handler = handler
-                items.append(item)
+                _append_unique(items, seen, item)
     return items
+
+
+def _append_unique(items: list[AttackSurfaceItem], seen: set[tuple[str, str, str]], item: AttackSurfaceItem) -> None:
+    key = (item.method, item.route, item.file)
+    if key in seen:
+        return
+    seen.add(key)
+    items.append(item)
+
+
+def _sveltekit_route_from_path(rel: str) -> str | None:
+    route_file = rel.split("/src/routes/", 1)[1]
+    route_root = route_file.rsplit("/", 1)[0] if "/" in route_file else ""
+    parts: list[str] = []
+    for raw_part in route_root.split("/"):
+        if not raw_part or (raw_part.startswith("(") and raw_part.endswith(")")):
+            continue
+        if raw_part.startswith("@"):
+            continue
+        if raw_part.startswith("[[...") and raw_part.endswith("]]"):
+            parts.append(f":{raw_part[5:-2]}")
+        elif raw_part.startswith("[...") and raw_part.endswith("]"):
+            parts.append(f":{raw_part[4:-1]}")
+        elif raw_part.startswith("[") and raw_part.endswith("]"):
+            parts.append(f":{raw_part[1:-1]}")
+        else:
+            parts.append(raw_part)
+    return "/" + "/".join(parts) if parts else "/"
+
+
+def _methods_for_file(path: Path, text: str, fallback: str) -> list[str]:
+    if path.name.startswith("+server."):
+        methods = sorted({match.group(1).upper() for match in HTTP_METHOD_EXPORT.finditer(text)})
+        return methods or [fallback]
+    if path.name.startswith("+page.") or path.name.startswith("+layout."):
+        return ["PAGE"]
+    return [fallback]
 
 
 def _surface_from_text(route: str, method: str, file: str, text: str) -> AttackSurfaceItem:
     lower = text.lower()
-    auth = "present" if any(token in lower for token in ["auth", "session", "jwt", "currentuser", "user_id"]) else "unknown"
+    auth = "present" if any(token in lower for token in ["auth", "session", "jwt", "currentuser", "user_id", "locals.user"]) else "unknown"
     authorization = "present" if any(token in lower for token in ["owner", "tenant", "policy", "authorize", "role"]) else "unknown"
     validation = "present" if any(token in lower for token in ["zod", "joi", "pydantic", "schema", "validate"]) else "unknown"
     return AttackSurfaceItem(
@@ -64,7 +121,7 @@ def _surface_from_text(route: str, method: str, file: str, text: str) -> AttackS
         authentication=auth,
         authorization=authorization,
         validation=validation,
-        input_sources=[source for source in ["params", "query", "body", "cookies", "headers"] if source in lower],
+        input_sources=[source for source in ["params", "query", "body", "cookies", "headers", "formdata", "url"] if source in lower],
         database_access=[db for db in ["prisma", "supabase", "sql", "findunique", "findfirst", "select"] if db in lower],
         file_access=[op for op in ["readfile", "writefile", "upload", "download"] if op in lower],
         external_calls=[op for op in ["fetch(", "axios", "requests.", "httpx."] if op in lower],
