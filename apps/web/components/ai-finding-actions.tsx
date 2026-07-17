@@ -11,8 +11,11 @@ type AIActionResult = {
   model?: string;
   result?: {
     summary: string;
+    evidence?: string[];
+    reasoning?: string;
     recommendation: string;
     confidence: string;
+    risk?: string | null;
   } | null;
 };
 
@@ -23,15 +26,48 @@ const actionLabels: Array<[AIAction, string]> = [
   ["test", "Test"],
 ];
 
+const actionCopy: Record<AIAction, { title: string; reasoning: string; recommendation: string; evidence: string }> = {
+  explain: {
+    title: "What this means",
+    evidence: "Evidence used",
+    reasoning: "Why it matters",
+    recommendation: "Inspect next",
+  },
+  challenge: {
+    title: "Skeptical review",
+    evidence: "Support and gaps",
+    reasoning: "Assumptions to verify",
+    recommendation: "Confirm or dismiss",
+  },
+  fix: {
+    title: "Patch direction",
+    evidence: "Patch target",
+    reasoning: "Why this fixes it",
+    recommendation: "Patch steps",
+  },
+  test: {
+    title: "Regression plan",
+    evidence: "Coverage target",
+    reasoning: "Cases to prove",
+    recommendation: "Tests to add",
+  },
+};
+
 export function AIFindingActions({ finding }: { finding: Finding }) {
   const [activeAction, setActiveAction] = useState<AIAction | null>(null);
-  const [result, setResult] = useState<AIActionResult | null>(null);
+  const [selectedAction, setSelectedAction] = useState<AIAction | null>(null);
+  const [results, setResults] = useState<Partial<Record<AIAction, AIActionResult>>>({});
   const [error, setError] = useState<string | null>(null);
 
   async function runAction(action: AIAction) {
+    if (results[action]) {
+      setSelectedAction(action);
+      setError(null);
+      return;
+    }
     setActiveAction(action);
+    setSelectedAction(action);
     setError(null);
-    setResult(null);
     try {
       const response = await fetch("/api/ai/finding-action", {
         method: "POST",
@@ -42,7 +78,7 @@ export function AIFindingActions({ finding }: { finding: Finding }) {
       if (!response.ok || data.status === "Failed") {
         throw new Error(data.message ?? "Qwen action failed.");
       }
-      setResult(data);
+      setResults((current) => ({ ...current, [action]: data }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Qwen action failed.");
     } finally {
@@ -50,23 +86,47 @@ export function AIFindingActions({ finding }: { finding: Finding }) {
     }
   }
 
+  const result = selectedAction ? results[selectedAction] : null;
   const structured = result?.result;
+  const labels = selectedAction ? actionCopy[selectedAction] : null;
 
   return (
     <div className="ai-actions">
       <div className="button-row">
         {actionLabels.map(([action, label]) => (
-          <button className="button ai-action-button" key={action} type="button" onClick={() => runAction(action)} disabled={activeAction !== null}>
+          <button className={`button ai-action-button${selectedAction === action ? " active-ai-action" : ""}`} key={action} type="button" onClick={() => runAction(action)} disabled={activeAction !== null}>
             {activeAction === action ? "Running..." : label}
           </button>
         ))}
       </div>
       {error ? <p className="muted">{error}</p> : null}
-      {structured ? (
+      {structured && labels ? (
         <div className="ai-result">
-          <strong>{structured.summary}</strong>
-          <p>{structured.recommendation}</p>
-          <span className="mono muted">{result?.model} / {structured.confidence}</span>
+          <div>
+            <span className="ai-result-label">{labels.title}</span>
+            <strong>{structured.summary}</strong>
+          </div>
+          {structured.evidence?.length ? (
+            <div>
+              <span className="ai-result-label">{labels.evidence}</span>
+              <ul className="ai-evidence-list">
+                {structured.evidence.slice(0, 4).map((item, index) => (
+                  <li key={`${item}-${index}`}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {structured.reasoning ? (
+            <div>
+              <span className="ai-result-label">{labels.reasoning}</span>
+              <p>{structured.reasoning}</p>
+            </div>
+          ) : null}
+          <div>
+            <span className="ai-result-label">{labels.recommendation}</span>
+            <p>{structured.recommendation}</p>
+          </div>
+          <span className="mono ai-generated-label">Gen. by Qwen</span>
         </div>
       ) : null}
     </div>

@@ -537,7 +537,32 @@ textarea:focus-visible {
   background: rgba(255, 255, 255, 0.035);
   padding: 12px;
   display: grid;
-  gap: 8px;
+  gap: 12px;
+}
+
+.ai-result p {
+  margin: 4px 0 0;
+}
+
+.ai-result-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.ai-evidence-list {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+}
+
+.ai-evidence-list li::marker {
+  color: var(--brand-primary);
 }
 
 .stage-row,
@@ -2840,10 +2865,21 @@ textarea:focus-visible {
   background: rgba(240, 42, 86, 0.09);
 }
 
+.ai-action-button.active-ai-action {
+  border-color: rgba(240, 42, 86, 0.42);
+  background: rgba(240, 42, 86, 0.08);
+  color: var(--text-primary);
+}
+
 .ai-action-button:disabled {
   cursor: wait;
   opacity: 0.72;
   transform: none;
+}
+
+.ai-generated-label {
+  color: var(--brand-primary);
+  font-weight: 760;
 }
 
 .detail-stack {
