@@ -1992,7 +1992,8 @@ textarea:focus-visible {
 }
 
 .attack-canvas {
-  min-height: 460px;
+  width: 100%;
+  min-height: 520px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   background:
@@ -2001,7 +2002,29 @@ textarea:focus-visible {
     var(--background-surface-1);
   background-size: 34px 34px;
   position: relative;
-  overflow: hidden;
+  overflow: auto;
+  scrollbar-color: var(--brand-primary) rgba(255, 255, 255, 0.06);
+  scrollbar-width: thin;
+}
+
+.attack-canvas::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.attack-canvas::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+}
+
+.attack-canvas::-webkit-scrollbar-thumb {
+  background: rgba(240, 42, 86, 0.72);
+  border: 2px solid rgba(10, 11, 10, 0.88);
+  border-radius: 999px;
+}
+
+.attack-canvas-inner {
+  position: relative;
 }
 
 .attack-canvas-empty {
@@ -2039,11 +2062,11 @@ textarea:focus-visible {
 .attack-edges path {
   fill: none;
   stroke: var(--brand-primary);
-  stroke-width: 2.25;
+  stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
-  opacity: 0.84;
-  filter: drop-shadow(0 0 8px rgba(240, 42, 86, 0.24));
+  opacity: 0.9;
+  filter: drop-shadow(0 0 8px rgba(240, 42, 86, 0.2));
 }
 
 .attack-edges text {
@@ -2064,19 +2087,22 @@ textarea:focus-visible {
   border-radius: var(--radius-md);
   background: rgba(30, 34, 32, 0.88);
   backdrop-filter: blur(10px);
-  padding: 10px;
+  padding: 14px 12px;
   box-shadow: var(--shadow-elevated);
   overflow-wrap: anywhere;
+  overflow: hidden;
 }
 
 .attack-node strong {
   display: block;
   margin-top: 8px;
   line-height: 1.25;
+  max-height: 52px;
+  overflow: hidden;
 }
 
 .attack-node p {
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   color: var(--high);
 }
 
@@ -3356,19 +3382,11 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 
-  .attack-canvas {
-    min-height: 0;
-    display: grid;
-    gap: 10px;
-    overflow: visible;
-    padding: 12px;
-  }
-
   .map-live-connector {
     display: none;
   }
 
-  .attack-node {
+  .landing-map .attack-node {
     position: static;
     min-width: 0;
   }
