@@ -1,4 +1,5 @@
 import { LineSidebar } from "@/components/line-sidebar";
+import { RouteTransition } from "@/components/route-transition";
 import type { Project } from "@/lib/types";
 
 export function AppShell({
@@ -12,7 +13,9 @@ export function AppShell({
       <LineSidebar projects={projects} activeProjectId={activeProjectId} />
       <main className="app-main">
         <div className="sr-only">Signed in as {userEmail}</div>
-        <div className="app-content">{children}</div>
+        <div className="app-content">
+          <RouteTransition>{children}</RouteTransition>
+        </div>
       </main>
     </div>
   );

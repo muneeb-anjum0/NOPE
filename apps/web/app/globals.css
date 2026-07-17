@@ -1601,6 +1601,213 @@ textarea:focus-visible {
   gap: 22px;
 }
 
+.route-transition {
+  --route-accent: var(--brand-primary);
+  --route-rise: 18px;
+  --route-scale: 0.986;
+  --route-blur: 10px;
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+  isolation: isolate;
+  transform-origin: 50% 18%;
+  animation: route-stage-in 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.route-transition[data-route="overview"] {
+  --route-rise: 12px;
+  --route-scale: 0.992;
+}
+
+.route-transition[data-route="findings"],
+.route-transition[data-route="assets"],
+.route-transition[data-route="reports"] {
+  --route-rise: 14px;
+}
+
+.route-transition[data-route="attack-map"] {
+  --route-rise: 8px;
+  --route-scale: 0.996;
+}
+
+.route-transition[data-route="settings"] {
+  --route-rise: 10px;
+}
+
+.route-transition > * {
+  min-width: 0;
+}
+
+.route-transition .page-header,
+.route-transition .dashboard-hero {
+  animation: route-header-in 560ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.route-transition .dashboard-scoreboard > *,
+.route-transition .overview-evidence-rail,
+.route-transition .filter-bar,
+.route-transition .finding-detail-panel,
+.route-transition .finding-table,
+.route-transition .app-panel,
+.route-transition .folder-card,
+.route-transition .coverage-command-strip > *,
+.route-transition .coverage-lane,
+.route-transition .asset-manifest-bar,
+.route-transition .asset-ledger,
+.route-transition .report-board-row,
+.route-transition .settings-console-strip > *,
+.route-transition .settings-ledger,
+.route-transition .settings-edit-deck {
+  animation: route-item-in 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.route-transition .dashboard-scoreboard > *:nth-child(1),
+.route-transition .coverage-command-strip > *:nth-child(1),
+.route-transition .folder-card:nth-child(1),
+.route-transition .report-board-row:nth-child(1),
+.route-transition .settings-console-strip > *:nth-child(1) {
+  animation-delay: 40ms;
+}
+
+.route-transition .dashboard-scoreboard > *:nth-child(2),
+.route-transition .coverage-command-strip > *:nth-child(2),
+.route-transition .folder-card:nth-child(2),
+.route-transition .report-board-row:nth-child(2),
+.route-transition .settings-console-strip > *:nth-child(2) {
+  animation-delay: 80ms;
+}
+
+.route-transition .dashboard-scoreboard > *:nth-child(3),
+.route-transition .coverage-command-strip > *:nth-child(3),
+.route-transition .folder-card:nth-child(3),
+.route-transition .report-board-row:nth-child(3),
+.route-transition .settings-console-strip > *:nth-child(3) {
+  animation-delay: 120ms;
+}
+
+.route-transition .dashboard-scoreboard > *:nth-child(4),
+.route-transition .coverage-command-strip > *:nth-child(4),
+.route-transition .folder-card:nth-child(4),
+.route-transition .report-board-row:nth-child(4),
+.route-transition .settings-console-strip > *:nth-child(4) {
+  animation-delay: 160ms;
+}
+
+.route-transition .folder-card:nth-child(n + 5),
+.route-transition .report-board-row:nth-child(n + 5) {
+  animation-delay: 190ms;
+}
+
+.route-transition[data-route="findings"] .finding-detail-panel {
+  animation-name: route-detail-drop;
+}
+
+.route-transition[data-route="attack-map"] .attack-flow-board,
+.route-transition[data-route="attack-map"] .attack-flow-empty {
+  animation: route-map-in 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.route-transition[data-route="attack-map"] .attack-flow-row {
+  animation: route-item-in 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.route-transition[data-route="attack-map"] .attack-flow-row:nth-child(1) {
+  animation-delay: 80ms;
+}
+
+.route-transition[data-route="attack-map"] .attack-flow-row:nth-child(2) {
+  animation-delay: 130ms;
+}
+
+.route-transition[data-route="attack-map"] .attack-flow-row:nth-child(n + 3) {
+  animation-delay: 180ms;
+}
+
+.route-transition[data-route="coverage"] .coverage-lane:nth-child(1),
+.route-transition[data-route="assets"] .asset-ledger:nth-child(1) {
+  animation-delay: 100ms;
+}
+
+.route-transition[data-route="coverage"] .coverage-lane:nth-child(2),
+.route-transition[data-route="assets"] .asset-ledger:nth-child(2) {
+  animation-delay: 150ms;
+}
+
+.route-transition[data-route="scan-folder"] .app-grid.split > *:nth-child(1),
+.route-transition[data-route="settings"] .settings-ledger {
+  animation-delay: 80ms;
+}
+
+.route-transition[data-route="scan-folder"] .app-grid.split > *:nth-child(2),
+.route-transition[data-route="settings"] .settings-edit-deck {
+  animation-delay: 130ms;
+}
+
+@keyframes route-stage-in {
+  from {
+    opacity: 0;
+    filter: blur(var(--route-blur));
+    transform: translateY(var(--route-rise)) scale(var(--route-scale));
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes route-header-in {
+  from {
+    opacity: 0;
+    clip-path: inset(0 0 28% 0);
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0);
+    transform: translateY(0);
+  }
+}
+
+@keyframes route-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes route-detail-drop {
+  from {
+    opacity: 0;
+    border-color: rgba(240, 42, 86, 0.42);
+    box-shadow: 0 0 0 1px rgba(240, 42, 86, 0.12), 0 18px 60px rgba(240, 42, 86, 0.08);
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    border-color: var(--border-subtle);
+    box-shadow: none;
+    transform: translateY(0);
+  }
+}
+
+@keyframes route-map-in {
+  from {
+    opacity: 0;
+    background-position: 18px 12px;
+    transform: scale(0.992);
+  }
+  to {
+    opacity: 1;
+    background-position: 0 0;
+    transform: scale(1);
+  }
+}
+
 .app-content > *,
 .app-grid > *,
 .page-header > * {
