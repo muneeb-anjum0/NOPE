@@ -1763,6 +1763,104 @@ textarea:focus-visible {
   outline-offset: -2px;
 }
 
+.finding-table {
+  table-layout: fixed;
+}
+
+.finding-table .severity-column {
+  width: 86px;
+}
+
+.finding-table .finding-column {
+  width: min(360px, 30%);
+}
+
+.finding-table .location-column {
+  width: 45%;
+}
+
+.finding-table .evidence-column {
+  width: 140px;
+}
+
+.finding-table .status-column {
+  width: 86px;
+}
+
+.finding-title-cell,
+.location-cell {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.finding-title-cell strong {
+  display: block;
+  max-width: 360px;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+.location-cell {
+  line-height: 1.35;
+}
+
+.new-finding-row {
+  animation: finding-row-reveal 420ms ease both;
+}
+
+.new-finding-row:nth-child(2n) {
+  animation-delay: 35ms;
+}
+
+.load-more-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 38px;
+  border: 1px solid rgba(240, 42, 86, 0.42);
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, rgba(240, 42, 86, 0.2), rgba(255, 255, 255, 0.045)),
+    var(--background-elevated);
+  color: var(--text-primary);
+  padding: 0 15px;
+  font-weight: 760;
+  box-shadow: 0 0 0 1px rgba(240, 42, 86, 0.08), 0 14px 34px rgba(240, 42, 86, 0.08);
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.load-more-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(240, 42, 86, 0.68);
+  background:
+    linear-gradient(135deg, rgba(240, 42, 86, 0.28), rgba(255, 255, 255, 0.06)),
+    var(--background-elevated);
+  box-shadow: 0 0 0 1px rgba(240, 42, 86, 0.14), 0 18px 40px rgba(240, 42, 86, 0.12);
+}
+
+.load-more-button:active {
+  transform: scale(0.985);
+}
+
+.load-more-button .mono {
+  color: var(--brand-primary);
+  font-size: 11px;
+}
+
+@keyframes finding-row-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+    background: rgba(240, 42, 86, 0.105);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    background: transparent;
+  }
+}
+
 .input-shell {
   width: 100%;
   min-height: 40px;
