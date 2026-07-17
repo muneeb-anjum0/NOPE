@@ -1,10 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { severityClass } from "@/lib/nope-data";
 import type { Finding } from "@/lib/types";
 
 const BATCH_SIZE = 7;
+
+function severityClass(severity: string) {
+  return `severity-pill severity-${severity}`;
+}
 
 export function FindingTable({
   findings,
