@@ -1747,11 +1747,20 @@ textarea:focus-visible {
 }
 
 .interactive-row {
-  transition: background 140ms ease;
+  transition: background 140ms ease, border-color 140ms ease;
 }
 
 .interactive-row:hover {
   background: rgba(255, 255, 255, 0.025);
+}
+
+.clickable-finding-row {
+  cursor: pointer;
+}
+
+.clickable-finding-row:focus-visible {
+  outline: 2px solid rgba(240, 42, 86, 0.58);
+  outline-offset: -2px;
 }
 
 .input-shell {
@@ -2585,7 +2594,9 @@ textarea:focus-visible {
   min-height: 32px;
 }
 
-.findings-layout {
+.findings-stack {
+  display: grid;
+  gap: 16px;
   align-items: start;
 }
 
@@ -2598,7 +2609,7 @@ textarea:focus-visible {
   text-decoration: none;
 }
 
-.pagination-row,
+.finding-table-footer,
 .tab-row {
   display: flex;
   align-items: center;
@@ -2608,9 +2619,9 @@ textarea:focus-visible {
   margin-top: 12px;
 }
 
-.pagination-row span:last-child {
-  display: flex;
-  gap: 8px;
+.finding-table-footer {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 12px;
 }
 
 .tab-row {

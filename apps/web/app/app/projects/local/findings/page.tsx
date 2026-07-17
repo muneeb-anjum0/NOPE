@@ -42,11 +42,14 @@ export default async function FindingsPage({ searchParams }: PageProps) {
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
   const scans = scansForProject(allScans, activeProjectId);
   const scan = selectScan(scans, params.get("scan")) ?? freshScan();
-  const results = (await getFindings(scan.id, params)) ?? {
+  const findingsQuery = new URLSearchParams(params.toString());
+  findingsQuery.set("page", "1");
+  findingsQuery.set("page_size", "100");
+  const results = (await getFindings(scan.id, findingsQuery)) ?? {
     scan_id: scan.id,
     total: scan.findings.length,
     page: 1,
-    page_size: 25,
+    page_size: 100,
     pages: 1,
     sort: "severity",
     direction: "asc" as const,
@@ -108,17 +111,8 @@ export default async function FindingsPage({ searchParams }: PageProps) {
         </details>
       </form>
 
-      <div className="app-grid split findings-layout">
-        <div>
-          <FindingTable findings={results.items} scanId={scan.id} selectedId={selectedId} search={params} />
-          <div className="pagination-row">
-            <span className="mono muted">{results.total} findings / page {results.page} of {results.pages}</span>
-            <span>
-              <a className="button-secondary" aria-disabled={results.page <= 1} href={hrefWith(params, { page: Math.max(1, results.page - 1) })}>Prev</a>
-              <a className="button-secondary" aria-disabled={results.page >= results.pages} href={hrefWith(params, { page: Math.min(results.pages, results.page + 1) })}>Next</a>
-            </span>
-          </div>
-        </div>
+      <div className="findings-stack">
+        <FindingTable findings={results.items} scanId={scan.id} selectedId={selectedId} search={params} total={results.total} />
         <FindingDetailPanel detail={detail} tab={tab} params={params} />
       </div>
     </>
