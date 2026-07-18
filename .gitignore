@@ -9,6 +9,7 @@ __pycache__/
 .nope-workspaces/
 .nope-benchmark-results/
 .env
+!benchmarks/fixtures/nope-benchmark-v1/.env
 *.pyc
 *.log
 *.tsbuildinfo

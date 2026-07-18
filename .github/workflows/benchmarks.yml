@@ -20,6 +20,7 @@ jobs:
 
       - name: Run scanner-only benchmark
         run: |
+          set -o pipefail
           mkdir -p .nope-benchmark-results
           chmod 0777 .nope-benchmark-results
           docker run --rm \
@@ -28,7 +29,8 @@ jobs:
             python -m nope_api.benchmarks \
               --mode scanner-only \
               --output .nope-benchmark-results/scanner-only.json \
-              --markdown-output .nope-benchmark-results/scanner-only.md
+              --markdown-output .nope-benchmark-results/scanner-only.md \
+            | tee .nope-benchmark-results/scanner-only.stdout.txt
 
       - name: Upload benchmark artifacts
         if: always()
