@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { ACTIVE_PROJECT_COOKIE } from "@/lib/active-project";
+import { isE2EFixtureMode } from "@/lib/nope-data";
 
 const API_BASE = process.env.API_URL_INTERNAL || "http://localhost:8000";
 
@@ -10,6 +11,14 @@ export async function POST(request: Request) {
   const next = new URL("/app/projects/local/scans", request.url);
   if (!projectId) {
     next.searchParams.set("error", "Choose a project folder to delete.");
+    return NextResponse.redirect(next, 303);
+  }
+
+  if (isE2EFixtureMode()) {
+    const jar = await cookies();
+    if (jar.get(ACTIVE_PROJECT_COOKIE)?.value === projectId) {
+      jar.delete(ACTIVE_PROJECT_COOKIE);
+    }
     return NextResponse.redirect(next, 303);
   }
 

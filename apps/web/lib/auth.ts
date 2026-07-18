@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { API_BASE } from "@/lib/api";
+import { isE2EFixtureMode } from "@/lib/nope-data";
 
 export type LocalUser = {
   id: string;
@@ -14,6 +15,9 @@ export async function getSessionToken() {
 export async function getCurrentUser(): Promise<LocalUser | null> {
   const token = await getSessionToken();
   if (!token) return null;
+  if (isE2EFixtureMode() && token === "stage8-e2e-session") {
+    return { id: "user_stage8", email: "stage8@example.test" };
+  }
   try {
     const response = await fetch(`${API_BASE}/api/auth/me`, {
       headers: { authorization: `Bearer ${token}` },

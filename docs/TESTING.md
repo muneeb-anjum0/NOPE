@@ -45,6 +45,47 @@ pnpm --dir apps/web build
 
 The current frontend test command is a CI-compatible TypeScript no-emit check.
 
+## Stage 8 Browser E2E, Accessibility, and Visual Regression
+
+Stage 8 adds a deterministic Playwright lane for the web app:
+
+```powershell
+pnpm --dir apps/web exec playwright install chromium
+pnpm web:e2e
+```
+
+The suite starts Next.js on port `3100` with `NOPE_E2E_FIXTURE=1`. Fixture mode keeps browser tests independent of mutable local scan data while still exercising real Next routes, forms, cookies, redirects, API proxies, client hydration, dialogs, scan event polling, and Qwen action UI states.
+
+Covered widths:
+
+- `1440`
+- `1280`
+- `1024`
+- `768`
+- `390`
+- `360`
+
+Covered browser flows:
+
+- Landing, login, logout, and session persistence.
+- Project folder creation, folder navigation, ZIP upload, scan start, progress UI, cancellation, retry, deletion, partial, failed, and completed scan states.
+- Findings filters, DOM-only load more, row selection, expandable detail panel, evidence/code/code-flow/fix/tests/history tabs, lifecycle states, empty states, and Qwen Explain/Challenge/Fix/Test/Patch Review actions.
+- Attack map, coverage, assets, reports, baselines, drift, settings, mobile sidebar navigation, and mobile collapse behavior.
+
+Accessibility coverage:
+
+- Axe checks on `/`, `/login`, overview, scan folders, scan folder detail, findings, attack map, coverage, assets, reports, and settings.
+- Keyboard focus, focus indicators, dialog focus trapping, Escape close behavior, labels, named icon buttons, reduced motion behavior, and focusable scroll regions.
+
+Visual regression:
+
+```powershell
+pnpm web:e2e:update
+pnpm web:e2e
+```
+
+Snapshots are deterministic by freezing animations and masking volatile time fields. The suite captures app-shell screenshots at every required width and dense route snapshots once at `1280`.
+
 ## Phase 15 UI Viewports
 
 Phase 15 uses the in-app browser runtime against a production `next start` build and verifies these routes at `1440`, `1280`, `1024`, `768`, `390`, and `360` pixel widths:

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { API_BASE } from "@/lib/api";
+import { E2E_SCAN_RUNNING } from "@/lib/e2e-fixtures";
+import { isE2EFixtureMode } from "@/lib/nope-data";
 
 function redirectWithError(request: Request, message: string, projectId?: string, scaffoldWarning = false) {
   const next = new URL(projectId ? `/app/projects/local/scans/${encodeURIComponent(projectId)}` : "/app/projects/local/scans", request.url);
@@ -48,6 +50,12 @@ export async function POST(request: Request) {
   const confirmed = form.get("confirmed") === "on";
   const projectId = String(form.get("projectId") ?? "");
   const forceScaffold = form.get("forceScaffold") === "on";
+
+  if (isE2EFixtureMode()) {
+    const next = new URL(projectId ? `/app/projects/local/scans/${encodeURIComponent(projectId)}` : "/app/projects/local/scans", request.url);
+    next.searchParams.set("scan", E2E_SCAN_RUNNING);
+    return NextResponse.redirect(next, 303);
+  }
 
   if (file instanceof File && file.size > 0 && targetUrl) {
     const full = new FormData();

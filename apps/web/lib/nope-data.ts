@@ -12,8 +12,26 @@ import type {
   SecurityBaseline,
   SystemSettings,
 } from "@/lib/types";
+import {
+  e2eAIHealth,
+  e2eBaselines,
+  e2eComparison,
+  e2eFindingDetail,
+  e2eFindings,
+  e2eGitHubStatus,
+  e2eModelSettings,
+  e2eProjects,
+  e2eProjectSettings,
+  e2eScans,
+  e2eSystemSettings,
+} from "@/lib/e2e-fixtures";
+
+export function isE2EFixtureMode() {
+  return process.env.NOPE_E2E_FIXTURE === "1";
+}
 
 export async function getScans(): Promise<Scan[]> {
+  if (isE2EFixtureMode()) return e2eScans;
   try {
     return await api<Scan[]>("/api/scans");
   } catch {
@@ -22,6 +40,7 @@ export async function getScans(): Promise<Scan[]> {
 }
 
 export async function getScan(scanId: string): Promise<Scan | null> {
+  if (isE2EFixtureMode()) return e2eScans.find((scan) => scan.id === scanId) ?? null;
   try {
     return await api<Scan>(`/api/scans/${encodeURIComponent(scanId)}`);
   } catch {
@@ -36,6 +55,7 @@ export function selectScan(scans: Scan[], scanId?: string | null): Scan | null {
 }
 
 export async function getProjects(): Promise<Project[]> {
+  if (isE2EFixtureMode()) return e2eProjects;
   try {
     return await api<Project[]>("/api/projects");
   } catch {
@@ -49,6 +69,7 @@ export async function getLatestScan(): Promise<Scan | null> {
 }
 
 export async function getFindings(scanId: string, searchParams?: URLSearchParams): Promise<FindingsResult | null> {
+  if (isE2EFixtureMode()) return e2eFindings(scanId, searchParams);
   try {
     const query = searchParams?.toString();
     return await api<FindingsResult>(`/api/scans/${scanId}/findings${query ? `?${query}` : ""}`);
@@ -58,6 +79,7 @@ export async function getFindings(scanId: string, searchParams?: URLSearchParams
 }
 
 export async function getFindingDetail(scanId: string, findingId: string): Promise<FindingDetail | null> {
+  if (isE2EFixtureMode()) return e2eFindingDetail(scanId, findingId);
   try {
     return await api<FindingDetail>(`/api/scans/${scanId}/findings/${findingId}`);
   } catch {
@@ -66,6 +88,7 @@ export async function getFindingDetail(scanId: string, findingId: string): Promi
 }
 
 export async function getBaselines(projectId?: string | null): Promise<SecurityBaseline[]> {
+  if (isE2EFixtureMode()) return projectId ? e2eBaselines.filter((baseline) => baseline.project_id === projectId) : e2eBaselines;
   try {
     const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
     return await api<SecurityBaseline[]>(`/api/baselines${query}`);
@@ -75,6 +98,7 @@ export async function getBaselines(projectId?: string | null): Promise<SecurityB
 }
 
 export async function getScanComparison(scanId: string, againstScanId?: string): Promise<ScanComparison | null> {
+  if (isE2EFixtureMode()) return { ...e2eComparison, current_scan_id: scanId, reference_scan_id: againstScanId ?? e2eComparison.reference_scan_id };
   try {
     const query = againstScanId ? `?against_scan_id=${encodeURIComponent(againstScanId)}` : "";
     return await api<ScanComparison>(`/api/scans/${scanId}/compare${query}`);
@@ -84,6 +108,7 @@ export async function getScanComparison(scanId: string, againstScanId?: string):
 }
 
 export async function getModelSettings(): Promise<ModelSettings | null> {
+  if (isE2EFixtureMode()) return e2eModelSettings;
   try {
     return await api<ModelSettings>("/api/settings/model");
   } catch {
@@ -92,6 +117,7 @@ export async function getModelSettings(): Promise<ModelSettings | null> {
 }
 
 export async function getSystemSettings(): Promise<SystemSettings | null> {
+  if (isE2EFixtureMode()) return e2eSystemSettings;
   try {
     return await api<SystemSettings>("/api/settings/system");
   } catch {
@@ -100,6 +126,7 @@ export async function getSystemSettings(): Promise<SystemSettings | null> {
 }
 
 export async function getProjectSettings(projectId: string): Promise<ProjectSettings | null> {
+  if (isE2EFixtureMode()) return { ...e2eProjectSettings, project_id: projectId };
   try {
     return await api<ProjectSettings>(`/api/projects/${projectId}/settings`);
   } catch {
@@ -108,6 +135,7 @@ export async function getProjectSettings(projectId: string): Promise<ProjectSett
 }
 
 export async function getGitHubStatus(): Promise<GitHubStatus | null> {
+  if (isE2EFixtureMode()) return e2eGitHubStatus;
   try {
     return await api<GitHubStatus>("/api/github/status");
   } catch {
@@ -116,6 +144,7 @@ export async function getGitHubStatus(): Promise<GitHubStatus | null> {
 }
 
 export async function getAIHealth(): Promise<AIHealth | null> {
+  if (isE2EFixtureMode()) return e2eAIHealth;
   try {
     const health = await api<{ ai: { health: AIHealth } }>("/health");
     return health.ai.health;

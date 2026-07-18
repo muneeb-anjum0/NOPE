@@ -166,6 +166,22 @@ export function ScanHistory({ scans, selectedId, projectId }: { scans: Scan[]; s
               </span>
               <span className="scan-history-verdict">{scan.verdict}</span>
             </a>
+            {isActive ? (
+              <form action="/api/scan-action" method="post">
+                <input name="scanId" type="hidden" value={scan.id} />
+                {projectId ? <input name="projectId" type="hidden" value={projectId} /> : null}
+                <input name="action" type="hidden" value="cancel" />
+                <button className="button ghost scan-action-button" type="submit">Cancel</button>
+              </form>
+            ) : null}
+            {["failed", "partial", "cancelled"].includes(state.status) ? (
+              <form action="/api/scan-action" method="post">
+                <input name="scanId" type="hidden" value={scan.id} />
+                {projectId ? <input name="projectId" type="hidden" value={projectId} /> : null}
+                <input name="action" type="hidden" value="retry" />
+                <button className="button ghost scan-action-button" type="submit">Retry</button>
+              </form>
+            ) : null}
             <form action="/api/delete-scan" method="post">
               <input name="scanId" type="hidden" value={scan.id} />
               {projectId ? <input name="projectId" type="hidden" value={projectId} /> : null}

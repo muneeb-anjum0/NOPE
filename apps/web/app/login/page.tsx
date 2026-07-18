@@ -24,8 +24,8 @@ export default async function LoginPage({
         </p>
         {params.error ? <p className="login-error">{params.error}</p> : null}
         <form className="app-grid" action="/api/auth/login" method="post">
-          <input className="input-shell" name="email" type="email" placeholder="you@example.com" required />
-          <input className="input-shell" name="password" type="password" placeholder="At least 8 characters" minLength={8} required />
+          <input className="input-shell" name="email" type="email" placeholder="you@example.com" aria-label="Email address" required />
+          <input className="input-shell" name="password" type="password" placeholder="At least 8 characters" aria-label="Password" minLength={8} required />
           <button className="button primary" type="submit">
             Continue to dashboard
           </button>

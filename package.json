@@ -8,6 +8,8 @@
     "web:build": "pnpm --dir apps/web build",
     "web:lint": "pnpm --dir apps/web lint",
     "web:typecheck": "pnpm --dir apps/web typecheck",
+    "web:e2e": "pnpm --dir apps/web test:e2e",
+    "web:e2e:update": "pnpm --dir apps/web test:e2e:update",
     "api:test": "cd apps/api && pytest",
     "api:lint": "cd apps/api && ruff check nope_api tests",
     "dev": "pnpm --dir apps/web dev"

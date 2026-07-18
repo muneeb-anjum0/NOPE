@@ -2,6 +2,8 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { API_BASE } from "@/lib/api";
 import { ACTIVE_PROJECT_COOKIE } from "@/lib/active-project";
+import { E2E_PROJECT_ID } from "@/lib/e2e-fixtures";
+import { isE2EFixtureMode } from "@/lib/nope-data";
 
 function detailMessage(detail: string, fallback: string) {
   try {
@@ -21,6 +23,16 @@ export async function POST(request: Request) {
 
   if (!name) {
     next.searchParams.set("error", "Name the folder first.");
+    return NextResponse.redirect(next, 303);
+  }
+
+  if (isE2EFixtureMode()) {
+    (await cookies()).set(ACTIVE_PROJECT_COOKIE, E2E_PROJECT_ID, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+    });
     return NextResponse.redirect(next, 303);
   }
 

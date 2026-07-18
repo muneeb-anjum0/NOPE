@@ -12,13 +12,13 @@
   --border-strong: rgba(255, 255, 255, 0.18);
   --text-primary: #f5f7f5;
   --text-secondary: #a9b0ab;
-  --text-tertiary: #737b76;
+  --text-tertiary: #8b948e;
   --text-muted: var(--text-tertiary);
   --text-disabled: #4e5551;
   --brand-primary: #f02a56;
   --brand-primary-hover: #ff3d67;
   --brand-primary-muted: rgba(240, 42, 86, 0.14);
-  --critical: #ff3b4f;
+  --critical: #ff5367;
   --high: #ff7a35;
   --medium: #e7b743;
   --low: #5b8def;
@@ -1311,7 +1311,7 @@ textarea:focus-visible {
 
 .sidebar-folder-picker summary small {
   margin-top: 3px;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: 10px;
 }
@@ -1454,6 +1454,18 @@ textarea:focus-visible {
   outline: none;
 }
 
+.line-sidebar__button {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  position: relative;
+}
+
+.line-sidebar__button:focus-visible {
+  outline: 1px solid var(--brand-primary);
+  outline-offset: 6px;
+}
+
 .line-sidebar__item::before {
   content: "";
   position: absolute;
@@ -1514,12 +1526,12 @@ textarea:focus-visible {
   transform: translateX(-8px);
 }
 
-.sidebar-frame.is-collapsed .line-sidebar__item[aria-current="true"] .line-sidebar__label {
+.sidebar-frame.is-collapsed .line-sidebar__button[aria-current="page"] .line-sidebar__label {
   color: var(--brand-primary);
   transform: none;
 }
 
-.sidebar-frame.is-collapsed .line-sidebar__item[aria-current="true"] .line-sidebar__marker {
+.sidebar-frame.is-collapsed .line-sidebar__button[aria-current="page"] .line-sidebar__marker {
   background-color: var(--brand-primary);
 }
 
@@ -1557,7 +1569,7 @@ textarea:focus-visible {
   transform: translateY(-50%) scaleX(calc(0.7 + var(--effect, 0) * 0.6));
 }
 
-.line-sidebar__item[aria-current="true"] .line-sidebar__text {
+.line-sidebar__button[aria-current="page"] .line-sidebar__text {
   color: var(--text-primary);
 }
 
@@ -3394,7 +3406,7 @@ textarea:focus-visible {
 .scan-status-running,
 .scan-status-queued,
 .scan-status-preparing {
-  color: var(--brand-primary);
+  color: var(--brand-primary-hover);
 }
 
 .scan-status-completed {

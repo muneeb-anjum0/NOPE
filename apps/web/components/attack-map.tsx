@@ -187,7 +187,7 @@ export function AttackMapPanel({ scan }: { scan: Scan }) {
         <span>file</span>
         <span>data / risk</span>
       </div>
-      <div className="attack-flow-rows">
+      <div className="attack-flow-rows" role="region" aria-label="Attack map paths" tabIndex={0}>
         {rows.map((row, index) => <FlowRowView index={index} key={row.id} row={row} />)}
       </div>
     </section>

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { API_BASE } from "@/lib/api";
+import { isE2EFixtureMode } from "@/lib/nope-data";
 
 export async function POST(request: Request) {
   const form = await request.formData();
@@ -8,6 +9,10 @@ export async function POST(request: Request) {
   const projectId = String(form.get("projectId") ?? "");
   if (!scanId) {
     return NextResponse.redirect(new URL("/app/projects/local/scans?error=Choose a scan to delete.", request.url), 303);
+  }
+
+  if (isE2EFixtureMode()) {
+    return NextResponse.redirect(new URL(projectId ? `/app/projects/local/scans/${encodeURIComponent(projectId)}` : "/app/projects/local/scans", request.url), 303);
   }
 
   const headers = new Headers();

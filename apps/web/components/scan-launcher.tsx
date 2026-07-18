@@ -1,11 +1,16 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Upload } from "lucide-react";
 
 export function ScanLauncher({ projectId, scaffoldWarning }: { projectId?: string; scaffoldWarning?: string }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [fileName, setFileName] = useState("");
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
 
   const setFiles = (files: FileList | null) => {
     const file = files?.[0];
@@ -19,7 +24,7 @@ export function ScanLauncher({ projectId, scaffoldWarning }: { projectId?: strin
   };
 
   return (
-    <form className="app-grid" action="/api/start-scan" method="post" encType="multipart/form-data">
+    <form className="app-grid" action="/api/start-scan" method="post" encType="multipart/form-data" data-scan-launcher-ready={hydrated ? "true" : "false"}>
       {projectId ? <input name="projectId" type="hidden" value={projectId} /> : null}
       <label
         className={`dropzone${fileName ? " dropzone-selected" : ""}`}

@@ -183,14 +183,20 @@ function BitsLineSidebar({
               itemRefs.current[index] = el;
             }}
             className="line-sidebar__item"
-            aria-current={activeIndex === index ? "true" : undefined}
-            onClick={() => handleClick(index, label)}
           >
-            {showMarker ? <span className="line-sidebar__marker" aria-hidden="true" /> : null}
-            <span className="line-sidebar__label">
-              {showIndex ? <span className="line-sidebar__index">{String(index + 1).padStart(2, "0")}</span> : null}
-              <span className="line-sidebar__text">{label}</span>
-            </span>
+            <button
+              type="button"
+              className="line-sidebar__button"
+              aria-current={activeIndex === index ? "page" : undefined}
+              aria-label={label}
+              onClick={() => handleClick(index, label)}
+            >
+              {showMarker ? <span className="line-sidebar__marker" aria-hidden="true" /> : null}
+              <span className="line-sidebar__label">
+                {showIndex ? <span className="line-sidebar__index">{String(index + 1).padStart(2, "0")}</span> : null}
+                <span className="line-sidebar__text">{label}</span>
+              </span>
+            </button>
           </li>
         ))}
       </ul>

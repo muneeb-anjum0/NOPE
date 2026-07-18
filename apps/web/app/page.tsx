@@ -118,7 +118,7 @@ export default function LandingPage() {
               {stages.map((stage, index) => (
                 <div className="stage-row" style={{ animationDelay: `${index * 90}ms` }} key={stage}>
                   <span>{stage}</span>
-                  <span className="status-dot ok" aria-label="complete" />
+                  <span className="status-dot ok" aria-hidden="true" />
                 </div>
               ))}
             </div>
@@ -223,7 +223,7 @@ export default function LandingPage() {
                 <span className="mono">file</span>
                 <span className="mono">data</span>
               </div>
-              <div className="attack-canvas landing-map" aria-label="Static attack map showcase">
+              <div className="attack-canvas landing-map" aria-label="Static attack map showcase" role="img" tabIndex={0}>
                 <AttackMapConnector />
                 {[
                   ["entry", "ANY /api/invoices/:id", "entry point"],
