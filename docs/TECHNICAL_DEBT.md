@@ -4,12 +4,10 @@ Date: 2026-07-18
 
 ## Critical
 
-- Worker container runs as root and mounts Docker socket to launch sandbox containers.
 - GitHub private repository access is not implemented beyond blocked contracts.
 
 ## High
 
-- Event/progress persistence is incomplete; E2E scan completed with zero returned events.
 - AI action cache is process-memory plus browser localStorage; server restart loses API cache.
 - Qwen first-run latency is 34-46 seconds per structured action on the current GPU/model.
 - Host `pnpm api:lint` fails because `ruff` is not installed.
@@ -18,6 +16,8 @@ Date: 2026-07-18
 ## Recently resolved
 
 - Stage 1 benchmark scanner quality now passes in both scanner-only and scanner-plus-Qwen modes with precision/recall/F1 of `1.000` on the canonical Docker fixture.
+- Stage 2 durable scan events now persist ordered progress and fix the completed-scan zero-events defect.
+- Stage 3 removes Docker socket access from the general worker and moves sandbox orchestration behind the narrow internal `nope-runner` boundary.
 
 ## Medium
 

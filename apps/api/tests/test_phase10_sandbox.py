@@ -119,7 +119,11 @@ def test_failed_workflow_creates_finding_and_failed_coverage(tmp_path):
 
 def test_timed_out_workflow_forces_container_cleanup(tmp_path):
     executor = FakeExecutor(["timed_out", "passed"])
-    sandbox = DockerSandbox(Settings(sandbox_timeout_seconds=2), tmp_path, executor)
+    sandbox = DockerSandbox(
+        Settings(sandbox_timeout_seconds=2, sandbox_allow_commands='python -c "while True: pass"'),
+        tmp_path,
+        executor,
+    )
 
     result = sandbox.run_workflow(SandboxWorkflow(name="loop", kind="python", command="python -c \"while True: pass\""))
 

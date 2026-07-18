@@ -211,6 +211,7 @@ flowchart LR
   subgraph execution["Execution Plane"]
     direction TB
     worker["NOPE Worker<br/>pipeline runner"]
+    runner["NOPE Runner<br/>isolated Docker boundary"]
     scanners["Deterministic scanners<br/>Semgrep, Gitleaks, OSV,<br/>Trivy, Checkov, Hadolint, Bandit"]
     sandbox["Optional sandbox<br/>declared workflows and ZAP"]
     gate["Evidence gate<br/>context expansion and promotion"]
@@ -230,9 +231,11 @@ flowchart LR
   api -->|"enqueue scan job"| queue
   queue -->|"job payload"| worker
   worker -->|"repository and URL evidence"| scanners
-  worker -->|"opt-in dynamic checks"| sandbox
+  worker -->|"token-authenticated sandbox request"| runner
+  runner -->|"allowlisted Docker job"| sandbox
   scanners -->|"raw candidates"| worker
-  sandbox -->|"bounded runtime evidence"| worker
+  sandbox -->|"bounded runtime evidence"| runner
+  runner -->|"sandbox result"| worker
   worker -->|"deduped candidates"| gate
   gate -->|"promoted findings"| worker
   gate -->|"needs_context / rejected audit"| candidates
@@ -251,7 +254,7 @@ flowchart LR
   classDef service fill:#101211,stroke:#f02a56,stroke-width:2px,color:#f5f7f5;
   classDef store fill:#141716,stroke:#f02a56,stroke-width:1.5px,color:#f5f7f5;
   class input,control,execution,intelligence lane;
-  class user,web,api,worker,scanners,sandbox,gate,ai,candidates,reports service;
+  class user,web,api,worker,runner,scanners,sandbox,gate,ai,candidates,reports service;
   class db,queue,minio store;
 ```
 
@@ -264,6 +267,7 @@ flowchart LR
 | Web | `NOPE` / `nope-web` | Landing page, login, dashboard |
 | API | `nope-api` | Auth, orchestration, settings, reports, scan APIs |
 | Worker | `nope-worker` | Redis consumer and scanner execution pipeline |
+| Runner | `nope-runner` | Narrow internal Docker boundary for allowlisted sandbox jobs |
 | Database | `nope-postgres` | Users, sessions, scans, findings, reports, settings |
 | Queue | `nope-redis` | Scan queue, cancellation flags, worker heartbeat |
 | Object storage | `nope-minio` | Raw scanner artifacts and binary report artifacts |

@@ -1348,3 +1348,45 @@ Complete only Stage 2 of the canonical completion program: durable scan events a
 ### Closure
 
 Stage 2 implementation is complete pending full regression, Docker rebuild/refresh, final docs update, commit, and push.
+
+## 2026-07-18 Stage 3 Worker and Sandbox Security Hardening
+
+### Objective
+
+Complete only Stage 3 of the canonical completion program: remove unrestricted Docker daemon access from the general worker, introduce a narrow sandbox runner boundary, harden archive and URL ingestion, add hostile tests, refresh Docker, commit, push, and do not begin Stage 4.
+
+### Pre-stage state
+
+- Pre-stage commit: `73365cdb15a718fb7b0437b1684caace3e1349b3`.
+- The worker inherited the API image's non-root user but Compose overrode it to `root`.
+- The worker mounted `/var/run/docker.sock` and directly orchestrated sandbox containers.
+- ZIP ingestion and URL scanning had basic protections, but lacked the complete Stage 3 hostile-input matrix.
+
+### Implemented
+
+- Added `nope-runner`, an internal FastAPI runner service that is the only Compose service with Docker socket access.
+- Removed the Docker socket and root override from `nope-worker`; live container inspection verified uid `100(nope)` and socket absence.
+- Routed sandbox assessment through token-authenticated runner requests constrained to existing workspaces under `NOPE_TEMP_ROOT`.
+- Enforced sandbox image and exact-command allowlists, fixed NOPE-only environment, controlled read-only repository mounts, no arbitrary mounts/env/networks, ordinary workflow `--network none`, no privileged mode, `no-new-privileges`, `cap-drop ALL`, non-root sandbox user, read-only root where supported, tmpfs work dirs, CPU/memory/PID/time/log limits, and cleanup.
+- Kept ZAP behind a runner-created internal Docker network only for explicit sandbox manifests.
+- Hardened ZIP extraction against traversal, absolute paths, null bytes, symlinks, hardlinks/special files, duplicate normalized paths, Unicode/case collisions, deep nesting, long paths, compressed/extracted size limits, excessive file counts, high compression ratios, and failed-extraction cleanup.
+- Hardened URL scanning against credentials, unsupported schemes, unapproved hosts, private/loopback/link-local/reserved/metadata addresses, disallowed ports, unsafe redirects, DNS revalidation before probes, timeouts, and response-size limits.
+- Updated README and security/sandbox/pipeline/architecture/status/troubleshooting docs with the runner boundary and residual Docker-daemon risk.
+
+### Verification results
+
+- `python -m pytest apps/api/tests/test_phase10_sandbox.py apps/api/tests/test_security.py apps/api/tests/test_stage3_security_hardening.py -vv --tb=short`: passed, `20 passed`.
+- `python -m pytest apps/api/tests -vv --tb=short`: passed, `155 passed, 2 warnings`.
+- `python -m compileall apps/api/nope_api apps/api/tests apps/worker`: passed.
+- `docker compose config --quiet`: passed.
+- `docker compose up -d --build`: passed; rebuilt `nope-nope-api`, `nope-nope-worker`, `nope-nope-runner`, and `nope-nope-web`; stack healthy/running on Docker.
+- `docker exec nope-worker sh -lc "id && test ! -S /var/run/docker.sock && echo worker-socket-absent"`: passed; uid `100(nope)`, socket absent.
+- `docker exec nope-runner sh -lc "id && docker version --format '{{.Client.Version}} {{.Server.Version}}' && test -S /var/run/docker.sock && echo runner-socket-present"`: passed; runner has Docker client/server `29.6.1` and owns the socket boundary.
+- API `/health`: passed; migrations current, scanners installed, Qwen reachable, sandbox enabled, Docker available, network default disabled, limits reported.
+- Internal runner `/health`: passed from inside `nope-runner`.
+- Live runner smoke via socketless worker to `http://nope-runner:8010/runner/sandbox`: passed; allowlisted `python -m compileall .` workflow returned `NOPE sandbox` passed, Dynamic testing `Verified`, `0` findings.
+- `docker ps -a --filter "name=nope-sandbox"` and `docker network ls --filter "name=nope-sandbox"`: no leftover sandbox containers or networks.
+
+### Closure
+
+Stage 3 is complete for locally achievable worker and sandbox security hardening: the general worker no longer has unrestricted Docker daemon access, the runner boundary is narrow and tested, sandbox jobs are allowlisted and resource bounded, ZIP/URL hostile inputs are blocked, docs record residual risk, full regression passes, and the refreshed Docker stack is running.

@@ -2,7 +2,9 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 
+from nope_api.config import Settings, get_settings
 from nope_api.models import Confidence, CoverageRecord, CoverageStatus, Evidence, Finding, ScannerRun, Severity, now_utc
+from nope_api.security import validate_resolved_addresses
 
 
 SECURITY_HEADERS = {
@@ -18,7 +20,34 @@ def _url_evidence(url: str, message: str) -> Evidence:
     return Evidence(source="NOPE URL scanner", route=url, endpoint=url, message=message)
 
 
-async def scan_url(url: str) -> tuple[list[Finding], list[ScannerRun], list[CoverageRecord]]:
+async def _bounded_get(client: httpx.AsyncClient, url: str, settings: Settings) -> httpx.Response:
+    async with client.stream("GET", url, follow_redirects=False) as response:
+        body = bytearray()
+        async for chunk in response.aiter_bytes():
+            body.extend(chunk)
+            if len(body) > settings.url_scan_max_response_bytes:
+                raise ValueError("URL response exceeded configured maximum size.")
+        return httpx.Response(
+            status_code=response.status_code,
+            headers=response.headers,
+            content=bytes(body),
+            request=response.request,
+            extensions=response.extensions,
+        )
+
+
+def _validate_url_for_probe(url: str, approved_hosts: set[str], settings: Settings) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("URL probe target must use http or https.")
+    hostname = parsed.hostname.lower()
+    if hostname not in approved_hosts:
+        raise ValueError("URL probe target is outside approved host scope.")
+    validate_resolved_addresses(hostname, settings)
+
+
+async def scan_url(url: str, settings: Settings | None = None) -> tuple[list[Finding], list[ScannerRun], list[CoverageRecord]]:
+    settings = settings or get_settings()
     started = now_utc()
     findings: list[Finding] = []
     coverage = [
@@ -26,9 +55,41 @@ async def scan_url(url: str) -> tuple[list[Finding], list[ScannerRun], list[Cove
         CoverageRecord(domain="Dynamic testing", status=CoverageStatus.partial, scanners=["NOPE URL scanner"], notes="No destructive or authenticated dynamic testing was performed."),
     ]
     try:
-        async with httpx.AsyncClient(follow_redirects=False, timeout=15) as client:
-            response = await client.get(url)
+        parsed = urlparse(url)
+        approved_hosts = {parsed.hostname.lower()} if parsed.hostname else set()
+        _validate_url_for_probe(url, approved_hosts, settings)
+        async with httpx.AsyncClient(
+            follow_redirects=False,
+            timeout=settings.url_scan_timeout_seconds,
+            headers={"user-agent": "NOPE-security-scanner/1.0"},
+        ) as client:
+            response = await _bounded_get(client, url, settings)
             parsed = urlparse(url)
+            location = response.headers.get("location")
+            if location:
+                redirect_url = urljoin(url, location)
+                redirect = urlparse(redirect_url)
+                if redirect.hostname != parsed.hostname or settings.url_scan_max_redirects == 0:
+                    findings.append(
+                        Finding(
+                            fingerprint=f"url-open-redirect-{parsed.hostname}",
+                            scanner="NOPE URL scanner",
+                            original_rule_id="url-open-redirect",
+                            title="Target redirects outside approved host",
+                            description="The target returned a redirect that NOPE did not follow because redirects are disabled or outside approved scope.",
+                            severity=Severity.medium,
+                            confidence=Confidence.high,
+                            category="URL scope",
+                            cwe="CWE-601",
+                            affected_route=url,
+                            endpoint=url,
+                            scanner_sources=["NOPE URL scanner"],
+                            evidence=[_url_evidence(url, f"Redirect location: {location}")],
+                            remediation="Restrict redirects to approved hosts or validate redirect destinations server-side.",
+                        )
+                    )
+                else:
+                    _validate_url_for_probe(redirect_url, approved_hosts, settings)
             if response.next_request and response.next_request.url.host != parsed.hostname:
                 findings.append(
                     Finding(
@@ -109,7 +170,9 @@ async def scan_url(url: str) -> tuple[list[Finding], list[ScannerRun], list[Cove
 
             exposed_paths = ["/.env", "/.git/config", "/server-status", "/swagger.json", "/openapi.json", "/_next/static/"]
             for path in exposed_paths:
-                probe = await client.get(urljoin(url, path))
+                probe_url = urljoin(url, path)
+                _validate_url_for_probe(probe_url, approved_hosts, settings)
+                probe = await _bounded_get(client, probe_url, settings)
                 if probe.status_code == 200 and path not in {"/_next/static/"}:
                     findings.append(
                         Finding(

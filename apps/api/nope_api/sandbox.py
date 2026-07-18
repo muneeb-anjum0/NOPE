@@ -8,6 +8,7 @@ import subprocess
 import time
 from typing import Any, Protocol
 
+import httpx
 from pydantic import BaseModel, Field, ValidationError
 
 from nope_api.config import Settings
@@ -110,7 +111,7 @@ def sandbox_health(settings: Settings) -> dict[str, Any]:
         "workspace_volume": settings.sandbox_workspace_volume or None,
         "docker_available": bool(docker_path),
         "docker_path": docker_path,
-        "network_default": "disabled" if not settings.sandbox_network_enabled else "enabled by manifest",
+        "network_default": "disabled; ZAP uses only a runner-created internal network",
         "limits": sandbox_limits(settings),
     }
 
@@ -136,6 +137,46 @@ def sandbox_limits(settings: Settings) -> dict[str, Any]:
 
 
 def run_sandbox_assessment(
+    root: Path,
+    settings: Settings,
+    executor: SandboxExecutor | None = None,
+) -> tuple[list[ScannerRun], list[Finding], list[CoverageRecord], list[dict[str, Any]]]:
+    if settings.sandbox_runner_url and executor is None:
+        return _run_remote_sandbox_assessment(root, settings)
+    return _run_local_sandbox_assessment(root, settings, executor)
+
+
+def _run_remote_sandbox_assessment(
+    root: Path,
+    settings: Settings,
+) -> tuple[list[ScannerRun], list[Finding], list[CoverageRecord], list[dict[str, Any]]]:
+    try:
+        response = httpx.post(
+            f"{settings.sandbox_runner_url.rstrip('/')}/runner/sandbox",
+            headers={"authorization": f"Bearer {settings.sandbox_runner_token}"},
+            json={"workspace_path": str(root.resolve())},
+            timeout=settings.sandbox_timeout_seconds + settings.sandbox_zap_timeout_seconds + 15,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        return (
+            [ScannerRun(**item) for item in payload.get("scanner_runs", [])],
+            [Finding(**item) for item in payload.get("findings", [])],
+            [CoverageRecord(**item) for item in payload.get("coverage", [])],
+            list(payload.get("artifacts", [])),
+        )
+    except Exception as exc:
+        started = now_utc()
+        message = f"Sandbox runner unavailable or rejected the job: {_bounded_redacted(str(exc), 512)}"
+        return (
+            [ScannerRun(scanner="NOPE sandbox", version="runner", status="failed", coverage_categories=["Dynamic testing"], started_at=started, completed_at=now_utc(), message=message)],
+            [],
+            [CoverageRecord(domain="Dynamic testing", status=CoverageStatus.failed, scanners=["NOPE sandbox"], notes=message)],
+            [{"name": "Sandbox runner", "status": "failed", "message": message, "isolation": sandbox_limits(settings)}],
+        )
+
+
+def _run_local_sandbox_assessment(
     root: Path,
     settings: Settings,
     executor: SandboxExecutor | None = None,
@@ -197,13 +238,15 @@ class DockerSandbox:
         image = workflow.image or self._default_image(workflow.kind)
         if not self._image_allowed(image):
             return SandboxCommandResult(status="unsupported", name=workflow.name, command=[], message=f"Image is not allowed for sandbox workflow: {image}")
+        if not self._command_allowed(workflow.command):
+            return SandboxCommandResult(status="unsupported", name=workflow.name, command=[], message=f"Command is not allowed for sandbox workflow: {workflow.command}")
         timeout = min(workflow.timeout_seconds or self.settings.sandbox_timeout_seconds, self.settings.sandbox_timeout_seconds)
         name = f"nope-sandbox-{new_id('run')}"
         command = self._docker_run_command(
             name=name,
             image=image,
             inner_command=f"cp -R {self._repository_source_path()}/. /workspace && cd /workspace && {workflow.command}",
-            network="none" if not self.settings.sandbox_network_enabled else workflow.network,
+            network="none",
             detach=False,
         )
         result = self.executor.run(command, timeout)
@@ -221,6 +264,8 @@ class DockerSandbox:
         zap_image = zap.image or self.settings.sandbox_zap_image
         if not self._image_allowed(app_image) or not self._image_allowed(zap_image):
             return SandboxCommandResult(status="unsupported", name="OWASP ZAP baseline", command=[], message="Startup or ZAP image is not allowed.")
+        if not self._command_allowed(startup.command):
+            return SandboxCommandResult(status="unsupported", name="OWASP ZAP baseline", command=[], message="Startup command is not allowed.")
         network = f"nope-sandbox-net-{new_id('net')}"
         app_name = f"nope-sandbox-app-{new_id('app')}"
         commands: list[list[str]] = [
@@ -290,6 +335,10 @@ class DockerSandbox:
     def _image_allowed(self, image: str) -> bool:
         prefixes = [item.strip() for item in self.settings.sandbox_allow_images.split(",") if item.strip()]
         return any(image.startswith(prefix) for prefix in prefixes)
+
+    def _command_allowed(self, command: str) -> bool:
+        allowed = {item.strip() for item in self.settings.sandbox_allow_commands.split(",") if item.strip()}
+        return command.strip() in allowed
 
     def _docker_run_command(
         self,

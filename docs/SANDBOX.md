@@ -26,7 +26,7 @@ Phase 10 adds a local Docker sandbox for repository workflows that need limited 
 }
 ```
 
-Supported initial workflow kinds are `node`, `python`, `static`, and `custom`. `node` and `static` default to the configured Node image, and `python` and `custom` default to the configured Python image. Images must match the configured allow-list prefixes.
+Supported initial workflow kinds are `node`, `python`, `static`, and `custom`. `node` and `static` default to the configured Node image, and `python` and `custom` default to the configured Python image. Images and commands must match the configured allowlists. Manifest-declared mounts, environment variables, Docker networks, and arbitrary shell commands are not accepted.
 
 ## Isolation
 
@@ -36,7 +36,7 @@ Repository workflow containers are started with:
 - No privileged mode.
 - `--security-opt no-new-privileges:true`.
 - `--cap-drop ALL`.
-- Network disabled by default with `--network none`.
+- Network disabled with `--network none`.
 - Read-only repository bind mount at `/workspace-src`.
 - Writable tmpfs workspace at `/workspace`.
 - Read-only root filesystem.
@@ -53,4 +53,6 @@ The ZAP image uses a writable root filesystem because the upstream ZAP runtime w
 
 ## Docker Stack
 
-The local Compose worker has Docker CLI and Docker socket access so it can orchestrate sibling sandbox containers. That access stays at the worker boundary and is not mounted into launched sandbox containers. The API exposes `GET /api/sandbox/health` for the configured limits and isolation flags.
+The local Compose worker is non-root and socketless. Sandbox execution is delegated to the internal `nope-runner` service, which is the only service with Docker socket access. The worker sends a token-authenticated request containing the already-extracted workspace path; the runner accepts only paths under `NOPE_TEMP_ROOT` and then executes the same constrained sandbox policy described above.
+
+`nope-runner` is intentionally narrow: it does not accept arbitrary images, commands, mounts, environment variables, or networks from the worker. The API exposes `GET /api/sandbox/health` for the configured limits and isolation flags.

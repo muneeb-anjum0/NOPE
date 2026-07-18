@@ -128,10 +128,11 @@ CPU mode is slower but keeps deterministic scans functional.
 
 ## Sandbox Fails
 
-Confirm the worker has Docker access:
+Confirm the runner has Docker access. The worker should remain socketless:
 
 ```powershell
-docker compose exec -T nope-worker sh -lc "docker version --format '{{.Client.Version}} {{.Server.Version}}'"
+docker compose exec -T nope-runner sh -lc "docker version --format '{{.Client.Version}} {{.Server.Version}}'"
+docker compose exec -T nope-worker sh -lc "test ! -S /var/run/docker.sock"
 ```
 
 Confirm sandbox settings:

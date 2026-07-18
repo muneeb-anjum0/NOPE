@@ -46,7 +46,7 @@ Scanner failures are persisted as failed scanner runs and reduce coverage honest
 
 ## 6. Dynamic and Sandbox Analysis
 
-If `.nope/sandbox.json` is present, the worker can launch constrained Docker workflows. Repository workflow containers run with non-root users, no privileged mode, no Docker socket, no host home, no NOPE service secrets, dropped capabilities, `no-new-privileges`, bounded CPU/memory/PID/tmpfs/logs, and timeout cleanup.
+If `.nope/sandbox.json` is present, the socketless worker asks the internal `nope-runner` service to execute constrained Docker workflows for the already-extracted workspace. Repository workflow containers run with non-root users, no privileged mode, no Docker socket, no host home, no NOPE service secrets, dropped capabilities, `no-new-privileges`, bounded CPU/memory/PID/tmpfs/logs, allowlisted images and commands, no arbitrary mounts/env/networks, network disabled, and timeout cleanup.
 
 If ZAP is enabled in the manifest, NOPE creates a private internal Docker network, starts the declared app container, runs the ZAP baseline container against that internal target, records bounded evidence, and tears everything down.
 

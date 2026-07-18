@@ -101,7 +101,7 @@ Folder-scoped scans and baseline/drift code exist and are tested. The model corr
 
 ## 18. Sandbox status
 
-Sandbox support exists with non-root launched containers, limited memory/CPU/PIDs, read-only repo mounts, no-new-privileges, and network off by default. However, the worker container itself runs as root and mounts `/var/run/docker.sock` to launch sibling containers. That is a major trust boundary risk for a tool that processes hostile repos. Dynamic/ZAP checks were skipped in the audited repository E2E.
+Sandbox support exists with non-root launched containers, limited memory/CPU/PIDs, read-only repo mounts, no-new-privileges, and network off for ordinary workflows. Stage 3 moves Docker socket access out of the general worker and into the narrow internal `nope-runner` boundary. The worker is non-root and socketless; the runner accepts only token-authenticated sandbox requests for existing workspaces under `NOPE_TEMP_ROOT` and applies image, command, mount, environment, network, resource, timeout, log, artifact, and cleanup limits. Dynamic/ZAP checks remain opt-in through `.nope/sandbox.json`.
 
 ## 19. UI and UX status
 
@@ -121,7 +121,7 @@ Historical docs that call the whole product "Complete" remain too optimistic for
 
 ## 23. Security posture of NOPE itself
 
-Local posture is acceptable for trusted developer use, not production. Strengths: ZIP Slip/symlink checks, SSRF/private-target blocking by default, bearer auth, Postgres ownership scoping, scanner output redaction, sandbox limits. Risks: worker Docker socket/root, local auth only, in-memory login rate limit, llama.cpp no API key/CORS warning, no formal container vulnerability audit, no production CSRF/cookie hardening review.
+Local posture is acceptable for trusted developer use, not production. Strengths: hardened ZIP extraction, SSRF/private-target blocking by default, bearer auth, Postgres ownership scoping, scanner output redaction, socketless non-root worker, and bounded runner-based sandbox execution. Risks: the local `nope-runner` service still holds Docker daemon authority, local auth only, in-memory login rate limit, llama.cpp no API key/CORS warning, no formal container vulnerability audit, and no production CSRF/cookie hardening review.
 
 ## 24. Technical debt
 
@@ -129,15 +129,13 @@ See `docs/TECHNICAL_DEBT.md`.
 
 ## 25. Recommended next sequence
 
-1. Fix durable queue/event progress.
-2. Harden sandbox/worker Docker socket boundary.
-3. Add formal browser/axe E2E.
-4. Implement real GitHub activation once credentials exist.
-5. Add durable AI action cache or user-visible async generation queue.
+1. Add formal browser/axe E2E.
+2. Implement real GitHub activation once credentials exist.
+3. Add durable AI action cache or user-visible async generation queue.
 
 ## 26. Fastest path to a genuinely complete local product
 
-Keep Docker base compose as the canonical runtime, add event persistence tests, run a hostile sandbox matrix, add Playwright smoke tests for all app routes, and document exact local setup around model path/VRAM.
+Keep Docker base compose as the canonical runtime, keep hostile sandbox/URL/ZIP tests in regression, add Playwright smoke tests for all app routes, and document exact local setup around model path/VRAM.
 
 ## 27. Git and repository state
 
@@ -145,7 +143,7 @@ Branch: `main`. Commit: `a46bbc5`. Remote: `https://github.com/muneeb-anjum0/NOP
 
 ## 28. Final evidence-based assessment
 
-NOPE is a Functional MVP moving toward a strong local beta. It is not a production-ready local tool yet because dynamic testing is opt-in/skipped for common runs, the worker Docker socket boundary is risky, formal browser/security regression coverage is incomplete, and GitHub activation is blocked. It is definitely not production-ready SaaS.
+NOPE is a Functional MVP moving toward a strong local beta. It is not a production-ready local tool yet because dynamic testing is opt-in/skipped for common runs, the local runner still has Docker-daemon authority, formal browser/security regression coverage is incomplete, and GitHub activation is blocked. It is definitely not production-ready SaaS.
 
 ## 29. Stage 1 addendum: benchmark correctness
 

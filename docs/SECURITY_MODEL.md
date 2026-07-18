@@ -13,20 +13,38 @@ NOPE treats every uploaded repository and every scanned target as potentially ho
 ## Upload boundaries
 
 - ZIP extraction rejects absolute paths and `..` traversal.
-- Symlinks are rejected.
-- Maximum archive size, extracted size, and file count are configurable.
-- Temporary workspaces are isolated and cleaned up after scan completion.
+- Symlinks, hardlinks/special files, duplicate normalized paths, excessive path length, excessive nesting, oversized compressed archives, oversized extracted content, high compression-ratio archives, and excessive file counts are rejected.
+- ZIP paths are normalized before extraction so Unicode and case tricks cannot create duplicate or escaping members.
+- Temporary workspaces are isolated and cleaned up after failed extraction or scan completion.
 
 ## Execution boundaries
 
 - Unknown application code is not executed by the API process.
+- The general worker is non-root in the Compose stack and does not mount the Docker socket.
+- A dedicated internal `nope-runner` service owns the Docker socket boundary. The worker can request only a sandbox assessment for an existing workspace under `NOPE_TEMP_ROOT`; the runner rejects unauthenticated requests and workspace paths outside that root.
 - Repository sandbox workflows run in disposable Docker containers with non-root users, `no-new-privileges`, dropped capabilities, read-only repository mounts, read-only roots where supported, tmpfs work directories, memory/CPU/PID limits, bounded logs, and command timeouts.
 - Sandbox workflow containers do not receive the Docker socket, host home, NOPE MinIO/Postgres/Redis/Qwen secrets, or privileged mode.
-- Network is disabled by default for repository workflows.
+- Repository workflow images and commands must match configured allowlists; arbitrary images, commands, environment variables, mounts, and networks are not accepted.
+- Network is disabled for repository workflows.
 - ZAP dynamic scans use a private internal Docker network: one constrained application container is started from the declared manifest, one ZAP container scans only that internal target, and both are removed after the run.
 - The ZAP scanner image keeps its writable root filesystem because the upstream image writes runtime files during startup; it still receives dropped capabilities, `no-new-privileges`, private-network-only access, tmpfs work paths, and memory/PID/time limits.
-- The worker is the Docker orchestrator in the local Compose stack. Its Docker socket access is not propagated into sandbox containers.
 - Target application containers and scanner containers are separated in the architecture.
+
+## URL boundaries
+
+- URL scans require explicit authorization confirmation.
+- Only `http` and `https` schemes are accepted.
+- Credentials in URLs are rejected.
+- Target ports are restricted to the configured allowlist.
+- Hostnames are resolved and checked before scanning; private, loopback, link-local, reserved, localhost, and metadata-address targets are blocked by default.
+- Redirects are not followed by default; unsafe redirect targets are reported instead of fetched.
+- Probe requests use bounded timeouts and response-size limits.
+
+## Residual risk
+
+- The local `nope-runner` service still holds Docker daemon authority because local Docker sandboxing requires a daemon boundary. A runner compromise can become a Docker-host compromise. The important Stage 3 change is that the general worker, API, web app, scanner code, and uploaded repositories no longer receive unrestricted Docker daemon access.
+- Rootless Docker, a Docker authorization proxy, or a separate runner host would further reduce this residual risk in production deployments.
+- ZAP runs on a runner-created internal Docker network only when a repository explicitly opts in with a sandbox manifest.
 
 ## Secrets
 

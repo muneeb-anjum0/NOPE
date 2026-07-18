@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 from pathlib import Path
 from typing import Awaitable, Callable
 
@@ -17,6 +18,13 @@ from nope_api.url_scanner import scan_url
 
 ProgressCallback = Callable[[Scan], Awaitable[None]]
 CancellationChecker = Callable[[Scan], Awaitable[bool]]
+
+
+async def _run_url_scan(target_url: str, settings: Settings):
+    parameters = inspect.signature(scan_url).parameters
+    if len(parameters) >= 2:
+        return await scan_url(target_url, settings)
+    return await scan_url(target_url)
 
 
 class ScanCancelled(Exception):
@@ -222,7 +230,7 @@ async def run_url_only_scan(
     scan.status = "running"
     scan.stages.append({"name": "Running non-destructive URL checks", "status": "running"})
     await _checkpoint(scan, progress_callback, cancellation_checker)
-    findings, runs, coverage_updates = await scan_url(scan.target_url or "")
+    findings, runs, coverage_updates = await _run_url_scan(scan.target_url or "", settings)
     scan.stages[-1]["status"] = "completed" if runs and runs[0].status == "passed" else "failed"
     scan.findings = _promote_validated_findings(scan, findings, None)
     scan.scanner_runs = runs
@@ -252,7 +260,7 @@ async def run_full_scan(
     if scan.target_url:
         scan.stages.append({"name": "Running URL checks", "status": "running"})
         await _checkpoint(scan, progress_callback, cancellation_checker)
-        url_findings, url_runs, coverage_updates = await scan_url(scan.target_url)
+        url_findings, url_runs, coverage_updates = await _run_url_scan(scan.target_url, settings)
         scan.stages[-1]["status"] = (
             "completed" if url_runs and url_runs[0].status == "passed" else "partial"
         )

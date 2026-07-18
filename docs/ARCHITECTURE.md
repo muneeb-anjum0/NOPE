@@ -70,11 +70,11 @@ Current scan objects are also stored as JSON snapshots so the API contract remai
 
 ## Job flow
 
-The API validates scan requests, persists a queued `Scan`, extracts repository uploads into the shared workspace volume when needed, and enqueues Redis jobs. The worker consumes Redis jobs, runs the same scan engine, checkpoints stage progress back to Postgres, honors cancellation flags between stages, records retry/failure events, and keeps a Redis heartbeat for `/api/worker/health`.
+The API validates scan requests, persists a queued `Scan`, extracts repository uploads into the shared workspace volume when needed, and enqueues Redis jobs. The worker consumes Redis jobs, runs the same scan engine, checkpoints stage progress back to Postgres, honors cancellation flags between stages, records retry/failure events, and keeps a Redis heartbeat for `/api/worker/health`. The worker runs non-root and does not mount the Docker socket.
 
 ## Sandbox flow
 
-Repositories can opt into Phase 10 sandbox execution with `.nope/sandbox.json`. The worker launches disposable Docker containers for declared Node, Python, static, or custom commands with non-root users, dropped capabilities, `no-new-privileges`, read-only repository mounts, no sandbox Docker socket, no host home, no NOPE service secrets, bounded CPU/memory/PID/tmpfs/log limits, network disabled by default, and timeout cleanup.
+Repositories can opt into sandbox execution with `.nope/sandbox.json`. The worker delegates those requests to the internal `nope-runner` service, the only Compose service with Docker socket access. The runner accepts only token-authenticated requests for workspaces under `NOPE_TEMP_ROOT`, then launches disposable Docker containers for allowlisted Node, Python, static, or ZAP commands with non-root users, dropped capabilities, `no-new-privileges`, read-only repository mounts, no sandbox Docker socket, no host home, no NOPE service secrets, bounded CPU/memory/PID/tmpfs/log limits, network disabled for normal workflows, and timeout cleanup.
 
 For dynamic ZAP coverage, NOPE creates a private internal Docker network, starts the declared app container, runs the ZAP container against that internal target only, records bounded evidence, and tears down the containers/network.
 

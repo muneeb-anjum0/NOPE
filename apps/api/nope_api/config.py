@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     max_archive_bytes: int = 50 * 1024 * 1024
     max_extracted_bytes: int = 200 * 1024 * 1024
     max_file_count: int = 8000
+    max_archive_path_length: int = 240
+    max_archive_nesting_depth: int = 24
+    max_archive_compression_ratio: int = 100
     max_scan_seconds: int = 900
     max_scanner_seconds: int = 180
     scanner_concurrency: int = 3
@@ -36,6 +39,8 @@ class Settings(BaseSettings):
 
     sandbox_enabled: bool = True
     sandbox_docker_command: str = "docker"
+    sandbox_runner_url: str = ""
+    sandbox_runner_token: str = "development-runner-token-change-me"
     sandbox_workspace_volume: str = ""
     sandbox_node_image: str = "node:24-alpine"
     sandbox_python_image: str = "python:3.11-slim"
@@ -53,6 +58,11 @@ class Settings(BaseSettings):
     sandbox_log_bytes: int = 64 * 1024
     sandbox_network_enabled: bool = False
     sandbox_allow_images: str = "node:,python:,ghcr.io/zaproxy/zaproxy:"
+    sandbox_allow_commands: str = "python -m compileall .,python -m http.server 8080,python -m http.server 8080 --bind 0.0.0.0,pytest -q,npm test,npm run test,npm run build,pnpm test,pnpm build,yarn test,yarn build"
+    url_scan_timeout_seconds: int = 15
+    url_scan_max_response_bytes: int = 1024 * 1024
+    url_scan_max_redirects: int = 0
+    url_scan_allowed_ports: str = "80,443"
 
     ai_provider: str = "none"
     ai_runtime_url: str = "http://localhost:11434"
