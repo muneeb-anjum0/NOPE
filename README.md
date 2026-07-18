@@ -163,6 +163,15 @@ Bundled scanner adapters:
 | Gitleaks | Secrets |
 | OSV-Scanner | Vulnerable dependencies |
 | Trivy | Dependencies, containers, CI/CD, secrets, misconfigurations |
+| npm audit | Node dependencies from `package-lock.json` |
+| pnpm audit | Node dependencies from `pnpm-lock.yaml` |
+| yarn audit | Node dependencies from `yarn.lock` |
+| pip-audit | Python dependencies from requirements/project manifests |
+| .NET package audit | NuGet vulnerable package output when .NET SDK is installed |
+| cargo audit | Rust dependencies from `Cargo.lock` when cargo-audit is installed |
+| govulncheck | Go reachable vulnerabilities from `go.mod` when govulncheck is installed |
+| composer audit | PHP dependencies from `composer.lock` when Composer is installed |
+| bundler-audit | Ruby gems from `Gemfile.lock` when bundler-audit is installed |
 | Checkov | Infrastructure, CI/CD, containers |
 | Hadolint | Dockerfile/container hygiene |
 | Bandit | Python injection and secret patterns |
@@ -170,6 +179,8 @@ Bundled scanner adapters:
 | NOPE sandbox / ZAP | Optional dynamic testing when `.nope/sandbox.json` declares safe workflows |
 
 Scanner failures are not hidden. They are recorded as failed or not-applicable coverage.
+
+Ecosystem scanner plugins prefer lockfiles and machine-readable output. They never run package scripts, installers, or arbitrary repository commands. If a project is applicable but the required CLI is not installed in the scanner image, NOPE records the scanner as unavailable/failed coverage instead of pretending it ran.
 
 Raw candidate findings that fail evidence validation are also not hidden. The scan stage audit records how many candidates were promoted, withheld for more context, or rejected before the dashboard Findings view was populated.
 

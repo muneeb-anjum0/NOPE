@@ -44,12 +44,12 @@ Final Docker benchmark run on 2026-07-18:
 | Bandit | Yes | 1.9.4 | Yes | Yes | Captured | Yes | 78% |
 | Hadolint | Yes | 2.14.0 | Yes | Yes | Captured | Yes | 78% |
 | ZAP | Image/config exists | Version captured from runtime output | Private internal-network baseline verified for supported manifests | Alerts parsed into NOPE findings | Raw JSON/config artifact captured | Skipped/partial/failed/readiness/timeout handled | 85% |
-| npm audit | No first-class plugin | No | No | No | No | No | 10% |
-| pnpm audit | No first-class plugin | No | No | No | No | No | 10% |
-| yarn audit | No first-class plugin | No | No | No | No | No | 0% |
-| pip-audit | No first-class plugin | Host missing | No | No | No | No | 5% |
-| dotnet package audit | No first-class plugin | Host dotnet only | No | No | No | No | 5% |
-| cargo audit | No | Host missing | No | No | No | No | 0% |
-| govulncheck | No | Host missing | No | No | No | No | 0% |
-| composer audit | No first-class plugin | Host composer only | No | No | No | No | 5% |
-| bundler-audit | No | Host missing | No | No | No | No | 0% |
+| npm audit | Yes | Docker rebuild required | Controlled command/parser tests | Yes | Captured by scanner-run artifact path | Yes | 100% local |
+| pnpm audit | Yes | Docker rebuild required | Controlled command/parser tests | Yes | Captured by scanner-run artifact path | Yes | 100% local |
+| yarn audit | Yes | Docker rebuild required | Controlled command/parser tests | Yes | Captured by scanner-run artifact path | Yes | 100% local |
+| pip-audit | Yes | Docker rebuild required | Controlled command/parser tests | Yes | Captured by scanner-run artifact path | Yes | 100% local |
+| dotnet package audit | Plugin present; SDK not bundled | Unavailable unless SDK installed | Controlled command/parser tests | Yes | Captured when tool runs | Yes | 100% plugin / external tool |
+| cargo audit | Plugin present; cargo-audit not bundled | Unavailable unless cargo-audit installed | Controlled command/parser tests | Yes | Captured when tool runs | Yes | 100% plugin / external tool |
+| govulncheck | Plugin present; govulncheck not bundled | Unavailable unless installed | Controlled command/parser tests | Yes | Captured when tool runs | Yes | 100% plugin / external tool |
+| composer audit | Plugin present; Composer not bundled | Unavailable unless Composer installed | Controlled command/parser tests | Yes | Captured when tool runs | Yes | 100% plugin / external tool |
+| bundler-audit | Plugin present; bundler-audit not bundled | Unavailable unless installed | Controlled command/parser tests | Yes | Captured when tool runs | Yes | 100% plugin / external tool |

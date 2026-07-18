@@ -137,16 +137,115 @@ def _security_pack_path(*parts: str) -> Path:
     return Path(__file__).resolve().parents[3] / "security-packs" / Path(*parts)
 
 
+def _first_match(root: Path, patterns: list[str]) -> Path | None:
+    for pattern in patterns:
+        matches = sorted(root.rglob(pattern))
+        if matches:
+            return matches[0]
+    return None
+
+
+def _dependency_path(value: object) -> str | None:
+    if isinstance(value, list):
+        parts: list[str] = []
+        for item in value:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                for key in ("path", "module", "package", "name"):
+                    if item.get(key):
+                        parts.append(str(item[key]))
+                        break
+        return " > ".join(parts) if parts else None
+    if isinstance(value, str):
+        return value
+    return None
+
+
+def _fixed_version(value: object) -> str | None:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        strings = [str(item) for item in value if item]
+        return ", ".join(strings) if strings else None
+    if isinstance(value, dict):
+        if value.get("version"):
+            return str(value["version"])
+        if value.get("name"):
+            return str(value["name"])
+    return None
+
+
+def _dependency_finding(
+    *,
+    scanner: str,
+    package: str,
+    advisory: str,
+    title: str,
+    severity: object,
+    file: str | None = None,
+    installed_version: object = None,
+    fixed_version: object = None,
+    dependency_path: object = None,
+    description: str | None = None,
+) -> Finding:
+    fixed = _fixed_version(fixed_version)
+    path = _dependency_path(dependency_path)
+    version_text = f" Installed version: {installed_version}." if installed_version else ""
+    path_text = f" Dependency path: {path}." if path else ""
+    fix_text = f" Fixed version: {fixed}." if fixed else ""
+    body = (description or title or f"Vulnerable dependency {package}.") + version_text + path_text + fix_text
+    remediation = f"Upgrade {package}"
+    if fixed:
+        remediation += f" to {fixed}"
+    remediation += " or remove the vulnerable dependency."
+    return _finding(
+        scanner=scanner,
+        rule_id=advisory,
+        title=f"{package}: {advisory}",
+        description=body,
+        severity=_severity(severity, Severity.high),
+        original_severity=severity,
+        confidence=Confidence.high,
+        category="Dependencies",
+        file=file,
+        package=package,
+        cve=advisory,
+        remediation=remediation,
+    )
+
+
+def _json_lines(text: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parsed = load_json_or_none(line)
+        if isinstance(parsed, dict):
+            rows.append(parsed)
+    return rows
+
+
 class ScannerPlugin:
     name = "base"
     command = ""
     coverage_categories: list[str] = []
     supported_markers: list[str] = []
+    required_markers: list[str] = []
+    network_required = False
+    machine_readable_output = "json"
+    resource_requirements: dict[str, str] = {
+        "timeout": "settings.max_scanner_seconds",
+        "stdout_stderr_limit": "settings.max_scanner_output_bytes",
+    }
+    acceptable_exit_codes = {0, 1}
 
     def detect_applicability(self, root: Path) -> bool:
-        if not self.supported_markers:
+        markers = self.required_markers or self.supported_markers
+        if not markers:
             return True
-        return any(list(root.rglob(marker)) for marker in self.supported_markers)
+        return any(list(root.rglob(marker)) for marker in markers)
 
     def health_check(self) -> tuple[bool, str]:
         if not self.command:
@@ -186,6 +285,10 @@ class ScannerPlugin:
             "version": self.version(),
             "coverage_categories": self.coverage_categories,
             "supported_markers": self.supported_markers,
+            "required_markers": self.required_markers,
+            "network_required": self.network_required,
+            "machine_readable_output": self.machine_readable_output,
+            "resource_requirements": self.resource_requirements,
         }
 
     def execute(self, root: Path, settings: Settings) -> tuple[ScannerRun, list[Finding]]:
@@ -231,6 +334,9 @@ class ScannerPlugin:
                     **os.environ,
                     "HOME": os.environ.get("HOME") or "/tmp",
                     "SEMGREP_SEND_METRICS": "off",
+                    "NPM_CONFIG_IGNORE_SCRIPTS": "true",
+                    "npm_config_ignore_scripts": "true",
+                    "YARN_ENABLE_SCRIPTS": "0",
                 },
             )
             findings = self.parse_results(result.stdout, result.stderr, root)
@@ -239,7 +345,7 @@ class ScannerPlugin:
             return (
                 ScannerRun(
                     scanner=self.name,
-                    status="passed" if result.returncode in {0, 1} else "failed",
+                    status="passed" if result.returncode in self.acceptable_exit_codes else "failed",
                     coverage_categories=self.coverage_categories,
                     started_at=started,
                     completed_at=now_utc(),
@@ -493,6 +599,404 @@ class TrivyPlugin(ScannerPlugin):
         return findings
 
 
+class NpmAuditPlugin(ScannerPlugin):
+    name = "npm audit"
+    command = "npm"
+    coverage_categories = ["Dependencies"]
+    supported_markers = ["package.json", "package-lock.json"]
+    required_markers = ["package-lock.json"]
+    network_required = True
+
+    def build_command(self, root: Path) -> list[str]:
+        return ["npm", "audit", "--json", "--package-lock-only", "--ignore-scripts"]
+
+    def parse_results(self, stdout: str, stderr: str, root: Path) -> list[Finding]:
+        data = _as_dict(load_json_or_none(stdout))
+        findings: list[Finding] = []
+        lockfile = _relative(root, str(_first_match(root, ["package-lock.json"]))) if _first_match(root, ["package-lock.json"]) else None
+        for package_name, vuln_value in _as_dict(data.get("vulnerabilities")).items():
+            vuln = _as_dict(vuln_value)
+            via_items = _as_list(vuln.get("via")) or [vuln]
+            for via in via_items:
+                advisory = _as_dict(via)
+                if not advisory:
+                    advisory_id = str(via)
+                    title = f"Vulnerable dependency via {advisory_id}"
+                    severity = vuln.get("severity")
+                    fixed = _as_dict(vuln.get("fixAvailable")).get("version")
+                else:
+                    advisory_id = str(advisory.get("source") or advisory.get("url") or advisory.get("name") or package_name)
+                    title = str(advisory.get("title") or vuln.get("title") or f"Vulnerable dependency: {package_name}")
+                    severity = advisory.get("severity") or vuln.get("severity")
+                    fixed = _as_dict(vuln.get("fixAvailable")).get("version") or advisory.get("patched_versions")
+                findings.append(
+                    _dependency_finding(
+                        scanner=self.name,
+                        package=str(package_name),
+                        advisory=advisory_id,
+                        title=title,
+                        severity=severity,
+                        file=lockfile,
+                        installed_version=vuln.get("range"),
+                        fixed_version=fixed,
+                        dependency_path=vuln.get("nodes") or vuln.get("effects"),
+                        description=title,
+                    )
+                )
+        for advisory_id, value in _as_dict(data.get("advisories")).items():
+            advisory = _as_dict(value)
+            package = str(advisory.get("module_name") or advisory.get("name") or "dependency")
+            findings.append(
+                _dependency_finding(
+                    scanner=self.name,
+                    package=package,
+                    advisory=str(advisory.get("cves", [advisory_id])[0] if isinstance(advisory.get("cves"), list) and advisory.get("cves") else advisory_id),
+                    title=str(advisory.get("title") or f"Vulnerable dependency: {package}"),
+                    severity=advisory.get("severity"),
+                    file=lockfile,
+                    installed_version=advisory.get("vulnerable_versions"),
+                    fixed_version=advisory.get("patched_versions"),
+                    dependency_path=[path for finding in _as_list(advisory.get("findings")) for path in _as_list(_as_dict(finding).get("paths"))],
+                    description=advisory.get("overview"),
+                )
+            )
+        return findings
+
+
+class PnpmAuditPlugin(NpmAuditPlugin):
+    name = "pnpm audit"
+    command = "pnpm"
+    supported_markers = ["package.json", "pnpm-lock.yaml"]
+    required_markers = ["pnpm-lock.yaml"]
+
+    def build_command(self, root: Path) -> list[str]:
+        return ["pnpm", "audit", "--json"]
+
+    def parse_results(self, stdout: str, stderr: str, root: Path) -> list[Finding]:
+        data = _as_dict(load_json_or_none(stdout))
+        lockfile = _relative(root, str(_first_match(root, ["pnpm-lock.yaml"]))) if _first_match(root, ["pnpm-lock.yaml"]) else None
+        findings: list[Finding] = []
+        for advisory_id, value in _as_dict(data.get("advisories") or data.get("vulnerabilities")).items():
+            advisory = _as_dict(value)
+            package = str(advisory.get("module_name") or advisory.get("name") or advisory_id)
+            findings.append(
+                _dependency_finding(
+                    scanner=self.name,
+                    package=package,
+                    advisory=str(advisory.get("cves", [advisory_id])[0] if isinstance(advisory.get("cves"), list) and advisory.get("cves") else advisory_id),
+                    title=str(advisory.get("title") or f"Vulnerable dependency: {package}"),
+                    severity=advisory.get("severity"),
+                    file=lockfile,
+                    installed_version=advisory.get("vulnerable_versions"),
+                    fixed_version=advisory.get("patched_versions"),
+                    dependency_path=[path for finding in _as_list(advisory.get("findings")) for path in _as_list(_as_dict(finding).get("paths"))],
+                    description=advisory.get("overview") or advisory.get("title"),
+                )
+            )
+        return findings
+
+
+class YarnAuditPlugin(NpmAuditPlugin):
+    name = "yarn audit"
+    command = "yarn"
+    supported_markers = ["package.json", "yarn.lock"]
+    required_markers = ["yarn.lock"]
+
+    def build_command(self, root: Path) -> list[str]:
+        if (root / ".yarnrc.yml").exists():
+            return ["yarn", "npm", "audit", "--json"]
+        return ["yarn", "audit", "--json"]
+
+    def parse_results(self, stdout: str, stderr: str, root: Path) -> list[Finding]:
+        data = load_json_or_none(stdout)
+        if isinstance(data, dict) and (data.get("vulnerabilities") or data.get("advisories")):
+            return super().parse_results(stdout, stderr, root)
+        lockfile = _relative(root, str(_first_match(root, ["yarn.lock"]))) if _first_match(root, ["yarn.lock"]) else None
+        findings: list[Finding] = []
+        for row in _json_lines(stdout):
+            if row.get("type") != "auditAdvisory":
+                continue
+            advisory = _as_dict(_as_dict(row.get("data")).get("advisory"))
+            advisory_id = str(advisory.get("cves", [advisory.get("id")])[0] if isinstance(advisory.get("cves"), list) and advisory.get("cves") else advisory.get("id") or advisory.get("url") or "yarn-advisory")
+            package = str(advisory.get("module_name") or advisory.get("name") or "dependency")
+            findings.append(
+                _dependency_finding(
+                    scanner=self.name,
+                    package=package,
+                    advisory=advisory_id,
+                    title=str(advisory.get("title") or f"Vulnerable dependency: {package}"),
+                    severity=advisory.get("severity"),
+                    file=lockfile,
+                    installed_version=advisory.get("vulnerable_versions"),
+                    fixed_version=advisory.get("patched_versions"),
+                    dependency_path=[path for finding in _as_list(advisory.get("findings")) for path in _as_list(_as_dict(finding).get("paths"))],
+                    description=advisory.get("overview"),
+                )
+            )
+        return findings
+
+
+class PipAuditPlugin(ScannerPlugin):
+    name = "pip-audit"
+    command = "pip-audit"
+    coverage_categories = ["Dependencies"]
+    supported_markers = ["requirements*.txt", "pyproject.toml", "poetry.lock"]
+    required_markers = ["requirements*.txt", "pyproject.toml", "poetry.lock"]
+    network_required = True
+
+    def build_command(self, root: Path) -> list[str]:
+        requirements = _first_match(root, ["requirements*.txt"])
+        if requirements:
+            return ["pip-audit", "--format", "json", "--requirement", str(requirements)]
+        if _first_match(root, ["poetry.lock"]):
+            return ["pip-audit", "--format", "json", "--locked", str(root)]
+        return ["pip-audit", "--format", "json", str(root)]
+
+    def parse_results(self, stdout: str, stderr: str, root: Path) -> list[Finding]:
+        data = _as_dict(load_json_or_none(stdout))
+        findings: list[Finding] = []
+        manifest = _relative(root, str(_first_match(root, ["requirements*.txt", "pyproject.toml", "poetry.lock"]))) if _first_match(root, ["requirements*.txt", "pyproject.toml", "poetry.lock"]) else None
+        for dependency in _as_list(data.get("dependencies")):
+            dep = _as_dict(dependency)
+            package = str(dep.get("name") or "dependency")
+            for vuln in _as_list(dep.get("vulns")):
+                item = _as_dict(vuln)
+                advisory = str(item.get("id") or (_as_list(item.get("aliases"))[0] if _as_list(item.get("aliases")) else "pip-audit"))
+                findings.append(
+                    _dependency_finding(
+                        scanner=self.name,
+                        package=package,
+                        advisory=advisory,
+                        title=str(item.get("description") or f"Vulnerable dependency: {package}"),
+                        severity=item.get("severity") or "high",
+                        file=manifest,
+                        installed_version=dep.get("version"),
+                        fixed_version=item.get("fix_versions"),
+                        dependency_path=package,
+                        description=item.get("description"),
+                    )
+                )
+        return findings
+
+
+class DotnetPackageAuditPlugin(ScannerPlugin):
+    name = ".NET package audit"
+    command = "dotnet"
+    coverage_categories = ["Dependencies"]
+    supported_markers = ["*.csproj", "*.sln", "packages.lock.json"]
+    required_markers = ["*.csproj", "*.sln", "packages.lock.json"]
+    network_required = True
+
+    def build_command(self, root: Path) -> list[str]:
+        target = _first_match(root, ["*.sln", "*.csproj"])
+        command = ["dotnet", "package", "list"]
+        if target:
+            command.append(str(target))
+        return [*command, "--vulnerable", "--include-transitive", "--format", "json"]
+
+    def parse_results(self, stdout: str, stderr: str, root: Path) -> list[Finding]:
+        data = _as_dict(load_json_or_none(stdout))
+        findings: list[Finding] = []
+        for project in _as_list(data.get("projects")):
+            project_file = _relative(root, _as_dict(project).get("path") or _as_dict(project).get("filePath"))
+            for framework in _as_list(_as_dict(project).get("frameworks")):
+                frame = _as_dict(framework)
+                for bucket in ("topLevelPackages", "transitivePackages"):
+                    for package_value in _as_list(frame.get(bucket)):
+                        package = _as_dict(package_value)
+                        package_name = str(package.get("id") or package.get("name") or "dependency")
+                        for vuln_value in _as_list(package.get("vulnerabilities")):
+                            vuln = _as_dict(vuln_value)
+                            advisory = str(vuln.get("advisoryurl") or vuln.get("advisoryUrl") or vuln.get("id") or "dotnet-advisory")
+                            findings.append(
+                                _dependency_finding(
+                                    scanner=self.name,
+                                    package=package_name,
+                                    advisory=advisory,
+                                    title=f"Vulnerable .NET package: {package_name}",
+                                    severity=vuln.get("severity"),
+                                    file=project_file,
+                                    installed_version=package.get("resolvedVersion"),
+                                    fixed_version=package.get("latestVersion"),
+                                    dependency_path=bucket,
+                                    description=f"{package_name} is reported vulnerable by .NET package audit.",
+                                )
+                            )
+        return findings
+
+
+class CargoAuditPlugin(ScannerPlugin):
+    name = "cargo audit"
+    command = "cargo"
+    coverage_categories = ["Dependencies"]
+    supported_markers = ["Cargo.lock", "Cargo.toml"]
+    required_markers = ["Cargo.lock"]
+    network_required = True
+
+    def build_command(self, root: Path) -> list[str]:
+        return ["cargo", "audit", "--json"]
+
+    def health_check(self) -> tuple[bool, str]:
+        if not shutil.which("cargo"):
+            return False, "cargo was not found on PATH."
+        try:
+            result = subprocess.run(["cargo", "audit", "--version"], capture_output=True, text=True, timeout=10, check=False)
+        except Exception as exc:
+            return False, f"cargo-audit version check failed: {exc}"
+        if result.returncode == 0:
+            return True, "Installed."
+        return False, "cargo-audit was not found as a cargo subcommand."
+
+    def version_command(self) -> list[str]:
+        return ["cargo", "audit", "--version"]
+
+    def parse_results(self, stdout: str, stderr: str, root: Path) -> list[Finding]:
+        data = _as_dict(load_json_or_none(stdout))
+        lockfile = _relative(root, str(_first_match(root, ["Cargo.lock"]))) if _first_match(root, ["Cargo.lock"]) else None
+        findings: list[Finding] = []
+        for vuln_value in _as_list(_as_dict(data.get("vulnerabilities")).get("list")):
+            vuln = _as_dict(vuln_value)
+            advisory = _as_dict(vuln.get("advisory"))
+            versions = _as_dict(vuln.get("versions"))
+            package = str(advisory.get("package") or _as_dict(vuln.get("package")).get("name") or "crate")
+            advisory_id = str(advisory.get("id") or (_as_list(advisory.get("aliases"))[0] if _as_list(advisory.get("aliases")) else "cargo-advisory"))
+            findings.append(
+                _dependency_finding(
+                    scanner=self.name,
+                    package=package,
+                    advisory=advisory_id,
+                    title=str(advisory.get("title") or f"Vulnerable crate: {package}"),
+                    severity=advisory.get("severity") or advisory.get("cvss") or "high",
+                    file=lockfile,
+                    installed_version=_as_dict(vuln.get("package")).get("version"),
+                    fixed_version=versions.get("patched"),
+                    dependency_path=_as_list(vuln.get("versions")),
+                    description=advisory.get("description"),
+                )
+            )
+        return findings
+
+
+class GovulncheckPlugin(ScannerPlugin):
+    name = "govulncheck"
+    command = "govulncheck"
+    coverage_categories = ["Dependencies"]
+    supported_markers = ["go.mod", "go.sum"]
+    required_markers = ["go.mod"]
+    network_required = True
+
+    def build_command(self, root: Path) -> list[str]:
+        return ["govulncheck", "-json", "./..."]
+
+    def parse_results(self, stdout: str, stderr: str, root: Path) -> list[Finding]:
+        osv_by_id: dict[str, dict[str, Any]] = {}
+        findings: list[Finding] = []
+        go_mod = _relative(root, str(_first_match(root, ["go.mod"]))) if _first_match(root, ["go.mod"]) else None
+        for row in _json_lines(stdout):
+            if isinstance(row.get("osv"), dict):
+                osv = _as_dict(row["osv"])
+                if osv.get("id"):
+                    osv_by_id[str(osv["id"])] = osv
+            finding = _as_dict(row.get("finding"))
+            if not finding:
+                continue
+            advisory_id = str(finding.get("osv") or finding.get("id") or "go-vuln")
+            osv = osv_by_id.get(advisory_id, {})
+            trace = _as_list(finding.get("trace"))
+            package = "go module"
+            if trace:
+                first = _as_dict(trace[0])
+                package = str(first.get("module") or first.get("package") or package)
+            findings.append(
+                _dependency_finding(
+                    scanner=self.name,
+                    package=package,
+                    advisory=advisory_id,
+                    title=str(osv.get("summary") or finding.get("message") or f"Reachable Go vulnerability: {package}"),
+                    severity=osv.get("severity") or "high",
+                    file=go_mod,
+                    installed_version=_as_dict(trace[0]).get("version") if trace else None,
+                    fixed_version=finding.get("fixed_version") or finding.get("fixedVersion"),
+                    dependency_path=trace,
+                    description=osv.get("details") or osv.get("summary"),
+                )
+            )
+        return findings
+
+
+class ComposerAuditPlugin(ScannerPlugin):
+    name = "composer audit"
+    command = "composer"
+    coverage_categories = ["Dependencies"]
+    supported_markers = ["composer.json", "composer.lock"]
+    required_markers = ["composer.lock"]
+    network_required = True
+
+    def build_command(self, root: Path) -> list[str]:
+        return ["composer", "audit", "--format=json", "--locked"]
+
+    def parse_results(self, stdout: str, stderr: str, root: Path) -> list[Finding]:
+        data = _as_dict(load_json_or_none(stdout))
+        lockfile = _relative(root, str(_first_match(root, ["composer.lock"]))) if _first_match(root, ["composer.lock"]) else None
+        findings: list[Finding] = []
+        for package, advisory_list in _as_dict(data.get("advisories")).items():
+            for advisory_value in _as_list(advisory_list):
+                advisory = _as_dict(advisory_value)
+                advisory_id = str(advisory.get("cve") or advisory.get("advisoryId") or advisory.get("id") or advisory.get("link") or package)
+                findings.append(
+                    _dependency_finding(
+                        scanner=self.name,
+                        package=str(package),
+                        advisory=advisory_id,
+                        title=str(advisory.get("title") or f"Vulnerable Composer package: {package}"),
+                        severity=advisory.get("severity") or "high",
+                        file=lockfile,
+                        fixed_version=advisory.get("patchedVersions") or advisory.get("patched_versions"),
+                        dependency_path=package,
+                        description=advisory.get("title"),
+                    )
+                )
+        return findings
+
+
+class BundlerAuditPlugin(ScannerPlugin):
+    name = "bundler-audit"
+    command = "bundle-audit"
+    coverage_categories = ["Dependencies"]
+    supported_markers = ["Gemfile", "Gemfile.lock"]
+    required_markers = ["Gemfile.lock"]
+    network_required = False
+
+    def build_command(self, root: Path) -> list[str]:
+        return ["bundle-audit", "check", "--format", "json", "--no-update"]
+
+    def parse_results(self, stdout: str, stderr: str, root: Path) -> list[Finding]:
+        data = _as_dict(load_json_or_none(stdout))
+        lockfile = _relative(root, str(_first_match(root, ["Gemfile.lock"]))) if _first_match(root, ["Gemfile.lock"]) else None
+        findings: list[Finding] = []
+        for result_value in _as_list(data.get("results")):
+            result = _as_dict(result_value)
+            advisory = _as_dict(result.get("advisory"))
+            gem = _as_dict(result.get("gem"))
+            package = str(gem.get("name") or result.get("gem") or "gem")
+            advisory_id = str(advisory.get("cve") or advisory.get("ghsa") or advisory.get("id") or advisory.get("url") or "ruby-advisory")
+            findings.append(
+                _dependency_finding(
+                    scanner=self.name,
+                    package=package,
+                    advisory=advisory_id,
+                    title=str(advisory.get("title") or f"Vulnerable Ruby gem: {package}"),
+                    severity=advisory.get("criticality") or advisory.get("severity") or "high",
+                    file=lockfile,
+                    installed_version=gem.get("version"),
+                    fixed_version=advisory.get("patched_versions") or advisory.get("patchedVersions"),
+                    dependency_path=package,
+                    description=advisory.get("description") or advisory.get("title"),
+                )
+            )
+        return findings
+
+
 class CheckovPlugin(ScannerPlugin):
     name = "Checkov"
     command = "checkov"
@@ -645,6 +1149,15 @@ def scanner_plugins() -> list[ScannerPlugin]:
         GitleaksPlugin(),
         OsvScannerPlugin(),
         TrivyPlugin(),
+        NpmAuditPlugin(),
+        PnpmAuditPlugin(),
+        YarnAuditPlugin(),
+        PipAuditPlugin(),
+        DotnetPackageAuditPlugin(),
+        CargoAuditPlugin(),
+        GovulncheckPlugin(),
+        ComposerAuditPlugin(),
+        BundlerAuditPlugin(),
         CheckovPlugin(),
         HadolintPlugin(),
         BanditPlugin(),

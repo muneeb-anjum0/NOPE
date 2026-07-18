@@ -15,7 +15,9 @@ ARG TRIVY_VERSION=0.72.0
 ARG HADOLINT_VERSION=2.14.0
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl gnupg tar unzip \
+    && apt-get install -y --no-install-recommends ca-certificates curl gnupg nodejs npm tar unzip \
+    && npm install -g pnpm@10.26.0 yarn@1.22.22 \
+    && npm cache clean --force \
     && rm -rf /var/lib/apt/lists/*
 
 RUN install -m 0755 -d /etc/apt/keyrings \

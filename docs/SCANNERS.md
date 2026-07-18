@@ -10,6 +10,7 @@ The API image installs:
 - `gitleaks` for repository secret detection.
 - `osv-scanner` for open-source dependency vulnerability checks.
 - `trivy` for filesystem dependency/container/IaC checks.
+- `npm`, `pnpm`, `yarn`, and `pip-audit` for first-class ecosystem dependency audits where matching lockfiles or manifests exist.
 - `checkov` for Terraform, Dockerfile, and CI/CD policy checks.
 - `hadolint` for Dockerfile lint/security checks.
 - `bandit` for Python security analysis.
@@ -27,12 +28,39 @@ Phase 2 parser support exists for:
 - Gitleaks JSON
 - OSV-Scanner JSON
 - Trivy filesystem JSON
+- npm audit JSON
+- pnpm audit JSON
+- Yarn classic NDJSON and object-style audit JSON
+- pip-audit JSON
+- .NET package audit JSON
+- cargo audit JSON
+- govulncheck JSON lines
+- composer audit JSON
+- bundler-audit JSON
 - Checkov JSON
 - Hadolint JSON
 - Bandit JSON
 - OWASP ZAP baseline is not parsed during static repository scans because it is not applicable without a dynamic target. Phase 10 stores the bounded ZAP stdout/stderr evidence as sandbox artifacts.
 
-Parsers produce normalized severity, confidence, category, affected file, line, evidence, remediation, source, and stable fingerprints.
+Parsers produce normalized severity, confidence, category, affected file, line, package coordinates, advisory/CVE identity, dependency path when the scanner provides it, fixed version guidance when available, evidence, remediation, source, and stable fingerprints.
+
+## Ecosystem Audit Policy
+
+Ecosystem plugins prefer lockfile-backed, machine-readable audit modes:
+
+| Plugin | Applicability | Controlled command | Network |
+| --- | --- | --- | --- |
+| npm audit | `package-lock.json` | `npm audit --json --package-lock-only --ignore-scripts` | Required |
+| pnpm audit | `pnpm-lock.yaml` | `pnpm audit --json` | Required |
+| yarn audit | `yarn.lock` | Yarn classic `yarn audit --json` or Berry `yarn npm audit --json` | Required |
+| pip-audit | `requirements*.txt`, `pyproject.toml`, or `poetry.lock` | `pip-audit --format json --requirement <file>` or `pip-audit --format json [--locked] <project>` | Required |
+| .NET package audit | `.sln`, `.csproj`, or `packages.lock.json` | `dotnet package list --vulnerable --include-transitive --format json` | Required |
+| cargo audit | `Cargo.lock` | `cargo audit --json` | Required |
+| govulncheck | `go.mod` | `govulncheck -json ./...` | Required |
+| composer audit | `composer.lock` | `composer audit --format=json --locked` | Required |
+| bundler-audit | `Gemfile.lock` | `bundle-audit check --format json --no-update` | Not by default |
+
+NOPE does not execute package scripts, installers, arbitrary images, arbitrary commands, or repository-defined audit commands for these plugins. If the repository is applicable but the CLI is missing, the scanner run is marked failed with an unavailable-tool message so coverage remains honest.
 
 ## Execution Artifacts
 
@@ -59,6 +87,10 @@ Authenticated users can call `GET /api/scanners/capabilities` to see:
 - Version string
 - Coverage categories
 - Supported file markers used for applicability checks
+- Required lockfile/manifest markers
+- Whether network access is required
+- Machine-readable output format
+- Timeout/output resource requirements
 
 ## Verified Smoke
 
