@@ -53,6 +53,7 @@ class BaselineState(str, Enum):
 class Suppression(BaseModel):
     reason: str
     user: str
+    actor: str | None = None
     date: datetime = Field(default_factory=now_utc)
     expiry: datetime | None = None
     scope: str = "finding"
@@ -157,6 +158,7 @@ class Evidence(BaseModel):
 
 
 class Finding(BaseModel):
+    schema_version: str = "finding.v1"
     id: str = Field(default_factory=lambda: new_id("fnd"))
     project_id: str | None = None
     scan_id: str | None = None
@@ -165,6 +167,8 @@ class Finding(BaseModel):
     original_rule_id: str | None = None
     nope_rule_id: str | None = None
     fingerprint: str
+    original_fingerprint: str | None = None
+    correlation_id: str | None = None
     title: str
     description: str
     severity: Severity
@@ -183,6 +187,7 @@ class Finding(BaseModel):
     package: str | None = None
     cve: str | None = None
     raw_artifact_id: str | None = None
+    source_metadata: dict[str, Any] = Field(default_factory=dict)
     code_flow_fingerprint: str | None = None
     scanner_sources: list[str] = Field(default_factory=list)
     evidence: list[Evidence] = Field(default_factory=list)
@@ -199,6 +204,7 @@ class Finding(BaseModel):
     baseline_state: BaselineState = BaselineState.new
     suppression: Suppression | None = None
     suppression_expired_at: datetime | None = None
+    lifecycle_version: int = 1
     fix_available: bool = False
     verified: bool = False
 

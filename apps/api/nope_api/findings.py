@@ -257,7 +257,7 @@ def _sort_findings(findings: list[Finding], sort: str, direction: Literal["asc",
     return sorted(findings, key=key, reverse=reverse)
 
 
-def finding_detail(scan: Scan, finding_id: str) -> FindingDetail | None:
+def finding_detail(scan: Scan, finding_id: str, lifecycle_events: list[dict[str, Any]] | None = None) -> FindingDetail | None:
     finding = next((item for item in scan.findings if item.id == finding_id), None)
     if finding is None:
         return None
@@ -266,11 +266,53 @@ def finding_detail(scan: Scan, finding_id: str) -> FindingDetail | None:
         evidence=[evidence.model_dump(mode="json") for evidence in finding.evidence],
         source=_source_snippet(scan, finding),
         code_flow=_code_flow(scan, finding),
-        history=[
-            FindingHistoryItem(event="first_seen", at=finding.first_seen.isoformat(), data={"baseline_state": finding.baseline_state.value}),
-            FindingHistoryItem(event=finding.status, at=finding.last_seen.isoformat(), data={"recurrence_count": finding.recurrence_count}),
-        ],
+        history=_history_items(finding, lifecycle_events),
     )
+
+
+def _history_items(finding: Finding, lifecycle_events: list[dict[str, Any]] | None = None) -> list[FindingHistoryItem]:
+    items = [
+        FindingHistoryItem(
+            event="first_seen",
+            at=finding.first_seen.isoformat(),
+            data={
+                "baseline_state": finding.baseline_state.value,
+                "fingerprint": finding.fingerprint,
+                "original_fingerprint": finding.original_fingerprint,
+            },
+        )
+    ]
+    for event in lifecycle_events or []:
+        created = event.get("created_at")
+        items.append(
+            FindingHistoryItem(
+                event=str(event.get("new_status") or event.get("event") or "lifecycle_updated"),
+                at=created.isoformat() if hasattr(created, "isoformat") else str(created or finding.last_seen.isoformat()),
+                data={
+                    "previous_status": event.get("previous_status"),
+                    "status": event.get("new_status"),
+                    "actor": event.get("actor"),
+                    "reason": event.get("reason"),
+                    "scope": event.get("scope"),
+                    "expires_at": event.get("expires_at").isoformat() if hasattr(event.get("expires_at"), "isoformat") else event.get("expires_at"),
+                    "lifecycle_version": event.get("status_version"),
+                    "metadata": dict(event.get("metadata") or {}),
+                },
+            )
+        )
+    items.append(
+        FindingHistoryItem(
+            event=finding.status,
+            at=finding.last_seen.isoformat(),
+            data={
+                "recurrence_count": finding.recurrence_count,
+                "baseline_state": finding.baseline_state.value,
+                "lifecycle_version": finding.lifecycle_version,
+                "suppression": finding.suppression.model_dump(mode="json") if finding.suppression else None,
+            },
+        )
+    )
+    return items
 
 
 def _source_snippet(scan: Scan, finding: Finding) -> SourceSnippet | None:

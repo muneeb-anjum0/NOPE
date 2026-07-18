@@ -76,9 +76,11 @@ def run_rules(root: Path) -> list[Finding]:
                 for match in regex.finditer(text):
                     line_no = text[: match.start()].count("\n") + 1
                     snippet = lines[line_no - 1].strip() if line_no - 1 < len(lines) else match.group(0)
+                    native_fingerprint = fingerprint(rule["id"], rel, line_no, snippet)
                     findings.append(
                         Finding(
-                            fingerprint=fingerprint(rule["id"], rel, line_no, snippet),
+                            fingerprint=native_fingerprint,
+                            original_fingerprint=native_fingerprint,
                             scanner="NOPE rules",
                             original_rule_id=rule["id"],
                             nope_rule_id=rule["id"],
@@ -95,6 +97,12 @@ def run_rules(root: Path) -> list[Finding]:
                             start_line=line_no,
                             end_line=line_no,
                             scanner_sources=["NOPE rules"],
+                            source_metadata={
+                                "scanner": "NOPE rules",
+                                "original_rule_id": rule["id"],
+                                "original_fingerprint": native_fingerprint,
+                                "rule_pack": "nope-core-rules",
+                            },
                             evidence=[
                                 Evidence(
                                     source=rule["id"],
@@ -168,6 +176,11 @@ def correlation_key(finding: Finding) -> str:
     return f"fingerprint:{finding.fingerprint}"
 
 
+def canonical_fingerprint(finding: Finding) -> str:
+    digest = hashlib.sha256(correlation_key(finding).encode("utf-8", errors="ignore")).hexdigest()
+    return f"cfp_{digest[:24]}"
+
+
 def _merge_evidence(existing: list[Evidence], incoming: list[Evidence]) -> list[Evidence]:
     seen = {
         (
@@ -204,6 +217,13 @@ def _merge_evidence(existing: list[Evidence], incoming: list[Evidence]) -> list[
 
 
 def _merge_finding(existing: Finding, incoming: Finding) -> Finding:
+    if incoming.original_fingerprint and incoming.original_fingerprint not in existing.source_metadata.get("merged_original_fingerprints", []):
+        existing.source_metadata.setdefault("merged_original_fingerprints", [])
+        existing.source_metadata["merged_original_fingerprints"].append(incoming.original_fingerprint)
+    if incoming.fingerprint and incoming.fingerprint != existing.fingerprint:
+        existing.source_metadata.setdefault("merged_canonical_fingerprints", [])
+        if incoming.fingerprint not in existing.source_metadata["merged_canonical_fingerprints"]:
+            existing.source_metadata["merged_canonical_fingerprints"].append(incoming.fingerprint)
     if SEVERITY_RANK[incoming.severity] > SEVERITY_RANK[existing.severity]:
         existing.severity = incoming.severity
     if CONFIDENCE_RANK[incoming.confidence] > CONFIDENCE_RANK[existing.confidence]:
@@ -230,6 +250,7 @@ def _merge_finding(existing: Finding, incoming: Finding) -> Finding:
     existing.affected_route = existing.affected_route or incoming.affected_route
     existing.attack_scenario = existing.attack_scenario or incoming.attack_scenario
     existing.impact = existing.impact or incoming.impact
+    existing.source_metadata.update({key: value for key, value in incoming.source_metadata.items() if key not in existing.source_metadata})
     if existing.status == "open":
         existing.status = FindingStatus.new.value
     if incoming.status not in {"open", FindingStatus.new.value} and existing.status == FindingStatus.new.value:
@@ -242,6 +263,8 @@ def dedupe_findings(findings: list[Finding]) -> list[Finding]:
     for finding in findings:
         if finding.status == "open":
             finding.status = FindingStatus.new.value
+        if not finding.original_fingerprint:
+            finding.original_fingerprint = finding.fingerprint
         finding.last_seen = now_utc()
         if finding.start_line is None and finding.evidence:
             finding.start_line = finding.evidence[0].line
@@ -250,6 +273,12 @@ def dedupe_findings(findings: list[Finding]) -> list[Finding]:
         if finding.scanner and finding.scanner not in finding.scanner_sources:
             finding.scanner_sources.append(finding.scanner)
         key = correlation_key(finding)
+        finding.correlation_id = key
+        finding.fingerprint = canonical_fingerprint(finding)
+        finding.source_metadata.setdefault("original_fingerprint", finding.original_fingerprint)
+        finding.source_metadata.setdefault("schema_version", finding.schema_version)
+        finding.source_metadata.setdefault("scanner", finding.scanner)
+        finding.source_metadata.setdefault("scanner_sources", finding.scanner_sources)
         generic_key = None
         file, line = _source_location(finding)
         if file and line:

@@ -94,6 +94,7 @@ def _finding(
     )
     return Finding(
         fingerprint=fp,
+        original_fingerprint=fp,
         scanner=scanner,
         original_rule_id=rule_id,
         title=title,
@@ -113,6 +114,13 @@ def _finding(
         cve=cve,
         scanner_sources=[scanner],
         evidence=[evidence],
+        source_metadata={
+            "scanner": scanner,
+            "original_rule_id": rule_id,
+            "original_fingerprint": fp,
+            "original_severity": _original_text(original_severity),
+            "original_confidence": _original_text(original_confidence),
+        },
         remediation=remediation or "Review the scanner evidence and apply the scanner-recommended fix.",
     )
 

@@ -15,7 +15,8 @@ from nope_api.drift import BaselineSnapshot, baseline_snapshot, compare_scans
 from nope_api.findings import finding_detail, parse_finding_query, query_findings, raw_artifact
 from nope_api.github import BlockedGitHubAdapter
 from nope_api.ingestion import extract_zip
-from nope_api.models import AuthorizationScope, GitHubSettings, Project, ProjectSettings, Scan, ScanMode, ScanRequest, SystemSettings
+from nope_api.lifecycle import LifecycleTransitionRequest
+from nope_api.models import AuthorizationScope, FindingStatus, GitHubSettings, Project, ProjectSettings, Scan, ScanMode, ScanRequest, SystemSettings
 from nope_api.queue import clear_scan_cancel, enqueue_scan_job, queue_status, request_scan_cancel, scan_events
 from nope_api.reports import ReportContext, render_report
 from nope_api.sandbox import sandbox_health
@@ -477,30 +478,50 @@ def get_findings(
 
 @app.get("/api/scans/{scan_id}/findings/{finding_id}")
 def get_finding_detail(scan_id: str, finding_id: str, authorization: str | None = Header(default=None)):
-    detail = finding_detail(_load_scan(scan_id, authorization), finding_id)
+    owner_user_id = _require_owner_user_id(authorization)
+    detail = finding_detail(_load_scan(scan_id, authorization), finding_id, store.list_finding_lifecycle_events(scan_id, finding_id, owner_user_id))
     if not detail:
         raise HTTPException(status_code=404, detail="Finding not found.")
     return detail
 
 
+@app.patch("/api/scans/{scan_id}/findings/{finding_id}/lifecycle", response_model=Scan)
+def transition_finding_lifecycle(scan_id: str, finding_id: str, payload: LifecycleTransitionRequest, authorization: str | None = Header(default=None)) -> Scan:
+    owner_user_id = _require_owner_user_id(authorization)
+    try:
+        scan = store.transition_finding(scan_id, finding_id, payload, owner_user_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not scan:
+        raise HTTPException(status_code=404, detail="Finding not found.")
+    return scan
+
+
 @app.post("/api/scans/{scan_id}/findings/{finding_id}/suppress", response_model=Scan)
 def suppress_finding(scan_id: str, finding_id: str, payload: dict, authorization: str | None = Header(default=None)) -> Scan:
     owner_user_id = _require_owner_user_id(authorization)
-    scan = _load_scan(scan_id, authorization)
-    finding = next((item for item in scan.findings if item.id == finding_id), None)
-    if not finding:
-        raise HTTPException(status_code=404, detail="Finding not found.")
-    from nope_api.models import Suppression
-
     expiry = payload.get("expiry")
-    finding.suppression = Suppression(
-        reason=str(payload.get("reason") or "Suppressed from findings detail."),
-        user=str(payload.get("user") or owner_user_id or "local-user"),
+    if not str(payload.get("reason") or "").strip():
+        raise HTTPException(status_code=400, detail="Suppression reason is required.")
+    request = LifecycleTransitionRequest(
+        status=FindingStatus.suppressed,
+        reason=str(payload.get("reason") or ""),
+        actor=str(payload.get("actor") or payload.get("user") or owner_user_id or "local-user"),
         expiry=datetime.fromisoformat(expiry) if expiry else None,
         scope=str(payload.get("scope") or "finding"),
+        expected_version=payload.get("expected_version"),
     )
-    finding.status = "suppressed"
-    return store.save_scan(scan, owner_user_id)
+    try:
+        scan = store.transition_finding(scan_id, finding_id, request, owner_user_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not scan:
+        raise HTTPException(status_code=404, detail="Finding not found.")
+    return scan
 
 
 @app.get("/api/scans/{scan_id}/artifacts/{artifact_id}")

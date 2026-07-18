@@ -68,6 +68,17 @@ def _suppressed_count(scan: Scan) -> int:
     return sum(1 for finding in scan.findings if finding.status == "suppressed" or finding.suppression is not None)
 
 
+def _lifecycle_summary(scan: Scan) -> dict[str, Any]:
+    states = Counter(finding.status for finding in scan.findings)
+    return {
+        "states": dict(states),
+        "reintroduced": sum(1 for finding in scan.findings if finding.status == "reintroduced" or finding.baseline_state.value == "reintroduced"),
+        "recurring": sum(1 for finding in scan.findings if finding.recurrence_count > 1),
+        "suppressed": _suppressed_count(scan),
+        "schema_versions": sorted({finding.schema_version for finding in scan.findings}),
+    }
+
+
 def _failed_scanners(scan: Scan) -> list[str]:
     return [f"{run.scanner}: {run.message or 'failed'}" for run in scan.scanner_runs if run.status == "failed"]
 
@@ -150,6 +161,7 @@ def report_json(scan: Scan, context: ReportContext | None = None) -> dict:
             "failed_scanners": len(_failed_scanners(scan)),
         },
         "dynamic_testing": _dynamic_summary(scan),
+        "finding_lifecycle": _lifecycle_summary(scan),
         "baseline_comparison": baseline,
         "limitations": _limitations(scan),
         "methodology": _methodology(),
@@ -211,11 +223,16 @@ def report_markdown(scan: Scan, context: ReportContext | None = None) -> str:
                 f"- File: {_redact(finding.affected_file)}",
                 f"- Route: {_redact(finding.affected_route)}",
                 f"- Status: {_redact(finding.status)}",
+                f"- Fingerprint: {_redact(finding.fingerprint)}",
+                f"- Original scanner fingerprint: {_redact(finding.original_fingerprint)}",
+                f"- Recurrence count: {finding.recurrence_count}",
                 f"- Remediation: {_redact(finding.remediation)}",
                 "",
             ]
         )
-    lines.extend(["## Baseline Comparison", f"- Drift events: {baseline.get('summary', {}).get('total_drift_events', 0)}"])
+    lifecycle = _lifecycle_summary(scan)
+    lines.extend(["## Finding Lifecycle", *[f"- {key}: {value}" for key, value in lifecycle["states"].items()]])
+    lines.extend(["", "## Baseline Comparison", f"- Drift events: {baseline.get('summary', {}).get('total_drift_events', 0)}"])
     lines.extend(["", "## Untested Areas"])
     for item in _untested_areas(scan) or ["No explicit untested areas were recorded."]:
         lines.append(f"- {_redact(item)}")
@@ -252,6 +269,16 @@ def report_sarif(scan: Scan, context: ReportContext | None = None) -> dict:
                 "level": "error" if finding.severity.value in {"critical", "high"} else "warning",
                 "message": {"text": _redact(finding.title)},
                 "locations": [location],
+                "partialFingerprints": {
+                    "nopeCanonicalFingerprint": finding.fingerprint,
+                    "scannerFingerprint": finding.original_fingerprint or finding.fingerprint,
+                },
+                "properties": {
+                    "status": finding.status,
+                    "recurrence_count": finding.recurrence_count,
+                    "scanner_sources": finding.scanner_sources,
+                    "schema_version": finding.schema_version,
+                },
             }
         )
     return {
@@ -424,6 +451,9 @@ def _finding_section(story: list[Any], scan: Scan, severity: str, styles: dict[s
                 ["File", finding.affected_file or "n/a"],
                 ["Route", finding.affected_route or "n/a"],
                 ["Status", finding.status],
+                ["Fingerprint", finding.fingerprint],
+                ["Original fingerprint", finding.original_fingerprint or "n/a"],
+                ["Recurrence", str(finding.recurrence_count)],
                 ["Remediation", finding.remediation],
             ],
         )

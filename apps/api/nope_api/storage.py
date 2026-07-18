@@ -10,6 +10,7 @@ from psycopg.types.json import Jsonb
 from nope_api.artifacts import put_binary_artifact, put_json_artifact
 from nope_api.config import get_settings
 from nope_api.db import connect, run_migrations
+from nope_api.lifecycle import LifecycleTransitionRequest, apply_transition
 from nope_api.models import BaselineState, FindingStatus, Project, Scan, ScanEvent, now_utc, new_id
 from nope_api.reports import render_report
 
@@ -286,6 +287,9 @@ class PostgresStore:
         for finding in scan.findings:
             finding.project_id = scan.project_id
             finding.scan_id = scan.id
+            finding.lifecycle_version = max(1, int(finding.lifecycle_version or 1))
+            if not finding.original_fingerprint:
+                finding.original_fingerprint = finding.fingerprint
             if finding.status == "open":
                 finding.status = FindingStatus.new.value
             if finding.suppression and finding.suppression.expiry and finding.suppression.expiry <= now:
@@ -293,22 +297,178 @@ class PostgresStore:
                 finding.suppression = None
                 finding.status = FindingStatus.reopened.value
             elif finding.suppression:
+                if not finding.suppression.actor:
+                    finding.suppression.actor = finding.suppression.user
                 finding.status = FindingStatus.suppressed.value
+            active_suppression = self._active_suppression_for_finding(conn, finding, scan.project_id)
+            if active_suppression and finding.status not in {FindingStatus.fixed.value, FindingStatus.verified.value, FindingStatus.false_positive.value}:
+                finding.status = FindingStatus.suppressed.value
+                finding.suppression = active_suppression
 
             params: list[Any] = [finding.fingerprint, scan.id]
-            query = "select scan_id, event from finding_history where fingerprint = %s and scan_id <> %s"
+            query = """
+                select scan_id, event as state from finding_history where fingerprint = %s and scan_id <> %s
+                union all
+                select scan_id, new_status as state from finding_lifecycle_events where fingerprint = %s and scan_id <> %s
+            """
+            params = [finding.fingerprint, scan.id, finding.fingerprint, scan.id]
             if scan.project_id:
-                query += " and scan_id in (select id from scans where project_id = %s)"
+                query = f"select * from ({query}) prior where prior.scan_id in (select id from scans where project_id = %s)"
                 params.append(scan.project_id)
             rows = conn.execute(query, tuple(params)).fetchall()
             if rows:
                 finding.recurrence_count = max(finding.recurrence_count, len({row["scan_id"] for row in rows}) + 1)
                 if finding.baseline_state == BaselineState.new:
                     finding.baseline_state = BaselineState.existing
-                if any(row["event"] in {"fixed", "verified"} for row in rows):
+                if any(row["state"] in {"fixed", "verified"} for row in rows) and finding.status != FindingStatus.suppressed.value:
                     finding.status = FindingStatus.reintroduced.value
                     finding.baseline_state = BaselineState.reintroduced
             finding.last_seen = now
+
+    def _active_suppression_for_finding(self, conn, finding, project_id: str | None):
+        if not project_id:
+            return None
+        row = conn.execute(
+            """
+            select actor, reason, scope, expires_at, created_at
+            from finding_lifecycle_events
+            where project_id = %s
+              and fingerprint = %s
+              and new_status = 'suppressed'
+              and (expires_at is null or expires_at > now())
+            order by created_at desc
+            limit 1
+            """,
+            (project_id, finding.fingerprint),
+        ).fetchone()
+        if not row:
+            return None
+        from nope_api.models import Suppression
+
+        return Suppression(
+            reason=row["reason"],
+            user=row["actor"],
+            actor=row["actor"],
+            date=row["created_at"],
+            expiry=row["expires_at"],
+            scope=row["scope"] or "finding",
+        )
+
+    def _expire_suppressions_in_model(self, conn, scan: Scan, owner_user_id: str | None) -> bool:
+        now = now_utc()
+        changed = False
+        for finding in scan.findings:
+            if not finding.suppression or not finding.suppression.expiry or finding.suppression.expiry > now:
+                continue
+            previous = finding.status
+            finding.suppression_expired_at = now
+            finding.suppression = None
+            finding.status = FindingStatus.reopened.value
+            finding.lifecycle_version = max(1, finding.lifecycle_version) + 1
+            finding.last_seen = now
+            self._record_finding_lifecycle_event(
+                conn,
+                finding=finding,
+                previous_status=previous,
+                new_status=finding.status,
+                actor="system",
+                reason="Suppression expired automatically.",
+                scope="finding",
+                metadata={"automatic": True, "owner_user_id": owner_user_id},
+            )
+            changed = True
+        return changed
+
+    def _persist_scan_data_and_finding_rows(self, conn, scan: Scan) -> None:
+        conn.execute("update scans set data = %s where id = %s", (Jsonb(scan.model_dump(mode="json")), scan.id))
+        for finding in scan.findings:
+            conn.execute(
+                """
+                update findings
+                set status = %s,
+                    last_seen = %s,
+                    verified = %s,
+                    status_version = %s,
+                    suppressed_until = %s,
+                    suppression_scope = %s,
+                    suppression_reason = %s,
+                    suppression_actor = %s,
+                    data = %s
+                where id = %s and scan_id = %s
+                """,
+                (
+                    finding.status,
+                    finding.last_seen,
+                    finding.verified,
+                    finding.lifecycle_version,
+                    finding.suppression.expiry if finding.suppression else None,
+                    finding.suppression.scope if finding.suppression else None,
+                    finding.suppression.reason if finding.suppression else None,
+                    (finding.suppression.actor or finding.suppression.user) if finding.suppression else None,
+                    Jsonb(finding.model_dump(mode="json")),
+                    finding.id,
+                    scan.id,
+                ),
+            )
+
+    def _record_finding_lifecycle_event(
+        self,
+        conn,
+        *,
+        finding,
+        previous_status: str | None,
+        new_status: str,
+        actor: str,
+        reason: str,
+        scope: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        conn.execute(
+            """
+            insert into finding_lifecycle_events (
+              id, finding_id, scan_id, project_id, fingerprint, previous_status, new_status,
+              actor, reason, scope, expires_at, status_version, metadata
+            )
+            values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                new_id("fle"),
+                finding.id,
+                finding.scan_id,
+                finding.project_id,
+                finding.fingerprint,
+                previous_status,
+                new_status,
+                actor,
+                reason,
+                scope,
+                finding.suppression.expiry if finding.suppression else None,
+                finding.lifecycle_version,
+                Jsonb(metadata or {}),
+            ),
+        )
+        conn.execute(
+            """
+            insert into finding_history (finding_id, fingerprint, scan_id, event, data)
+            values (%s, %s, %s, %s, %s)
+            """,
+            (
+                finding.id,
+                finding.fingerprint,
+                finding.scan_id,
+                new_status,
+                Jsonb(
+                    {
+                        "previous_status": previous_status,
+                        "status": new_status,
+                        "actor": actor,
+                        "reason": reason,
+                        "scope": scope,
+                        "lifecycle_version": finding.lifecycle_version,
+                    }
+                ),
+            ),
+        )
 
     def get_scan(self, scan_id: str, owner_user_id: str | None = None) -> Scan | None:
         self.migrate()
@@ -319,7 +479,12 @@ class PostgresStore:
             params = (scan_id, owner_user_id)
         with connect(self.settings) as conn:
             row = conn.execute(query, params).fetchone()
-        return Scan(**row["data"]) if row else None
+            if not row:
+                return None
+            scan = Scan(**row["data"])
+            if self._expire_suppressions_in_model(conn, scan, owner_user_id):
+                self._persist_scan_data_and_finding_rows(conn, scan)
+        return scan
 
     def list_scans(self, owner_user_id: str | None = None) -> list[Scan]:
         self.migrate()
@@ -333,6 +498,29 @@ class PostgresStore:
             rows = conn.execute(query, params).fetchall()
         return [Scan(**row["data"]) for row in rows]
 
+    def list_finding_lifecycle_events(
+        self,
+        scan_id: str,
+        finding_id: str,
+        owner_user_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        self.migrate()
+        query = """
+            select finding_lifecycle_events.*
+            from finding_lifecycle_events
+            join scans on scans.id = finding_lifecycle_events.scan_id
+            where finding_lifecycle_events.scan_id = %s
+              and finding_lifecycle_events.finding_id = %s
+        """
+        params: list[Any] = [scan_id, finding_id]
+        if owner_user_id:
+            query += " and scans.owner_user_id = %s"
+            params.append(owner_user_id)
+        query += " order by finding_lifecycle_events.created_at asc"
+        with connect(self.settings) as conn:
+            rows = conn.execute(query, tuple(params)).fetchall()
+        return [dict(row) for row in rows]
+
     def user_owns_scan(self, scan_id: str, owner_user_id: str) -> bool:
         self.migrate()
         with connect(self.settings) as conn:
@@ -341,6 +529,85 @@ class PostgresStore:
                 (scan_id, owner_user_id),
             ).fetchone()
         return row is not None
+
+    def transition_finding(
+        self,
+        scan_id: str,
+        finding_id: str,
+        request: LifecycleTransitionRequest,
+        owner_user_id: str | None,
+    ) -> Scan | None:
+        self.migrate()
+        actor = request.actor or owner_user_id or "local-user"
+        with connect(self.settings) as conn:
+            params: tuple[Any, ...] = (scan_id,)
+            owner_clause = ""
+            if owner_user_id:
+                owner_clause = " and owner_user_id = %s"
+                params = (scan_id, owner_user_id)
+            scan_row = conn.execute(f"select data from scans where id = %s{owner_clause} for update", params).fetchone()
+            if not scan_row:
+                return None
+            finding_row = conn.execute(
+                """
+                select id, status_version
+                from findings
+                where scan_id = %s and id = %s
+                for update
+                """,
+                (scan_id, finding_id),
+            ).fetchone()
+            if not finding_row:
+                return None
+            scan = Scan(**scan_row["data"])
+            self._expire_suppressions_in_model(conn, scan, owner_user_id)
+            finding = next((item for item in scan.findings if item.id == finding_id), None)
+            if not finding:
+                return None
+            current_version = max(int(finding.lifecycle_version or 1), int(finding_row["status_version"] or 1))
+            finding.lifecycle_version = current_version
+            if request.expected_version is not None and request.expected_version != current_version:
+                raise RuntimeError(f"Finding lifecycle version conflict: expected {request.expected_version}, current {current_version}.")
+            previous = finding.status
+            finding.scan_id = scan.id
+            finding.project_id = scan.project_id
+            apply_transition(finding, request, actor=actor)
+            self._persist_scan_data_and_finding_rows(conn, scan)
+            self._record_finding_lifecycle_event(
+                conn,
+                finding=finding,
+                previous_status=previous,
+                new_status=finding.status,
+                actor=actor,
+                reason=request.reason,
+                scope=request.scope,
+                metadata=request.metadata,
+            )
+            conn.execute(
+                """
+                insert into audit_logs (owner_user_id, project_id, scan_id, action, actor, data)
+                values (%s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    owner_user_id,
+                    scan.project_id,
+                    scan.id,
+                    "finding.lifecycle.updated",
+                    actor,
+                    Jsonb(
+                        {
+                            "finding_id": finding.id,
+                            "fingerprint": finding.fingerprint,
+                            "previous_status": previous,
+                            "new_status": finding.status,
+                            "reason": request.reason,
+                            "scope": request.scope,
+                            "lifecycle_version": finding.lifecycle_version,
+                        }
+                    ),
+                ),
+            )
+            return scan
 
     def record_scan_event(
         self,
@@ -1251,9 +1518,10 @@ class PostgresStore:
                 insert into findings (
                   id, scan_id, project_id, fingerprint, title, description, severity, confidence,
                   category, cwe, owasp, affected_file, affected_route, remediation, status,
-                  first_seen, last_seen, fix_available, verified, data
+                  first_seen, last_seen, fix_available, verified, data, status_version,
+                  suppressed_until, suppression_scope, suppression_reason, suppression_actor
                 )
-                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     finding.id,
@@ -1276,6 +1544,11 @@ class PostgresStore:
                     finding.fix_available,
                     finding.verified,
                     Jsonb(finding_data),
+                    finding.lifecycle_version,
+                    finding.suppression.expiry if finding.suppression else None,
+                    finding.suppression.scope if finding.suppression else None,
+                    finding.suppression.reason if finding.suppression else None,
+                    (finding.suppression.actor or finding.suppression.user) if finding.suppression else None,
                 ),
             )
             conn.execute(
@@ -1291,8 +1564,14 @@ class PostgresStore:
                     Jsonb(
                         {
                             "status": finding.status,
+                            "schema_version": finding.schema_version,
+                            "original_fingerprint": finding.original_fingerprint,
+                            "correlation_id": finding.correlation_id,
+                            "scanner_sources": finding.scanner_sources,
                             "recurrence_count": finding.recurrence_count,
                             "baseline_state": finding.baseline_state.value,
+                            "lifecycle_version": finding.lifecycle_version,
+                            "suppression": finding.suppression.model_dump(mode="json") if finding.suppression else None,
                             "suppression_expired_at": finding.suppression_expired_at.isoformat() if finding.suppression_expired_at else None,
                         }
                     ),

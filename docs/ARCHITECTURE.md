@@ -68,6 +68,14 @@ The local implementation uses Postgres for local authentication and scan persist
 
 Current scan objects are also stored as JSON snapshots so the API contract remains stable while normalized tables preserve the high-value relational records used by reports, history, and status views.
 
+## Finding lifecycle
+
+Promoted findings use a canonical NOPE fingerprint for recurrence, drift, and deduplication while preserving the original scanner fingerprint and source metadata in the finding payload. Duplicate evidence from static scanners, dependency scanners, dynamic checks, custom rules, graph hints, Qwen review, and tests is merged into one finding without dropping scanner sources or evidence rows.
+
+Lifecycle updates are persisted through `finding_lifecycle_events`, `finding_history`, and `audit_logs`. Valid states are `new`, `confirmed`, `fixing`, `fixed`, `verified`, `false_positive`, `accepted_risk`, `suppressed`, `reopened`, and `reintroduced`. Updates are owner-scoped and optimistic-versioned through `lifecycle_version`.
+
+Suppressions require a reason, actor, timestamp, scope, and optional expiry. Expired suppressions reopen automatically when the scan/finding is read. A finding is marked reintroduced when its canonical fingerprint appears again in the same project after a prior fixed or verified lifecycle state.
+
 ## Job flow
 
 The API validates scan requests, persists a queued `Scan`, extracts repository uploads into the shared workspace volume when needed, and enqueues Redis jobs. The worker consumes Redis jobs, runs the same scan engine, checkpoints stage progress back to Postgres, honors cancellation flags between stages, records retry/failure events, and keeps a Redis heartbeat for `/api/worker/health`. The worker runs non-root and does not mount the Docker socket.

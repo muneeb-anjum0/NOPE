@@ -66,6 +66,14 @@ Secrets and dependency CVEs are handled differently: generated bundles can still
 
 In short: **the pipeline is stricter where heuristics used to be noisy, without hiding high-signal evidence.**
 
+### What is the finding lifecycle?
+
+NOPE stores every promoted finding with a canonical fingerprint, original scanner fingerprint, scanner/source metadata, evidence rows, status, recurrence count, suppression metadata, and lifecycle version.
+
+Supported lifecycle states are `new`, `confirmed`, `fixing`, `fixed`, `verified`, `false_positive`, `accepted_risk`, `suppressed`, `reopened`, and `reintroduced`.
+
+Lifecycle updates are owner-scoped, version-checked, and audited. Suppressions require a reason, actor, timestamp, scope, and optional expiry. Expired suppressions reopen automatically. When a previously fixed or verified canonical fingerprint appears again in a later scan for the same project folder, NOPE marks it as reintroduced.
+
 ### What does RAG do?
 
 RAG does **not** scan the app by itself.

@@ -2,7 +2,10 @@ export type Severity = "critical" | "high" | "medium" | "low" | "info";
 
 export type Finding = {
   id: string;
+  schema_version?: string;
   fingerprint?: string;
+  original_fingerprint?: string | null;
+  correlation_id?: string | null;
   severity: Severity;
   title: string;
   description?: string;
@@ -17,6 +20,7 @@ export type Finding = {
   package?: string | null;
   cve?: string | null;
   raw_artifact_id?: string | null;
+  source_metadata?: Record<string, unknown>;
   nope_rule_id?: string | null;
   original_rule_id?: string | null;
   confidence: string;
@@ -28,6 +32,9 @@ export type Finding = {
   last_seen?: string;
   recurrence_count?: number;
   baseline_state?: string;
+  suppression?: { reason: string; user: string; actor?: string | null; date: string; expiry?: string | null; scope: string } | null;
+  suppression_expired_at?: string | null;
+  lifecycle_version?: number;
   fix_available?: boolean;
   verified?: boolean;
   test_guidance?: string | null;
