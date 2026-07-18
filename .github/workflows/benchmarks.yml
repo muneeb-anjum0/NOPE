@@ -21,6 +21,7 @@ jobs:
       - name: Run scanner-only benchmark
         run: |
           mkdir -p .nope-benchmark-results
+          chmod 0777 .nope-benchmark-results
           docker run --rm \
             -v "${{ github.workspace }}/.nope-benchmark-results:/app/.nope-benchmark-results" \
             nope-api-benchmark \
