@@ -1,0 +1,38 @@
+name: Benchmarks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  scanner-only:
+    name: Scanner-only benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build API scanner image
+        run: docker build -f docker/api.Dockerfile -t nope-api-benchmark .
+
+      - name: Run scanner-only benchmark
+        run: |
+          mkdir -p .nope-benchmark-results
+          docker run --rm \
+            -v "${{ github.workspace }}/.nope-benchmark-results:/app/.nope-benchmark-results" \
+            nope-api-benchmark \
+            python -m nope_api.benchmarks \
+              --mode scanner-only \
+              --output .nope-benchmark-results/scanner-only.json \
+              --markdown-output .nope-benchmark-results/scanner-only.md
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scanner-only-benchmark
+          path: .nope-benchmark-results/
+          if-no-files-found: error

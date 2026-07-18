@@ -76,6 +76,12 @@ Verified on 2026-07-18 from the canonical Docker stack after rebuilding:
 
 The duplicate count represents related supporting evidence from multiple scanners or overlapping expected fixture concepts. It is not counted as a false positive when it is tied to a matched expected file/category.
 
+## CI artifacts
+
+`.github/workflows/benchmarks.yml` runs the scanner-only benchmark in the API scanner image on pushes and pull requests. It uploads `.nope-benchmark-results/scanner-only.json` and `.nope-benchmark-results/scanner-only.md` as the `scanner-only-benchmark` artifact.
+
+The scanner-plus-Qwen benchmark remains a canonical local Docker verification because CI runners do not have the local GGUF model, NVIDIA GPU access, or the user-owned model mount by default.
+
 ## Modes
 
 - `scanner-only` disables AI by setting the local benchmark settings provider to `none`.

@@ -42,6 +42,7 @@ Changes:
 - Upgraded the expected benchmark manifest to version 2 with severity, confidence, CWE, OWASP, line/range, scanner expectation, Qwen expectation, and dedupe expectation.
 - Benchmark output now includes precision, recall, F1, duplicate/supporting evidence count, and a Markdown summary.
 - Known false negatives no longer pass the benchmark gate.
+- Added `.github/workflows/benchmarks.yml` to run scanner-only in the API scanner image and upload JSON/Markdown benchmark artifacts in CI.
 
 Verification:
 
