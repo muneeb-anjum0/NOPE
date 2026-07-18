@@ -32,7 +32,7 @@ services:
       NOPE_REDIS_URL: redis://nope-redis:6379/0
       NOPE_MINIO_ENDPOINT: http://nope-minio:9000
       NOPE_SANDBOX_WORKSPACE_VOLUME: nope_nope-workspaces
-      NOPE_AI_PROVIDER: none
+      NOPE_AI_PROVIDER: llama.cpp
       NOPE_AI_RUNTIME_URL: http://nope-ai:8080
       NOPE_QWEN_ENDPOINT: http://nope-ai:8080
       NOPE_AI_MODEL_NAME: qwen3-8b-q4-k-m
@@ -42,9 +42,11 @@ services:
       NOPE_QWEN_BATCH_SIZE: ${NOPE_QWEN_BATCH_SIZE:-256}
       NOPE_QWEN_THREADS: ${NOPE_QWEN_THREADS:-8}
       NOPE_QWEN_PARALLEL: ${NOPE_QWEN_PARALLEL:-1}
-      NOPE_QWEN_GPU_LAYERS: ${NOPE_QWEN_GPU_LAYERS:-0}
+      NOPE_AI_GPU_LAYERS: ${NOPE_QWEN_GPU_LAYERS:-28}
+      NOPE_QWEN_GPU_LAYERS: ${NOPE_QWEN_GPU_LAYERS:-28}
       NOPE_QWEN_MAX_OUTPUT_TOKENS: ${NOPE_QWEN_MAX_OUTPUT_TOKENS:-1024}
       NOPE_QWEN_TIMEOUT_SECONDS: ${NOPE_QWEN_TIMEOUT_SECONDS:-180}
+      NOPE_AI_GPU_MEMORY_TARGET_MB: ${NOPE_QWEN_GPU_MEMORY_TARGET_MB:-5000}
       NOPE_QWEN_GPU_MEMORY_TARGET_MB: ${NOPE_QWEN_GPU_MEMORY_TARGET_MB:-5000}
     ports:
       - "8000:8000"
@@ -56,6 +58,8 @@ services:
       nope-redis:
         condition: service_healthy
       nope-minio:
+        condition: service_healthy
+      nope-ai:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -83,7 +87,7 @@ services:
       NOPE_MINIO_ENDPOINT: http://nope-minio:9000
       NOPE_TEMP_ROOT: /app/.nope-workspaces
       NOPE_SANDBOX_WORKSPACE_VOLUME: nope_nope-workspaces
-      NOPE_AI_PROVIDER: none
+      NOPE_AI_PROVIDER: llama.cpp
       NOPE_AI_RUNTIME_URL: http://nope-ai:8080
       NOPE_QWEN_ENDPOINT: http://nope-ai:8080
       NOPE_QWEN_MODEL_FILE: ${NOPE_MODEL_FILE:-Qwen3-8B-Q4_K_M.gguf}
@@ -91,9 +95,11 @@ services:
       NOPE_QWEN_BATCH_SIZE: ${NOPE_QWEN_BATCH_SIZE:-256}
       NOPE_QWEN_THREADS: ${NOPE_QWEN_THREADS:-8}
       NOPE_QWEN_PARALLEL: ${NOPE_QWEN_PARALLEL:-1}
-      NOPE_QWEN_GPU_LAYERS: ${NOPE_QWEN_GPU_LAYERS:-0}
+      NOPE_AI_GPU_LAYERS: ${NOPE_QWEN_GPU_LAYERS:-28}
+      NOPE_QWEN_GPU_LAYERS: ${NOPE_QWEN_GPU_LAYERS:-28}
       NOPE_QWEN_MAX_OUTPUT_TOKENS: ${NOPE_QWEN_MAX_OUTPUT_TOKENS:-1024}
       NOPE_QWEN_TIMEOUT_SECONDS: ${NOPE_QWEN_TIMEOUT_SECONDS:-180}
+      NOPE_AI_GPU_MEMORY_TARGET_MB: ${NOPE_QWEN_GPU_MEMORY_TARGET_MB:-5000}
       NOPE_QWEN_GPU_MEMORY_TARGET_MB: ${NOPE_QWEN_GPU_MEMORY_TARGET_MB:-5000}
     volumes:
       - nope-workspaces:/app/.nope-workspaces
@@ -104,6 +110,8 @@ services:
       nope-redis:
         condition: service_healthy
       nope-minio:
+        condition: service_healthy
+      nope-ai:
         condition: service_healthy
 
   nope-postgres:
@@ -153,11 +161,8 @@ services:
       retries: 5
 
   nope-ai:
-    image: ghcr.io/ggml-org/llama.cpp:server
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
     container_name: nope-ai
-    profiles:
-      - ai-cpu
-      - ai-gpu
     command:
       - "--host"
       - "0.0.0.0"
@@ -170,14 +175,14 @@ services:
       - "--batch-size"
       - "${NOPE_QWEN_BATCH_SIZE:-256}"
       - "--n-gpu-layers"
-      - "${NOPE_QWEN_GPU_LAYERS:-0}"
+      - "${NOPE_QWEN_GPU_LAYERS:-28}"
       - "--threads"
       - "${NOPE_QWEN_THREADS:-8}"
       - "--parallel"
       - "${NOPE_QWEN_PARALLEL:-1}"
     volumes:
       - type: bind
-        source: ${NOPE_MODEL_HOST_DIR:-./models}
+        source: ${NOPE_MODEL_HOST_DIR:-D:/Desktop/Model}
         target: /models
         read_only: true
     ports:
@@ -186,6 +191,16 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "all"
+      NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
       interval: 30s

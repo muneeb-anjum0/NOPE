@@ -170,6 +170,12 @@ def _fit_chat_prompt(settings: Settings, system: str, user: str, *, output_token
     return user[: max(0, user_char_budget - len(suffix))] + suffix
 
 
+def _no_think_user_prompt(user: str) -> str:
+    if user.lstrip().startswith("/no_think"):
+        return user
+    return "/no_think\n" + user
+
+
 def _gpu_state(settings: Settings) -> dict[str, Any]:
     layers = settings.effective_qwen_gpu_layers
     if layers <= 0:
@@ -259,12 +265,14 @@ async def llama_chat_completion(settings: Settings, *, system: str, user: str, j
     payload: dict[str, Any] = {
         "model": settings.ai_model_name,
         "messages": [
-            {"role": "system", "content": "/no_think " + system},
-            {"role": "user", "content": user},
+            {"role": "system", "content": system},
+            {"role": "user", "content": _no_think_user_prompt(user)},
         ],
         "max_tokens": output_tokens,
         "temperature": settings.ai_temperature,
         "top_p": settings.ai_top_p,
+        "cache_prompt": True,
+        "chat_template_kwargs": {"enable_thinking": False},
     }
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
@@ -370,8 +378,9 @@ async def structured_completion(
     *,
     root: Path | None = None,
     scan: Scan | None = None,
+    context: RagContext | None = None,
 ) -> StructuredAIResult:
-    context = retrieve_context([finding], settings.ai_max_retrieved_chunks, settings=settings, root=root, scan=scan)
+    context = context or retrieve_context([finding], settings.ai_max_retrieved_chunks, settings=settings, root=root, scan=scan)
     action_instruction = {
         "explain": (
             "EXPLAIN MODE. Translate this exact finding into plain engineering language. "
@@ -513,7 +522,7 @@ async def finding_action(
         }
     context = retrieve_context([finding], settings.ai_max_retrieved_chunks, settings=settings, root=root, scan=scan)
     try:
-        result = await structured_completion(settings, action, finding, root=root, scan=scan)
+        result = await structured_completion(settings, action, finding, root=root, scan=scan, context=context)
         _set_cached_action(cache_key, result)
         return {
             "status": "Complete",
