@@ -1,0 +1,46 @@
+# NOPE Capability Matrix
+
+Date: 2026-07-18
+
+| Capability | Intended result | Current implementation | Evidence | Status | Completion | Gap severity | Next work |
+| --- | --- | --- | --- | --- | ---: | --- | --- |
+| Docker app startup | Docker Desktop/plain compose starts full app including AI | Base compose now starts CUDA `nope-ai`; API/worker depend on it | `docker compose up --build -d`, health, inspect command | Verified | 90% | Minor | Document Windows model path requirement |
+| ZIP scanning | Upload repo ZIP and scan | Real E2E completed with 24 findings | `scan_356656eeadfa4c6a` | Verified | 85% | Moderate | Better event persistence and larger-repo tests |
+| PostgreSQL | Durable projects/scans/findings/reports/settings | Migrations clean; storage layer active | migration status, E2E | Verified | 85% | Minor | More restart-persistence tests |
+| Redis/worker | Async queue with progress/retry/cancel | Worker completes jobs; tests cover retry/cancel | E2E, pytest | Partial verified | 75% | Moderate | Fix empty events/live restart tests |
+| Scanner orchestration | Broad scanner execution with normalized findings | Main Docker scanners run | scanner versions, E2E | Partial | 64% | Major | Benchmark quality closure |
+| Evidence gate | Promote stronger findings, reduce weak heuristics | Context validation exists | code/tests/E2E evidence gate messages | Partial | 74% | Major | Close auth false negatives |
+| Qwen | Local GPU model for review/actions | Live llama.cpp with 28 layers, under 5 GB | health, action smoke, VRAM | Verified local | 78% | Moderate | Durable cache/async UI; speed limited by hardware |
+| RAG | Evidence-grounded context | Lexical/graph retrieval with redaction | Qwen evidence payload | Partial | 70% | Moderate | Better source provenance/ranking |
+| Findings UX | Filter, paginate, detail, AI actions | Functional routes/build; AI actions work | build, E2E, action smoke | Partial | 78% | Moderate | Browser automation and large findings UX |
+| Attack map | Show route/file/data/risk paths | Heuristic graph renders when evidence exists | code/UI/E2E scan has graph | Partial | 70% | Moderate | More parser-backed graph precision |
+| Coverage | Explain tested/untested areas | UI and backend records exist | route/build/E2E coverage 70% | Partial | 72% | Moderate | More actionable coverage taxonomy |
+| Assets | Folder-scoped inventory | UI summarizes evidence-connected assets | route/build/source | Partial | 72% | Moderate | Full indexed inventory and search |
+| Reports | JSON/MD/SARIF/PDF | All four returned 200 in E2E | E2E report outputs | Verified | 84% | Minor | Async generation/large report tests |
+| Drift/baselines | Same-folder comparisons | Implemented and tested | pytest and UI source | Partial | 74% | Moderate | More transparent baseline UX |
+| Sandbox | Safe dynamic testing | Runner exists; ordinary E2E skipped | E2E scanner run | Partial | 60% | Major | Hostile matrix and Docker socket hardening |
+| Settings | Persist AI/scanner/project settings | Implemented; encrypted test secrets | source/tests | Partial | 78% | Moderate | Verify all settings consumed at runtime |
+| GitHub | Private repo/PR workflow | Blocked adapter/contracts only | routes/docs/source | Superficial/blocked | 35% local, 0% activated | Major | OAuth/App credentials and implementation |
+| Documentation | Accurate setup/status | Extensive but overclaims | audit comparison | Partial | 58% | Moderate | Update stale completion claims |
+
+## Scanner matrix
+
+| Scanner | Installed in Docker | Version verified | Execution verified | Parser/normalization | Raw artifact | Failure handling | Completion |
+| --- | --- | --- | --- | --- | --- | --- | ---: |
+| Semgrep | Yes | 1.170.0 | Yes | Yes | Captured in scan model | Yes | 80% |
+| Gitleaks | Yes | 8.28.0 | Yes | Yes | Captured | Yes | 78% |
+| OSV-Scanner | Yes | 2.2.3 | Yes | Yes | Captured | Yes | 80% |
+| Trivy | Yes | 0.72.0 | Yes | Yes | Captured | Yes | 80% |
+| Checkov | Yes | 3.3.8 | Yes | Yes | Captured | Yes | 75% |
+| Bandit | Yes | 1.9.4 | Yes | Yes | Captured | Yes | 78% |
+| Hadolint | Yes | 2.14.0 | Yes | Yes | Captured | Yes | 78% |
+| ZAP | Image/config exists | Not version-verified here | Skipped for repo scans | Sandbox path only | Not in ordinary E2E | Skipped/not applicable | 35% |
+| npm audit | No first-class plugin | No | No | No | No | No | 10% |
+| pnpm audit | No first-class plugin | No | No | No | No | No | 10% |
+| yarn audit | No first-class plugin | No | No | No | No | No | 0% |
+| pip-audit | No first-class plugin | Host missing | No | No | No | No | 5% |
+| dotnet package audit | No first-class plugin | Host dotnet only | No | No | No | No | 5% |
+| cargo audit | No | Host missing | No | No | No | No | 0% |
+| govulncheck | No | Host missing | No | No | No | No | 0% |
+| composer audit | No first-class plugin | Host composer only | No | No | No | No | 5% |
+| bundler-audit | No | Host missing | No | No | No | No | 0% |
