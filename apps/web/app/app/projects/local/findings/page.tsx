@@ -128,14 +128,14 @@ export default async function FindingsPage({ searchParams }: PageProps) {
 
       <div className="findings-stack" data-brand-skip>
         <FindingDetailFocus />
-        <FindingDetailPanel detail={detail} tab={tab} params={params} />
+        <FindingDetailPanel detail={detail} tab={tab} params={params} scanId={scan.id} />
         <FindingTable findings={results.items} scanId={scan.id} selectedId={selectedId} searchQuery={params.toString()} total={results.total} />
       </div>
     </>
   );
 }
 
-function FindingDetailPanel({ detail, tab, params }: { detail: FindingDetail | null; tab: string; params: URLSearchParams }) {
+function FindingDetailPanel({ detail, tab, params, scanId }: { detail: FindingDetail | null; tab: string; params: URLSearchParams; scanId: string }) {
   if (!detail) {
     return (
       <div className="app-panel">
@@ -167,7 +167,7 @@ function FindingDetailPanel({ detail, tab, params }: { detail: FindingDetail | n
             <a key={name} className={tab === name ? "active-tab" : ""} href={hrefWith(params, { tab: name, detail: "open" })}>{name.replace("_", " ")}</a>
           ))}
         </div>
-        {tab === "overview" && <Overview detail={detail} />}
+        {tab === "overview" && <Overview detail={detail} scanId={scanId} />}
         {tab === "evidence" && <Evidence detail={detail} />}
         {tab === "code" && <Code detail={detail} />}
         {tab === "code_flow" && <CodeFlow detail={detail} />}
@@ -179,7 +179,7 @@ function FindingDetailPanel({ detail, tab, params }: { detail: FindingDetail | n
   );
 }
 
-function Overview({ detail }: { detail: FindingDetail }) {
+function Overview({ detail, scanId }: { detail: FindingDetail; scanId: string }) {
   const finding = detail.finding;
   return (
     <div className="detail-stack">
@@ -192,7 +192,7 @@ function Overview({ detail }: { detail: FindingDetail }) {
         <div><dt>Location</dt><dd className="mono">{finding.affected_file ?? finding.affected_route ?? "n/a"}</dd></div>
         <div><dt>Scanner</dt><dd>{finding.scanner_sources.join(" + ") || "n/a"}</dd></div>
       </dl>
-      <AIFindingActions finding={finding} />
+      <AIFindingActions finding={finding} scanId={scanId} />
     </div>
   );
 }

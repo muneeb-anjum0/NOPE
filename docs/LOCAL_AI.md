@@ -64,6 +64,9 @@ GPU mode requests an NVIDIA GPU through Docker Compose device reservations. The 
 - The service has no Docker socket.
 - It is not privileged.
 - It receives focused finding evidence, not whole repositories.
+- Finding actions use bounded RAG context with file, line, provenance, trust boundary, and retrieval reason.
+- Action output is validated as structured JSON; malformed output gets bounded retries and repair/fallback.
+- Completed action output is redacted and cached durably for 24 hours using fingerprint, action, model, quantization, prompt version, RAG version, evidence hash, and settings hash.
 - It has no shell/tool execution path from NOPE.
 
 ## Current Verification

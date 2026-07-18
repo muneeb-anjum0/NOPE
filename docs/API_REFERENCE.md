@@ -45,7 +45,10 @@ Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `
 - `GET /api/scanners/capabilities` - authenticated scanner health, version, coverage category, and applicability marker metadata.
 - `GET /api/settings/model` - current AI model configuration.
 - `POST /api/settings/model/test` - test AI runtime reachability.
-- `POST /api/findings/explain` - send one normalized finding to the configured llama.cpp adapter for a focused explanation.
+- `POST /api/scans/{scan_id}/findings/{finding_id}/ai-actions` - queue or serve a cached durable Qwen action. Supported actions are `explain`, `challenge`, `fix`, `regression_test`, and `patch_review`; `test` remains an alias for `regression_test`.
+- `GET /api/ai-actions/{job_id}` - poll a durable AI action job with queued/running/completed/failed/cancelled state, cache flag, latency, context count, and structured result.
+- `DELETE /api/ai-actions/{job_id}` - request cancellation for a queued or running AI action.
+- `POST /api/findings/explain` and `POST /api/findings/{action}` - compatibility endpoints for direct focused AI actions.
 
 ## Guarantees
 
@@ -58,5 +61,7 @@ Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `
 - Repository dynamic scans use `.nope/sandbox.json` only, support allowlisted Node/Python starts, and run ZAP against a private internal Docker-network target rather than arbitrary external hosts.
 - ZAP version, baseline configuration, raw JSON alerts, parsed alerts, artifacts, and unauthenticated/partial/skipped/failed coverage states are persisted through normal scanner-run, stage, coverage, and report payloads.
 - AI failures do not fail deterministic scans.
+- Finding AI actions are owner-scoped, durable, restart-recoverable, and cached for 24 hours using finding fingerprint, action, model, quantization, prompt version, RAG version, evidence hash, and settings hash.
+- Qwen receives bounded RAG context only; whole repositories and raw secrets are not persisted or sent as action context.
 - Project, scan, report, settings, GitHub contract, and AI explanation routes are scoped to the authenticated local user.
 - Sensitive settings are encrypted at rest and are not returned after save.

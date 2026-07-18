@@ -108,7 +108,7 @@ async def test_structured_completion_repairs_invalid_json_for_all_actions(monkey
         assert result.evidence
         assert "Example" in result.evidence[1]
 
-    assert len(calls) == 8
+    assert len(calls) == 12
 
 
 @pytest.mark.asyncio

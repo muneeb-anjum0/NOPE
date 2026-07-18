@@ -15,6 +15,7 @@ SECRET_PATTERNS = [
     re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['\"]?[^'\"\s]{8,}"),
     re.compile(r"(?i)(supabase[_-]?service[_-]?role|service_role)\s*[:=]\s*['\"]?[^'\"\s]{8,}"),
 ]
+RAG_VERSION = "stage7-rag-v1"
 
 SOURCE_SUFFIXES = {".js", ".jsx", ".ts", ".tsx", ".py", ".sql", ".json", ".toml", ".yaml", ".yml", ".tf", ".md"}
 SKIP_DIRS = {".git", ".next", "node_modules", "__pycache__", ".pytest_cache", "dist", "build", "coverage"}
@@ -417,10 +418,47 @@ def _surface_chunks(surface: list[AttackSurfaceItem], limits: RagLimits) -> list
     return chunks
 
 
-def _graph_chunks(graph: CodeGraph, limits: RagLimits) -> list[RagChunk]:
+def _graph_seed_nodes(graph: CodeGraph, findings: list[Finding]) -> set[str]:
+    files = _target_files(findings)
+    routes = _target_routes(findings)
+    terms = _query_terms(findings)
+    seeds: set[str] = set()
+    for node in graph.nodes:
+        haystack = " ".join([node.id, node.label, node.kind, node.file or ""]).lower()
+        if node.file and node.file in files:
+            seeds.add(node.id)
+            continue
+        if any(route and route in haystack for route in routes):
+            seeds.add(node.id)
+            continue
+        if any(term in haystack for term in terms if len(term) >= 4):
+            seeds.add(node.id)
+    return seeds
+
+
+def _graph_chunks(graph: CodeGraph, limits: RagLimits, findings: list[Finding]) -> list[RagChunk]:
     chunks: list[RagChunk] = []
     node_by_id = {node.id: node for node in graph.nodes}
+    seeds = _graph_seed_nodes(graph, findings)
+    if not seeds:
+        return chunks
+    adjacency: dict[str, set[str]] = {node.id: set() for node in graph.nodes}
     for edge in graph.edges:
+        adjacency.setdefault(edge.source, set()).add(edge.target)
+        adjacency.setdefault(edge.target, set()).add(edge.source)
+    frontier = set(seeds)
+    visited = set(seeds)
+    for _depth in range(max(0, limits.max_graph_depth)):
+        next_frontier: set[str] = set()
+        for node_id in frontier:
+            next_frontier.update(adjacency.get(node_id, set()) - visited)
+        visited.update(next_frontier)
+        frontier = next_frontier
+    if limits.max_graph_depth == 0:
+        visited = seeds
+    for edge in graph.edges:
+        if edge.source not in visited and edge.target not in visited:
+            continue
         source = node_by_id.get(edge.source)
         target = node_by_id.get(edge.target)
         text = {
@@ -434,7 +472,7 @@ def _graph_chunks(graph: CodeGraph, limits: RagLimits) -> list[RagChunk]:
                 title=f"{edge.source} {edge.relationship} {edge.target}",
                 text=json.dumps(text, indent=2),
                 file=(target.file if target else None) or (source.file if source else None),
-                retrieval_reason="code graph neighbor",
+                retrieval_reason=f"code graph neighbor within depth {limits.max_graph_depth} of target finding",
                 chunk_chars=limits.chunk_chars,
                 metadata={"source": edge.source, "target": edge.target, "relationship": edge.relationship},
                 score=3,
@@ -685,7 +723,7 @@ def retrieve_context(
     if scan:
         candidates.extend(_surface_chunks(scan.attack_surface, limits))
         if limits.max_graph_depth > 0:
-            candidates.extend(_graph_chunks(scan.code_graph, limits))
+            candidates.extend(_graph_chunks(scan.code_graph, limits, findings))
         candidates.extend(_stack_chunks(scan.stack, limits))
         candidates.extend(_scanner_run_chunks(scan.scanner_runs, limits))
     if root and root.exists():

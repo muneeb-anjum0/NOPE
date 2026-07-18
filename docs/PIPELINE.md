@@ -62,9 +62,9 @@ Deduplication merges repeated evidence for the same issue while preserving scann
 
 ## 9. Focused RAG and Qwen
 
-RAG retrieves bounded, provenance-carrying context around findings, routes, files, graph neighbors, scanner evidence, and security guidance. Repository text is treated as untrusted data.
+RAG retrieves bounded, provenance-carrying context around findings, routes, files, finding-centered graph neighbors, scanner evidence, and security guidance. Repository text is treated as untrusted data.
 
-Qwen is optional and runs through `nope-ai` llama.cpp. It receives focused evidence only, not whole repositories, and cannot silently downgrade deterministic findings. If Qwen fails, deterministic scans continue and AI coverage records the failure.
+Qwen is optional and runs through `nope-ai` llama.cpp. It receives focused evidence only, not whole repositories, and cannot silently downgrade deterministic findings. Finding actions are durable jobs for Explain, Challenge, Fix, Regression Test, and Patch Review. Completed action output is cached for 24 hours and invalidates when evidence, settings, prompt version, RAG version, model, or quantization changes. If Qwen fails, deterministic scans continue and AI coverage records the failure.
 
 ## 10. Coverage, Score, and Verdict
 

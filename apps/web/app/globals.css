@@ -4453,6 +4453,16 @@ textarea:focus-visible {
   transform: none;
 }
 
+.inline-action {
+  margin-left: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--brand-primary);
+  font: inherit;
+  font-weight: 760;
+  cursor: pointer;
+}
+
 .ai-generated-label {
   color: var(--brand-primary);
   font-weight: 760;

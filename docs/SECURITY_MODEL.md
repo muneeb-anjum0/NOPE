@@ -55,11 +55,14 @@ NOPE treats every uploaded repository and every scanned target as potentially ho
 - GitHub tokens are not stored in plaintext; production GitHub integration must use short-lived installation tokens or encrypted credential storage.
 - GitHub repository listing remains blocked until real credentials are supplied and verified; NOPE does not fake private repositories.
 - AI prompts must avoid full secret values and unnecessary source dumps.
+- AI action cache entries store redacted structured output and context metadata only; raw repository chunks and raw secrets are not persisted in the cache.
 
 ## Local AI service
 
 - `nope-ai` is a reasoning service, not a sandbox.
 - It receives focused evidence snippets, not whole repositories.
+- Repository instructions, comments, README text, and source strings are treated as untrusted data inside prompts.
+- Finding AI jobs are owner-scoped and have durable queued, running, completed, failed, and cancelled states.
 - It has no shell or tool execution API through NOPE.
 - The model directory is mounted read-only.
 - Host secrets and the Docker socket are not mounted.

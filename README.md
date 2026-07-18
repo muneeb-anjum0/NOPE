@@ -84,13 +84,13 @@ RAG retrieves focused context for Qwen after the pipeline has promoted findings 
 - scanner evidence
 - source snippets near affected files
 - route and attack-surface context
-- code graph edges
+- finding-centered code graph edges
 - evidence-gate promotion reasons
 - stack evidence
 - scanner run metadata
 - category-specific security guidance
 
-RAG redacts secrets, marks repository text as untrusted data, removes duplicate chunks, and enforces file/chunk/token limits. It does not currently use embeddings or vector search; it uses deterministic metadata, keyword, route, file, import, and graph scoring.
+RAG redacts secrets, marks repository text as untrusted data, removes duplicate chunks, and enforces file/chunk/token limits. Each retrieved chunk carries file, line, provenance, trust boundary, and retrieval reason. It does not currently use embeddings or vector search; it uses deterministic lexical, symbol, graph, route, file, import, and finding-centered scoring.
 
 In short: **RAG prepares focused evidence for AI.**
 
@@ -104,6 +104,7 @@ Qwen can:
 - challenge whether a finding is well-supported
 - suggest a fix direction
 - suggest regression/security tests
+- review what a patch must prove before it should be accepted
 - add an AI review message after a scan
 
 Qwen cannot:
@@ -114,6 +115,8 @@ Qwen cannot:
 - prove the app is secure
 - run the scan by itself
 - receive the whole repository as raw context
+
+Finding AI actions run as durable jobs with `queued`, `running`, `completed`, `failed`, and `cancelled` states. Completed answers are cached for 24 hours using the finding fingerprint, action, model, quantization, prompt version, RAG version, evidence hash, and settings hash. Cache entries survive API restarts and invalidate when the evidence, prompt/RAG version, model, or relevant settings change. Raw secrets are redacted before prompts, job state, and cache output.
 
 If Qwen fails, deterministic scan results are preserved.
 

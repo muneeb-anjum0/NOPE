@@ -2,12 +2,21 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from pydantic import BaseModel
 
 from nope_api import __version__
-from nope_api.ai import check_ai_health, explain_finding, finding_action
+from nope_api.ai import (
+    ai_action_job_response,
+    check_ai_health,
+    explain_finding,
+    finding_action,
+    normalize_ai_action,
+    prepare_ai_action_job,
+    run_ai_action_job,
+)
 from nope_api.auth import AuthRateLimitError, create_or_login, delete_session, get_user_for_token, init_auth_db
 from nope_api.config import get_settings
 from nope_api.db import migration_status, run_migrations
@@ -36,6 +45,10 @@ from nope_api.storage import store
 
 settings = get_settings()
 github_adapter = BlockedGitHubAdapter(store)
+
+
+class AIActionRequest(BaseModel):
+    action: str
 
 app = FastAPI(
     title="NOPE API",
@@ -974,6 +987,55 @@ async def test_model(authorization: str | None = Header(default=None)) -> dict:
     return {"status": status, **health_result}
 
 
+@app.post("/api/scans/{scan_id}/findings/{finding_id}/ai-actions")
+async def create_finding_ai_action(
+    scan_id: str,
+    finding_id: str,
+    payload: AIActionRequest,
+    background_tasks: BackgroundTasks,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    owner_user_id = _require_owner_user_id(authorization)
+    scan = store.get_scan(scan_id, owner_user_id)
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found.")
+    try:
+        job, should_run = await prepare_ai_action_job(
+            settings,
+            store,
+            scan=scan,
+            finding_id=finding_id,
+            action=payload.action,
+            owner_user_id=owner_user_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if should_run:
+        background_tasks.add_task(run_ai_action_job, settings, store, job["id"], owner_user_id)
+    response = ai_action_job_response(job)
+    if response is None:
+        raise HTTPException(status_code=500, detail="Unable to create AI action job.")
+    return response
+
+
+@app.get("/api/ai-actions/{job_id}")
+async def get_finding_ai_action(job_id: str, authorization: str | None = Header(default=None)) -> dict:
+    owner_user_id = _require_owner_user_id(authorization)
+    response = ai_action_job_response(store.get_ai_action_job(job_id, owner_user_id))
+    if response is None:
+        raise HTTPException(status_code=404, detail="AI action job not found.")
+    return response
+
+
+@app.delete("/api/ai-actions/{job_id}")
+async def cancel_finding_ai_action(job_id: str, authorization: str | None = Header(default=None)) -> dict:
+    owner_user_id = _require_owner_user_id(authorization)
+    response = ai_action_job_response(store.cancel_ai_action_job(job_id, owner_user_id) or store.get_ai_action_job(job_id, owner_user_id))
+    if response is None:
+        raise HTTPException(status_code=404, detail="AI action job not found.")
+    return response
+
+
 @app.post("/api/findings/explain")
 async def explain_finding_endpoint(finding: dict, authorization: str | None = Header(default=None)) -> dict:
     owner_user_id = _require_owner_user_id(authorization)
@@ -987,13 +1049,15 @@ async def explain_finding_endpoint(finding: dict, authorization: str | None = He
 @app.post("/api/findings/{action}")
 async def finding_action_endpoint(action: str, finding: dict, authorization: str | None = Header(default=None)) -> dict:
     owner_user_id = _require_owner_user_id(authorization)
-    if action not in {"explain", "challenge", "fix", "test"}:
+    try:
+        canonical_action = normalize_ai_action(action)
+    except ValueError as exc:
         raise HTTPException(status_code=404, detail="Unsupported finding AI action.")
     from nope_api.models import Finding
 
     parsed = Finding(**finding)
     scan, root = _scan_context_for_finding(parsed.scan_id, owner_user_id)
-    return await finding_action(settings, parsed, action, root=root, scan=scan)  # type: ignore[arg-type]
+    return await finding_action(settings, parsed, canonical_action, root=root, scan=scan)
 
 
 def _scan_context_for_finding(scan_id: str | None, owner_user_id: str) -> tuple[Scan | None, Path | None]:

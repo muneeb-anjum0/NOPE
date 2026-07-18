@@ -874,6 +874,227 @@ class PostgresStore:
             row = conn.execute(query + " returning id", params).fetchone()
         return row is not None
 
+    def get_ai_action_cache(self, cache_key: str, owner_user_id: str | None = None) -> dict[str, Any] | None:
+        self.migrate()
+        query = "select * from ai_action_cache where cache_key = %s and expires_at > now()"
+        params: tuple[Any, ...] = (cache_key,)
+        if owner_user_id:
+            query += " and owner_user_id = %s"
+            params = (cache_key, owner_user_id)
+        with connect(self.settings) as conn:
+            row = conn.execute(query, params).fetchone()
+            if row:
+                conn.execute("update ai_action_cache set last_used_at = now() where cache_key = %s", (cache_key,))
+        return dict(row) if row else None
+
+    def save_ai_action_cache(
+        self,
+        *,
+        cache_key: str,
+        owner_user_id: str | None,
+        finding_fingerprint: str,
+        action: str,
+        provider: str,
+        model: str,
+        quantization: str | None,
+        prompt_version: str,
+        rag_version: str,
+        evidence_hash: str,
+        settings_hash: str,
+        result: dict[str, Any],
+        context_metadata: dict[str, Any],
+        ttl_seconds: int,
+    ) -> None:
+        self.migrate()
+        with connect(self.settings) as conn:
+            conn.execute(
+                """
+                insert into ai_action_cache (
+                  cache_key, owner_user_id, finding_fingerprint, action, provider, model, quantization,
+                  prompt_version, rag_version, evidence_hash, settings_hash, result, context_metadata,
+                  expires_at, last_used_at
+                )
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now() + (%s * interval '1 second'), now())
+                on conflict (cache_key) do update set
+                  result = excluded.result,
+                  context_metadata = excluded.context_metadata,
+                  expires_at = excluded.expires_at,
+                  last_used_at = now()
+                """,
+                (
+                    cache_key,
+                    owner_user_id,
+                    finding_fingerprint,
+                    action,
+                    provider,
+                    model,
+                    quantization,
+                    prompt_version,
+                    rag_version,
+                    evidence_hash,
+                    settings_hash,
+                    Jsonb(result),
+                    Jsonb(context_metadata),
+                    int(ttl_seconds),
+                ),
+            )
+
+    def create_ai_action_job(
+        self,
+        *,
+        job_id: str,
+        owner_user_id: str | None,
+        scan_id: str | None,
+        finding_id: str,
+        finding_fingerprint: str,
+        action: str,
+        status: str,
+        provider: str,
+        model: str,
+        quantization: str | None,
+        prompt_version: str,
+        rag_version: str,
+        evidence_hash: str,
+        settings_hash: str,
+        cache_key: str,
+        message: str,
+        context_chunks: int = 0,
+        result: dict[str, Any] | None = None,
+        cached: bool = False,
+        latency_ms: int | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self.migrate()
+        completed_at = "now()" if status in {"completed", "failed", "cancelled"} else "null"
+        with connect(self.settings) as conn:
+            row = conn.execute(
+                f"""
+                insert into ai_action_jobs (
+                  id, owner_user_id, scan_id, finding_id, finding_fingerprint, action, status, provider,
+                  model, quantization, prompt_version, rag_version, evidence_hash, settings_hash,
+                  cache_key, completed_at, latency_ms, cached, message, context_chunks, result, metadata
+                )
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, {completed_at}, %s, %s, %s, %s, %s, %s)
+                returning *
+                """,
+                (
+                    job_id,
+                    owner_user_id,
+                    scan_id,
+                    finding_id,
+                    finding_fingerprint,
+                    action,
+                    status,
+                    provider,
+                    model,
+                    quantization,
+                    prompt_version,
+                    rag_version,
+                    evidence_hash,
+                    settings_hash,
+                    cache_key,
+                    latency_ms,
+                    cached,
+                    _redact_event_text(message),
+                    context_chunks,
+                    Jsonb(result) if result is not None else None,
+                    Jsonb(metadata or {}),
+                ),
+            ).fetchone()
+        return dict(row)
+
+    def get_ai_action_job(self, job_id: str, owner_user_id: str | None = None) -> dict[str, Any] | None:
+        self.migrate()
+        query = "select * from ai_action_jobs where id = %s"
+        params: tuple[Any, ...] = (job_id,)
+        if owner_user_id:
+            query += " and owner_user_id = %s"
+            params = (job_id, owner_user_id)
+        with connect(self.settings) as conn:
+            row = conn.execute(query, params).fetchone()
+        return dict(row) if row else None
+
+    def start_ai_action_job(self, job_id: str, owner_user_id: str | None = None) -> dict[str, Any] | None:
+        self.migrate()
+        query = "update ai_action_jobs set status = 'running', started_at = now(), message = %s where id = %s and status = 'queued'"
+        params: tuple[Any, ...] = ("Qwen action is running.", job_id)
+        if owner_user_id:
+            query += " and owner_user_id = %s"
+            params = ("Qwen action is running.", job_id, owner_user_id)
+        query += " returning *"
+        with connect(self.settings) as conn:
+            row = conn.execute(query, params).fetchone()
+        return dict(row) if row else None
+
+    def complete_ai_action_job(
+        self,
+        job_id: str,
+        *,
+        owner_user_id: str | None,
+        status: str,
+        message: str,
+        result: dict[str, Any] | None,
+        latency_ms: int | None,
+        context_chunks: int,
+        cached: bool = False,
+        error_code: str | None = None,
+        error_message: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        self.migrate()
+        query = """
+            update ai_action_jobs
+            set status = %s,
+                completed_at = case when %s in ('completed', 'failed') then now() else completed_at end,
+                cancelled_at = case when %s = 'cancelled' then now() else cancelled_at end,
+                latency_ms = %s,
+                cached = %s,
+                message = %s,
+                context_chunks = %s,
+                result = %s,
+                error_code = %s,
+                error_message = %s,
+                metadata = coalesce(metadata, '{}'::jsonb) || %s
+            where id = %s and status <> 'cancelled'
+        """
+        params: tuple[Any, ...] = (
+            status,
+            status,
+            status,
+            latency_ms,
+            cached,
+            _redact_event_text(message),
+            context_chunks,
+            Jsonb(result) if result is not None else None,
+            error_code,
+            _redact_event_text(error_message),
+            Jsonb(metadata or {}),
+            job_id,
+        )
+        if owner_user_id:
+            query += " and owner_user_id = %s"
+            params = params + (owner_user_id,)
+        query += " returning *"
+        with connect(self.settings) as conn:
+            row = conn.execute(query, params).fetchone()
+        return dict(row) if row else None
+
+    def cancel_ai_action_job(self, job_id: str, owner_user_id: str | None = None) -> dict[str, Any] | None:
+        self.migrate()
+        query = """
+            update ai_action_jobs
+            set status = 'cancelled', cancelled_at = now(), message = %s
+            where id = %s and status in ('queued', 'running')
+        """
+        params: tuple[Any, ...] = ("Qwen action was cancelled.", job_id)
+        if owner_user_id:
+            query += " and owner_user_id = %s"
+            params = ("Qwen action was cancelled.", job_id, owner_user_id)
+        query += " returning *"
+        with connect(self.settings) as conn:
+            row = conn.execute(query, params).fetchone()
+        return dict(row) if row else None
+
     def delete_project(self, project_id: str, owner_user_id: str | None = None) -> bool:
         self.migrate()
         query = "delete from projects where id = %s"
