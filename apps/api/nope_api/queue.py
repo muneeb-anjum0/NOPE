@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import socket
 import time
 from datetime import datetime
 from pathlib import Path
@@ -22,6 +23,7 @@ WORKER_HEARTBEAT_KEY = "nope:worker:heartbeat"
 MAX_ATTEMPTS = 3
 MAX_BACKOFF_SECONDS = 30
 STUCK_AFTER_SECONDS = 10 * 60
+WORKER_IDENTITY = socket.gethostname() or "nope-worker"
 
 
 def _redis_error() -> RuntimeError:
@@ -167,7 +169,54 @@ async def queue_status(settings: Settings) -> dict[str, Any]:
         await redis.aclose()
 
 
-async def scan_events(scan: Scan) -> dict[str, Any]:
+async def scan_events(scan: Scan, owner_user_id: str | None = None, *, after_sequence: int | None = None, limit: int = 100) -> dict[str, Any]:
+    persisted = store.list_scan_events(scan.id, owner_user_id, after_sequence=after_sequence, limit=limit)
+    if persisted and persisted["total"] == 0:
+        store.backfill_scan_events_from_snapshot(scan, owner_user_id)
+        persisted = store.list_scan_events(scan.id, owner_user_id, after_sequence=after_sequence, limit=limit)
+    if persisted and persisted["events"]:
+        latest_progress = next(
+            (event.get("progress") for event in reversed(persisted["events"]) if event.get("progress") is not None),
+            _progress_percent(scan),
+        )
+        return {
+            "scan_id": scan.id,
+            "status": scan.status,
+            "progress": latest_progress,
+            "stages": scan.stages,
+            "scanner_runs": [
+                {
+                    "scanner": run.scanner,
+                    "status": run.status,
+                    "findings_count": run.findings_count,
+                    "message": run.message,
+                }
+                for run in scan.scanner_runs
+            ],
+            **persisted,
+        }
+    if persisted and persisted["total"] > 0:
+        latest = store.list_scan_events(scan.id, owner_user_id, limit=1_000_000)
+        latest_progress = next(
+            (event.get("progress") for event in reversed(latest["events"]) if event.get("progress") is not None),
+            _progress_percent(scan),
+        ) if latest else _progress_percent(scan)
+        return {
+            "scan_id": scan.id,
+            "status": scan.status,
+            "progress": latest_progress,
+            "stages": scan.stages,
+            "scanner_runs": [
+                {
+                    "scanner": run.scanner,
+                    "status": run.status,
+                    "findings_count": run.findings_count,
+                    "message": run.message,
+                }
+                for run in scan.scanner_runs
+            ],
+            **persisted,
+        }
     return {
         "scan_id": scan.id,
         "status": scan.status,
@@ -183,6 +232,163 @@ async def scan_events(scan: Scan) -> dict[str, Any]:
             for run in scan.scanner_runs
         ],
     }
+
+
+def _scan_event_type(status: str) -> str:
+    return {
+        "queued": "scan_queued",
+        "preparing": "scan_preparing",
+        "running": "scan_started",
+        "completed": "scan_completed",
+        "partial": "scan_partial",
+        "failed": "scan_failed",
+        "cancelled": "scan_cancelled",
+    }.get(status, "stage_progress")
+
+
+def _stage_event_type(status: str) -> str:
+    return {
+        "queued": "stage_queued",
+        "running": "stage_started",
+        "completed": "stage_completed",
+        "partial": "stage_partial",
+        "failed": "stage_failed",
+        "skipped": "stage_skipped",
+        "cancelled": "scan_cancelled",
+        "timed out": "stage_failed",
+        "timed_out": "stage_failed",
+    }.get(status, "stage_progress")
+
+
+def _scanner_event_type(status: str, message: str = "") -> str:
+    lowered = (message or "").lower()
+    if "timeout" in lowered or status == "timed_out":
+        return "scanner_timed_out"
+    if "unavailable" in lowered or status == "skipped":
+        return "scanner_unavailable"
+    if status == "failed":
+        return "scanner_failed"
+    return "scanner_completed"
+
+
+def _persist_event_snapshot(scan: Scan, owner_user_id: str | None, *, attempt: int = 1, job_id: str | None = None) -> None:
+    progress = _progress_percent(scan)
+    store.record_scan_event(
+        scan.id,
+        _scan_event_type(scan.status),
+        owner_user_id=owner_user_id,
+        new_state=scan.status,
+        progress=progress,
+        message=scan.verdict if scan.status in {"completed", "partial", "failed", "cancelled"} else f"Scan is {scan.status}.",
+        attempt=attempt,
+        worker_identity=WORKER_IDENTITY,
+        metadata={"job_id": job_id} if job_id else {},
+        idempotency_key=f"scan:{scan.status}:attempt:{attempt}",
+    )
+    for index, stage in enumerate(scan.stages):
+        status = str(stage.get("status") or "running")
+        stage_name = str(stage.get("name") or "")
+        event_type = "qwen_started" if "qwen" in stage_name.lower() and status == "running" else _stage_event_type(status)
+        store.record_scan_event(
+            scan.id,
+            event_type,
+            owner_user_id=owner_user_id,
+            stage_id=f"stage:{index}",
+            new_state=status,
+            progress=progress,
+            message=str(stage.get("message") or stage.get("name") or ""),
+            metadata={"stage": stage, "index": index},
+            attempt=int(stage.get("attempt") or attempt),
+            worker_identity=WORKER_IDENTITY,
+            idempotency_key=f"stage:{index}:{status}:attempt:{int(stage.get('attempt') or attempt)}",
+        )
+        if status == "running":
+            store.record_scan_event(
+                scan.id,
+                "stage_progress",
+                owner_user_id=owner_user_id,
+                stage_id=f"stage:{index}",
+                new_state=status,
+                progress=progress,
+                message=str(stage.get("message") or stage.get("name") or ""),
+                metadata={"stage": stage, "index": index},
+                attempt=int(stage.get("attempt") or attempt),
+                worker_identity=WORKER_IDENTITY,
+                idempotency_key=f"stage:{index}:progress:attempt:{int(stage.get('attempt') or attempt)}",
+            )
+    for index, run in enumerate(scan.scanner_runs):
+        scanner_id = f"scanner:{index}:{run.scanner}"
+        store.record_scan_event(
+            scan.id,
+            "scanner_started",
+            owner_user_id=owner_user_id,
+            scanner_run_id=scanner_id,
+            new_state="running",
+            progress=progress,
+            message=f"{run.scanner} started.",
+            metadata={"scanner": run.scanner},
+            attempt=attempt,
+            worker_identity=WORKER_IDENTITY,
+            idempotency_key=f"scanner:{index}:{run.scanner}:started:attempt:{attempt}",
+        )
+        terminal_type = _scanner_event_type(run.status, run.message)
+        store.record_scan_event(
+            scan.id,
+            terminal_type,
+            owner_user_id=owner_user_id,
+            scanner_run_id=scanner_id,
+            new_state=run.status,
+            progress=progress,
+            message=run.message or f"{run.scanner} {run.status}.",
+            metadata={"scanner": run.model_dump(mode="json")},
+            error_code=run.status if run.status != "passed" else None,
+            error_details=run.message if run.status != "passed" else None,
+            attempt=attempt,
+            worker_identity=WORKER_IDENTITY,
+            idempotency_key=f"scanner:{index}:{run.scanner}:{run.status}:attempt:{attempt}",
+        )
+    if scan.ai_review.status != "Not tested":
+        qwen_type = "qwen_completed" if scan.ai_review.status in {"Complete", "Partial"} else "qwen_failed"
+        store.record_scan_event(
+            scan.id,
+            qwen_type,
+            owner_user_id=owner_user_id,
+            new_state=scan.ai_review.status,
+            progress=progress,
+            message=scan.ai_review.message,
+            metadata={"ai_review": scan.ai_review.model_dump(mode="json")},
+            error_code="qwen_failed" if qwen_type == "qwen_failed" else None,
+            error_details=scan.ai_review.message if qwen_type == "qwen_failed" else None,
+            attempt=attempt,
+            worker_identity=WORKER_IDENTITY,
+            idempotency_key=f"qwen:{scan.ai_review.status}:attempt:{attempt}",
+        )
+    if scan.status in {"completed", "partial", "failed", "cancelled"}:
+        for fmt in scan.report_formats:
+            store.record_scan_event(
+                scan.id,
+                "report_started",
+                owner_user_id=owner_user_id,
+                new_state="running",
+                progress=progress,
+                message=f"{fmt.upper()} report generation started.",
+                metadata={"format": fmt},
+                attempt=attempt,
+                worker_identity=WORKER_IDENTITY,
+                idempotency_key=f"report:{fmt}:started:attempt:{attempt}",
+            )
+            store.record_scan_event(
+                scan.id,
+                "report_completed",
+                owner_user_id=owner_user_id,
+                new_state="completed",
+                progress=progress,
+                message=f"{fmt.upper()} report generation completed.",
+                metadata={"format": fmt},
+                attempt=attempt,
+                worker_identity=WORKER_IDENTITY,
+                idempotency_key=f"report:{fmt}:completed:attempt:{attempt}",
+            )
 
 
 def _progress_percent(scan: Scan) -> int:
@@ -233,6 +439,20 @@ async def worker_loop(settings: Settings) -> None:
                 await redis.lpush(PROCESSING_KEY, processing_payload)
                 payload = processing_payload
             await _mark_job(redis, job, "running")
+            scan = store.get_scan(str(job.get("scan_id")), job.get("owner_user_id"))
+            if scan:
+                store.record_scan_event(
+                    scan.id,
+                    "worker_heartbeat",
+                    owner_user_id=job.get("owner_user_id"),
+                    new_state="running",
+                    progress=_progress_percent(scan),
+                    message="Worker heartbeat recorded for active scan.",
+                    metadata={"job_id": job.get("job_id"), "started_at": job.get("started_at")},
+                    attempt=int(job.get("attempt", 1)),
+                    worker_identity=WORKER_IDENTITY,
+                    idempotency_key=f"worker_heartbeat:{job.get('job_id')}:{job.get('attempt')}",
+                )
             try:
                 await asyncio.wait_for(execute_scan_job(settings, job), timeout=settings.max_scan_seconds)
                 await _mark_job(redis, job, "completed")
@@ -258,10 +478,12 @@ async def execute_scan_job(settings: Settings, job: dict[str, Any]) -> None:
         scan.completed_at = now_utc()
         _append_stage(scan, "Scan cancelled", "cancelled", "Cancelled before worker execution.")
         store.save_scan(scan, owner_user_id)
+        _persist_event_snapshot(scan, owner_user_id, attempt=int(job.get("attempt", 1)), job_id=job.get("job_id"))
         return
 
     async def persist_progress(updated: Scan) -> None:
         store.save_scan(updated, owner_user_id)
+        _persist_event_snapshot(updated, owner_user_id, attempt=int(job.get("attempt", 1)), job_id=job.get("job_id"))
 
     async def cancelled(updated: Scan) -> bool:
         return await is_scan_cancelled(settings, updated.id)
@@ -277,6 +499,20 @@ async def execute_scan_job(settings: Settings, job: dict[str, Any]) -> None:
             attempt=job.get("attempt", 1),
         )
         store.save_scan(scan, owner_user_id)
+        store.record_scan_event(
+            scan.id,
+            "retry_started" if int(job.get("attempt", 1)) > 1 else "scan_started",
+            owner_user_id=owner_user_id,
+            previous_state="queued",
+            new_state="running",
+            progress=_progress_percent(scan),
+            message="Redis job accepted.",
+            metadata={"job_id": job.get("job_id")},
+            attempt=int(job.get("attempt", 1)),
+            worker_identity=WORKER_IDENTITY,
+            idempotency_key=f"scan:started:attempt:{int(job.get('attempt', 1))}",
+        )
+        _persist_event_snapshot(scan, owner_user_id, attempt=int(job.get("attempt", 1)), job_id=job.get("job_id"))
 
         mode = ScanMode(str(job["mode"]))
         if mode == ScanMode.url:
@@ -297,15 +533,32 @@ async def execute_scan_job(settings: Settings, job: dict[str, Any]) -> None:
             completed.completed_at = now_utc()
             _append_stage(completed, "Scan cancelled", "cancelled", "Cancelled after scan engine returned.")
         store.save_scan(completed, owner_user_id)
+        _persist_event_snapshot(completed, owner_user_id, attempt=int(job.get("attempt", 1)), job_id=job.get("job_id"))
     except ScanCancelled:
         scan.status = "cancelled"
         scan.completed_at = now_utc()
         store.save_scan(scan, owner_user_id)
+        _persist_event_snapshot(scan, owner_user_id, attempt=int(job.get("attempt", 1)), job_id=job.get("job_id"))
     except Exception as exc:
         scan.status = "failed"
         scan.completed_at = now_utc()
         _append_stage(scan, "Worker execution failed", "failed", str(exc), attempt=job.get("attempt", 1))
         store.save_scan(scan, owner_user_id)
+        store.record_scan_event(
+            scan.id,
+            "scan_failed",
+            owner_user_id=owner_user_id,
+            previous_state="running",
+            new_state="failed",
+            progress=100,
+            message="Worker execution failed.",
+            error_code=exc.__class__.__name__,
+            error_details=str(exc),
+            attempt=int(job.get("attempt", 1)),
+            worker_identity=WORKER_IDENTITY,
+            idempotency_key=f"scan:failed:attempt:{int(job.get('attempt', 1))}:{exc.__class__.__name__}",
+        )
+        _persist_event_snapshot(scan, owner_user_id, attempt=int(job.get("attempt", 1)), job_id=job.get("job_id"))
         raise
 
 
@@ -334,6 +587,21 @@ async def _handle_job_failure(settings: Settings, redis, job: dict[str, Any], ex
         scan.completed_at = now_utc()
         _append_stage(scan, "Worker attempt failed", "timed out" if timed_out else "failed", message, attempt=attempt)
         store.save_scan(scan, owner_user_id)
+        store.record_scan_event(
+            scan.id,
+            "scanner_timed_out" if timed_out else "scan_failed",
+            owner_user_id=owner_user_id,
+            previous_state="running",
+            new_state=scan.status,
+            progress=100,
+            message=message,
+            error_code="whole_scan_timeout" if timed_out else exc.__class__.__name__,
+            error_details=message,
+            attempt=attempt,
+            worker_identity=WORKER_IDENTITY,
+            idempotency_key=f"failure:{attempt}:{'timeout' if timed_out else exc.__class__.__name__}",
+        )
+        _persist_event_snapshot(scan, owner_user_id, attempt=attempt, job_id=job.get("job_id"))
     if attempt < max_attempts and not await is_scan_cancelled(settings, scan_id):
         retry_job = {**job, "attempt": attempt + 1}
         await _mark_job(redis, retry_job, "queued")
@@ -343,6 +611,20 @@ async def _handle_job_failure(settings: Settings, redis, job: dict[str, Any], ex
             scan.completed_at = None
             _append_stage(scan, "Retry queued", "queued", f"Retry {attempt + 1} of {max_attempts} queued.", attempt=attempt + 1)
             store.save_scan(scan, owner_user_id)
+            store.record_scan_event(
+                scan.id,
+                "retry_scheduled",
+                owner_user_id=owner_user_id,
+                previous_state="failed",
+                new_state="queued",
+                progress=0,
+                message=f"Retry {attempt + 1} of {max_attempts} queued.",
+                metadata={"run_after": retry_job.get("run_after"), "job_id": retry_job.get("job_id")},
+                attempt=attempt + 1,
+                worker_identity=WORKER_IDENTITY,
+                idempotency_key=f"retry:scheduled:{attempt + 1}",
+            )
+            _persist_event_snapshot(scan, owner_user_id, attempt=attempt + 1, job_id=job.get("job_id"))
     else:
         await _mark_job(redis, job, "failed")
         await redis.delete(_active_key(scan_id))
@@ -371,5 +653,22 @@ async def _requeue_stuck_jobs(redis) -> int:
         await redis.lrem(PROCESSING_KEY, 1, payload)
         await redis.rpush(QUEUE_KEY, _json(job))
         await _mark_job(redis, job, "queued")
+        scan_id = str(job.get("scan_id"))
+        owner_user_id = job.get("owner_user_id")
+        scan = store.get_scan(scan_id, owner_user_id)
+        if scan:
+            store.record_scan_event(
+                scan.id,
+                "worker_lost",
+                owner_user_id=owner_user_id,
+                previous_state="running",
+                new_state="queued",
+                progress=_progress_percent(scan),
+                message="Processing job exceeded stale-worker threshold and was requeued.",
+                metadata={"started_at": started, "job_id": job.get("job_id")},
+                attempt=int(job.get("attempt", 1)),
+                worker_identity=WORKER_IDENTITY,
+                idempotency_key=f"worker_lost:{job.get('job_id')}:{job.get('attempt')}",
+            )
         requeued += 1
     return requeued

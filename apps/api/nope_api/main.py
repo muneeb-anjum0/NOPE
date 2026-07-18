@@ -590,8 +590,14 @@ def list_scan_drift(scan_id: str, authorization: str | None = Header(default=Non
 
 
 @app.get("/api/scans/{scan_id}/events")
-async def get_scan_events(scan_id: str, authorization: str | None = Header(default=None)) -> dict:
-    return await scan_events(_load_scan(scan_id, authorization))
+async def get_scan_events(
+    scan_id: str,
+    authorization: str | None = Header(default=None),
+    after_sequence: int | None = None,
+    limit: int = 100,
+) -> dict:
+    owner_user_id = _require_owner_user_id(authorization)
+    return await scan_events(_load_scan(scan_id, authorization), owner_user_id, after_sequence=after_sequence, limit=limit)
 
 
 @app.get("/api/scans/{scan_id}/attack-map")
@@ -606,19 +612,59 @@ def get_report(scan_id: str, fmt: str, authorization: str | None = Header(defaul
     scan = _load_scan(scan_id, authorization)
     try:
         if fmt == "pdf":
+            store.record_scan_event(
+                scan.id,
+                "report_started",
+                owner_user_id=owner_user_id,
+                new_state="running",
+                progress=100 if scan.status in {"completed", "partial", "failed", "cancelled"} else None,
+                message="PDF report generation started.",
+                metadata={"format": fmt, "source": "download"},
+                idempotency_key="report:pdf:download:started",
+            )
             context = ReportContext(
                 drift_events=store.list_drift_events(scan_id, owner_user_id),
                 baselines=store.list_security_baselines(owner_user_id, scan.project_id),
             )
             media_type, body = render_report(scan, fmt, context)
             store.save_report(scan, fmt, media_type, body, owner_user_id=owner_user_id)
+            store.record_scan_event(
+                scan.id,
+                "report_completed",
+                owner_user_id=owner_user_id,
+                new_state="completed",
+                progress=100 if scan.status in {"completed", "partial", "failed", "cancelled"} else None,
+                message="PDF report generation completed.",
+                metadata={"format": fmt, "source": "download"},
+                idempotency_key="report:pdf:download:completed",
+            )
         else:
             stored_report = store.get_report(scan_id, fmt, owner_user_id)
             if stored_report:
                 media_type, body = stored_report
             else:
+                store.record_scan_event(
+                    scan.id,
+                    "report_started",
+                    owner_user_id=owner_user_id,
+                    new_state="running",
+                    progress=100 if scan.status in {"completed", "partial", "failed", "cancelled"} else None,
+                    message=f"{fmt.upper()} report generation started.",
+                    metadata={"format": fmt, "source": "download"},
+                    idempotency_key=f"report:{fmt}:download:started",
+                )
                 media_type, body = render_report(scan, fmt)
                 store.save_report(scan, fmt, media_type, body, owner_user_id=owner_user_id)
+                store.record_scan_event(
+                    scan.id,
+                    "report_completed",
+                    owner_user_id=owner_user_id,
+                    new_state="completed",
+                    progress=100 if scan.status in {"completed", "partial", "failed", "cancelled"} else None,
+                    message=f"{fmt.upper()} report generation completed.",
+                    metadata={"format": fmt, "source": "download"},
+                    idempotency_key=f"report:{fmt}:download:completed",
+                )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     filename = f"nope-{scan.id}.{fmt}"
@@ -659,6 +705,8 @@ async def start_url_scan(request: ScanRequest, authorization: str | None = Heade
         stages=[{"name": "Queued for worker", "status": "queued"}],
     )
     store.save_scan(scan, owner_user_id)
+    store.record_scan_event(scan.id, "scan_created", owner_user_id=owner_user_id, new_state="queued", progress=0, message="URL scan created.", idempotency_key="scan_created")
+    store.record_scan_event(scan.id, "scan_queued", owner_user_id=owner_user_id, previous_state="created", new_state="queued", progress=0, message="URL scan queued for worker.", idempotency_key="scan_queued")
     await enqueue_scan_job(settings, {"scan_id": scan.id, "owner_user_id": owner_user_id, "mode": scan.mode.value})
     return scan
 
@@ -685,6 +733,8 @@ async def start_repository_scan(
         commit_sha=commit_sha,
     )
     store.save_scan(scan, owner_user_id)
+    store.record_scan_event(scan.id, "scan_created", owner_user_id=owner_user_id, new_state="preparing", progress=0, message="Repository scan created.", idempotency_key="scan_created")
+    store.record_scan_event(scan.id, "scan_preparing", owner_user_id=owner_user_id, previous_state="created", new_state="preparing", progress=3, message="Repository ZIP is being prepared.", idempotency_key="scan_preparing")
     try:
         root = await extract_zip(file, scan.id, settings)
         _validate_project_upload(scan, owner_user_id, root, force_scaffold)
@@ -696,6 +746,8 @@ async def start_repository_scan(
     scan.status = "queued"
     scan.stages.append({"name": "Queued for worker", "status": "queued", "message": "Repository extracted and ready."})
     store.save_scan(scan, owner_user_id)
+    store.record_scan_event(scan.id, "stage_queued", owner_user_id=owner_user_id, stage_id="stage:queued", new_state="queued", progress=0, message="Repository extracted and ready.", idempotency_key="stage:queued")
+    store.record_scan_event(scan.id, "scan_queued", owner_user_id=owner_user_id, previous_state="preparing", new_state="queued", progress=0, message="Repository scan queued for worker.", idempotency_key="scan_queued")
     await enqueue_scan_job(
         settings,
         {
@@ -740,6 +792,8 @@ async def start_full_scan(
         commit_sha=commit_sha,
     )
     store.save_scan(scan, owner_user_id)
+    store.record_scan_event(scan.id, "scan_created", owner_user_id=owner_user_id, new_state="preparing", progress=0, message="Full scan created.", idempotency_key="scan_created")
+    store.record_scan_event(scan.id, "scan_preparing", owner_user_id=owner_user_id, previous_state="created", new_state="preparing", progress=3, message="Repository ZIP and URL scope are being prepared.", idempotency_key="scan_preparing")
     try:
         root = await extract_zip(file, scan.id, settings)
         _validate_project_upload(scan, owner_user_id, root, force_scaffold)
@@ -751,6 +805,8 @@ async def start_full_scan(
     scan.status = "queued"
     scan.stages.append({"name": "Queued for worker", "status": "queued", "message": "Repository extracted and URL scope confirmed."})
     store.save_scan(scan, owner_user_id)
+    store.record_scan_event(scan.id, "stage_queued", owner_user_id=owner_user_id, stage_id="stage:queued", new_state="queued", progress=0, message="Repository extracted and URL scope confirmed.", idempotency_key="stage:queued")
+    store.record_scan_event(scan.id, "scan_queued", owner_user_id=owner_user_id, previous_state="preparing", new_state="queued", progress=0, message="Full scan queued for worker.", idempotency_key="scan_queued")
     await enqueue_scan_job(
         settings,
         {
@@ -768,9 +824,39 @@ async def cancel_scan(scan_id: str, authorization: str | None = Header(default=N
     owner_user_id = _require_owner_user_id(authorization)
     scan = _load_scan(scan_id, authorization)
     await request_scan_cancel(settings, scan_id)
+    store.record_scan_event(
+        scan.id,
+        "cancellation_requested",
+        owner_user_id=owner_user_id,
+        previous_state=scan.status,
+        new_state="cancelling",
+        progress=None,
+        message="Cancellation requested by user.",
+        idempotency_key=f"cancellation_requested:{scan.status}",
+    )
     if scan.status in {"queued", "preparing"}:
         scan.status = "cancelled"
         scan.completed_at = datetime.now(timezone.utc)
+        store.record_scan_event(
+            scan.id,
+            "cancellation_acknowledged",
+            owner_user_id=owner_user_id,
+            previous_state="cancelling",
+            new_state="cancelled",
+            progress=100,
+            message="Cancellation acknowledged before worker execution.",
+            idempotency_key="cancellation_acknowledged",
+        )
+        store.record_scan_event(
+            scan.id,
+            "scan_cancelled",
+            owner_user_id=owner_user_id,
+            previous_state="queued",
+            new_state="cancelled",
+            progress=100,
+            message="Scan cancelled before worker execution.",
+            idempotency_key="scan_cancelled",
+        )
     scan.stages.append({"name": "Cancellation requested", "status": "cancelled"})
     return store.save_scan(scan, owner_user_id)
 
@@ -787,6 +873,16 @@ async def retry_scan(scan_id: str, authorization: str | None = Header(default=No
     scan.completed_at = None
     scan.stages.append({"name": "Retry queued", "status": "queued"})
     store.save_scan(scan, owner_user_id)
+    store.record_scan_event(
+        scan.id,
+        "retry_scheduled",
+        owner_user_id=owner_user_id,
+        previous_state="failed",
+        new_state="queued",
+        progress=0,
+        message="Manual retry queued.",
+        idempotency_key=f"manual_retry:{datetime.now(timezone.utc).isoformat()}",
+    )
     await clear_scan_cancel(settings, scan.id)
     job = {"scan_id": scan.id, "owner_user_id": owner_user_id, "mode": scan.mode.value}
     if scan.repository_workspace_path:

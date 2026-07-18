@@ -19,6 +19,9 @@ async def test_execute_scan_job_runs_url_scan_and_persists(monkeypatch):
             saved_statuses.append(updated.status)
             return updated
 
+        def record_scan_event(self, *args, **kwargs):
+            return None
+
     async def fake_cancelled(settings, scan_id):
         return False
 
@@ -54,6 +57,9 @@ async def test_execute_scan_job_persists_cancelled_scan(monkeypatch):
             saved_statuses.append(updated.status)
             return updated
 
+        def record_scan_event(self, *args, **kwargs):
+            return None
+
     async def fake_cancelled(settings, scan_id):
         return True
 
@@ -78,6 +84,9 @@ async def test_job_failure_requeues_with_bounded_retry(monkeypatch):
 
         def save_scan(self, updated, owner_user_id=None):
             return updated
+
+        def record_scan_event(self, *args, **kwargs):
+            return None
 
     class FakeRedis:
         async def hset(self, *args, **kwargs):

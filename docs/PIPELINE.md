@@ -26,6 +26,8 @@ Supported modes:
 
 Redis stores queued jobs, active-scan locks, cancellation flags, processing jobs, retry metadata, and worker heartbeat. The worker consumes jobs, checkpoints scan snapshots and stage progress to Postgres, honors cancellation between stages, retries bounded failures with backoff, and exposes queue/worker health through API endpoints.
 
+Durable progress does not depend on Redis or the browser staying connected. Stage 2 adds a `scan_events` table that records ordered, idempotent events for scan creation, queueing, preparation, stage transitions, scanner starts/completions/failures/timeouts/unavailable states, retries, cancellation request/acknowledgement, worker heartbeat/lost recovery, Qwen start/completion/failure, report generation, and terminal scan states. `/api/scans/{scan_id}/events` replays that table with `after_sequence` and `limit`, so frontend polling is only a transport layer.
+
 ## 5. Repository Analysis
 
 Repository scans perform:

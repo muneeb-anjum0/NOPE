@@ -40,7 +40,7 @@ A local user can start the app with plain `docker compose up --build -d`, open `
 | --- | --- | --- | --- | ---: |
 | Scanner quality | Real scanner execution and normalization | Stage 1 benchmark passes locally in scanner-only and scanner-plus-Qwen modes; broader scanner-family expansion remains later work | Docker benchmark outputs | 86% |
 | Qwen actions | Explain/Challenge/Fix/Test return structured output and cache repeats | First uncached output takes 34-46s on this GPU; cache is not durable across API restart | Latency profile | 70% |
-| Queue/events | Worker executes queued scans | E2E scan events endpoint returned `event_count: 0` despite completion | E2E scan output | 68% |
+| Queue/events | Worker executes queued scans and Stage 2 durable `scan_events` now records ordered replayable progress | Later stages can add richer analytics, but completed scans no longer depend on mutable stage snapshots for event history | Stage 2 tests and durable event migration | 100% locally achievable |
 | Attack map | Dedicated route exists and can render mapped graph data | Graph depth/precision remains heuristic and depends on scan evidence | Source and UI behavior | 70% |
 | Sandbox | Docker sandbox runner exists with limits | ZAP/dynamic workflow is opt-in/skipped for ordinary repo scans; hostile matrix not rerun | E2E scanner run skipped sandbox | 60% |
 | GitHub | Settings/contracts/blocked adapter exist | No real OAuth/App token exchange or private repo access | Code/docs/routes | 35% local, 0% activated |
@@ -57,7 +57,7 @@ A local user can start the app with plain `docker compose up --build -d`, open `
 ## 7. What is broken
 
 - Host API lint is broken due missing host dependency. Reproduction: `pnpm api:lint`; result: `'ruff' is not recognized`.
-- Scan event observability is incomplete. Real E2E scan completed, but `/events` returned zero events.
+- Stage 2 addendum: scan event observability has been repaired with durable `scan_events`, deterministic sequence ordering, idempotency keys, paginated replay, snapshot backfill for older completed scans, and tests for success, partial failure, retry, cancellation, heartbeat/stuck recovery, restart-style reload, authorization, and pagination.
 
 ## 8. What is missing
 
@@ -89,7 +89,7 @@ Postgres is live and healthy. Migration status is clean. Scans, findings, report
 
 ## 15. Queue and worker status
 
-Redis and worker are live. E2E scan ran through the worker and completed. Retry/cancel are covered by tests, but live retry/cancel and worker-restart behavior were not rerun in this audit. Event history is weak: E2E `/events` returned zero events.
+Redis and worker are live. E2E scan ran through the worker and completed. Stage 2 now persists every important queue/worker/progress transition to Postgres `scan_events`; `/events` replays durable records and can backfill old completed snapshots that previously returned zero events.
 
 ## 16. Reporting status
 

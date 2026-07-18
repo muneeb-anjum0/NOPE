@@ -34,6 +34,7 @@ It:
 - promotes only evidence-backed findings into the Findings view
 - keeps weak, generated, contradicted, or under-context candidates out of scoring
 - calculates coverage, score, and verdict
+- records ordered durable progress events for browser/API/worker restarts
 - persists scans, findings, stages, scanner runs, reports, baselines, and drift data
 
 In short: **the pipeline does the security scanning work.**
@@ -204,7 +205,7 @@ flowchart LR
     direction TB
     api["NOPE API<br/>FastAPI orchestration"]
     queue[("Redis<br/>scan queue")]
-    db[("Postgres<br/>users, sessions,<br/>scans, findings")]
+    db[("Postgres<br/>users, sessions,<br/>scans, findings,<br/>scan events")]
   end
 
   subgraph execution["Execution Plane"]
@@ -235,7 +236,7 @@ flowchart LR
   worker -->|"deduped candidates"| gate
   gate -->|"promoted findings"| worker
   gate -->|"needs_context / rejected audit"| candidates
-  worker -->|"promoted findings, coverage, drift"| db
+  worker -->|"promoted findings, coverage, drift, durable events"| db
   worker -->|"raw output and generated files"| minio
   worker -->|"focused evidence only"| ai
   ai -->|"review suggestions"| worker

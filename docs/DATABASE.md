@@ -41,7 +41,8 @@ The `scans` table stores both normalized fields and a JSON snapshot of the curre
 
 - Protected API routes require a valid local bearer token by default through `NOPE_REQUIRE_AUTHENTICATED_API=true`.
 - Dashboard-originated calls forward the HttpOnly local session token and are scoped to the authenticated user.
-- Scan execution is Redis-backed: API requests persist queued scans, workers checkpoint stage progress to Postgres, and scan/event routes reload progress from durable scan snapshots.
+- Scan execution is Redis-backed, but Postgres is authoritative for history: API requests persist queued scans, workers checkpoint scan snapshots, and every important scan/stage/scanner/retry/cancellation/worker/report/Qwen transition is also stored in `scan_events` with a deterministic per-scan sequence number.
+- The event stream supports idempotent insertion through `(scan_id, idempotency_key)`, ordered replay through `(scan_id, sequence)`, and incremental pagination by `after_sequence`.
 - Generated report payloads are stored in Postgres. PDF bodies are base64-backed in Postgres and, when MinIO is reachable, also stored as binary report artifacts with object metadata recorded in `reports.data`.
 - Raw scanner stdout/stderr artifacts and PDF report artifacts are stored in MinIO and linked through `uploaded_artifacts`, `job_artifacts`, scanner runs, and report metadata.
 - Project creation now creates target/source metadata rows when target URL or repository metadata is supplied.

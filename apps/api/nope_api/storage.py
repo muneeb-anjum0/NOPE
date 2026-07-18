@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import re
 from hashlib import sha256
 from typing import Any
 
@@ -9,7 +10,7 @@ from psycopg.types.json import Jsonb
 from nope_api.artifacts import put_binary_artifact, put_json_artifact
 from nope_api.config import get_settings
 from nope_api.db import connect, run_migrations
-from nope_api.models import BaselineState, FindingStatus, Project, Scan, now_utc, new_id
+from nope_api.models import BaselineState, FindingStatus, Project, Scan, ScanEvent, now_utc, new_id
 from nope_api.reports import render_report
 
 
@@ -19,6 +20,42 @@ REPORT_MEDIA_TYPES = {
     "sarif": "application/sarif+json",
     "pdf": "application/pdf",
 }
+
+_SECRET_RE = re.compile(
+    r"(?i)(api[_-]?key|token|secret|password|authorization|bearer|sk-[a-z0-9_-]{8,}|ghp_[a-z0-9_]+)\s*[:=]\s*([^\s,'\"]+)"
+)
+
+
+def _redact_event_text(value: str | None, limit: int = 4096) -> str:
+    if not value:
+        return ""
+    redacted = _SECRET_RE.sub(lambda match: f"{match.group(1)}=***REDACTED***", str(value))
+    return redacted[:limit]
+
+
+def _stage_event_type(status: str) -> str:
+    return {
+        "queued": "stage_queued",
+        "running": "stage_started",
+        "completed": "stage_completed",
+        "partial": "stage_partial",
+        "failed": "stage_failed",
+        "skipped": "stage_skipped",
+        "cancelled": "scan_cancelled",
+        "timed out": "stage_failed",
+        "timed_out": "stage_failed",
+    }.get(status, "stage_progress")
+
+
+def _scanner_event_type(status: str, message: str = "") -> str:
+    lowered = (message or "").lower()
+    if "timeout" in lowered or status == "timed_out":
+        return "scanner_timed_out"
+    if "unavailable" in lowered or status == "skipped":
+        return "scanner_unavailable"
+    if status == "failed":
+        return "scanner_failed"
+    return "scanner_completed"
 
 
 class PostgresStore:
@@ -304,6 +341,249 @@ class PostgresStore:
                 (scan_id, owner_user_id),
             ).fetchone()
         return row is not None
+
+    def record_scan_event(
+        self,
+        scan_id: str,
+        event_type: str,
+        *,
+        owner_user_id: str | None = None,
+        stage_id: str | None = None,
+        scanner_run_id: str | None = None,
+        previous_state: str | None = None,
+        new_state: str | None = None,
+        progress: int | None = None,
+        message: str = "",
+        metadata: dict[str, Any] | None = None,
+        error_code: str | None = None,
+        error_details: str | None = None,
+        attempt: int = 1,
+        worker_identity: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> ScanEvent | None:
+        self.migrate()
+        event_key = idempotency_key or f"{event_type}:{stage_id or ''}:{scanner_run_id or ''}:{new_state or ''}:{attempt}"
+        with connect(self.settings) as conn:
+            params: tuple[Any, ...] = (scan_id,)
+            owner_clause = ""
+            if owner_user_id:
+                owner_clause = " and owner_user_id = %s"
+                params = (scan_id, owner_user_id)
+            scan_row = conn.execute(f"select id from scans where id = %s{owner_clause}", params).fetchone()
+            if not scan_row:
+                return None
+            existing = conn.execute(
+                """
+                select id, scan_id, stage_id, scanner_run_id, event_type, previous_state, new_state,
+                       progress, message, metadata, error_code, error_details, attempt, worker_identity,
+                       created_at, sequence, idempotency_key
+                from scan_events
+                where scan_id = %s and idempotency_key = %s
+                """,
+                (scan_id, event_key),
+            ).fetchone()
+            if existing:
+                data = dict(existing)
+                data["metadata"] = dict(data["metadata"] or {})
+                return ScanEvent(**data)
+
+            conn.execute("select pg_advisory_xact_lock(hashtext(%s))", (scan_id,))
+            latest = conn.execute(
+                "select sequence, progress from scan_events where scan_id = %s order by sequence desc limit 1",
+                (scan_id,),
+            ).fetchone()
+            sequence = int(latest["sequence"]) + 1 if latest else 1
+            if progress is not None:
+                progress = max(0, min(100, int(progress)))
+                if latest and event_type not in {"retry_scheduled", "retry_started"}:
+                    previous_progress = latest["progress"]
+                    if previous_progress is not None:
+                        progress = max(progress, int(previous_progress))
+            row = conn.execute(
+                """
+                insert into scan_events (
+                  id, scan_id, stage_id, scanner_run_id, event_type, previous_state, new_state,
+                  progress, message, metadata, error_code, error_details, attempt, worker_identity,
+                  sequence, idempotency_key
+                )
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                returning id, scan_id, stage_id, scanner_run_id, event_type, previous_state, new_state,
+                          progress, message, metadata, error_code, error_details, attempt, worker_identity,
+                          created_at, sequence, idempotency_key
+                """,
+                (
+                    new_id("evt"),
+                    scan_id,
+                    stage_id,
+                    scanner_run_id,
+                    event_type,
+                    previous_state,
+                    new_state,
+                    progress,
+                    _redact_event_text(message),
+                    Jsonb(metadata or {}),
+                    error_code,
+                    _redact_event_text(error_details),
+                    max(1, int(attempt or 1)),
+                    worker_identity,
+                    sequence,
+                    event_key,
+                ),
+            ).fetchone()
+        data = dict(row)
+        data["metadata"] = dict(data["metadata"] or {})
+        return ScanEvent(**data)
+
+    def list_scan_events(
+        self,
+        scan_id: str,
+        owner_user_id: str | None = None,
+        *,
+        after_sequence: int | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any] | None:
+        self.migrate()
+        limit = max(1, min(500, int(limit or 100)))
+        query = """
+            select scan_events.id, scan_events.scan_id, scan_events.stage_id, scan_events.scanner_run_id,
+                   scan_events.event_type, scan_events.previous_state, scan_events.new_state,
+                   scan_events.progress, scan_events.message, scan_events.metadata,
+                   scan_events.error_code, scan_events.error_details, scan_events.attempt,
+                   scan_events.worker_identity, scan_events.created_at, scan_events.sequence,
+                   scan_events.idempotency_key
+            from scan_events
+            join scans on scans.id = scan_events.scan_id
+            where scan_events.scan_id = %s
+        """
+        params: list[Any] = [scan_id]
+        if owner_user_id:
+            query += " and scans.owner_user_id = %s"
+            params.append(owner_user_id)
+        if after_sequence is not None:
+            query += " and scan_events.sequence > %s"
+            params.append(int(after_sequence))
+        query += " order by scan_events.sequence asc limit %s"
+        params.append(limit + 1)
+        with connect(self.settings) as conn:
+            scan_exists_query = "select data from scans where id = %s"
+            scan_params: tuple[Any, ...] = (scan_id,)
+            if owner_user_id:
+                scan_exists_query += " and owner_user_id = %s"
+                scan_params = (scan_id, owner_user_id)
+            scan_row = conn.execute(scan_exists_query, scan_params).fetchone()
+            if not scan_row:
+                return None
+            rows = conn.execute(query, tuple(params)).fetchall()
+        items = []
+        for row in rows[:limit]:
+            data = dict(row)
+            data["metadata"] = dict(data["metadata"] or {})
+            items.append(ScanEvent(**data).model_dump(mode="json"))
+        return {
+            "events": items,
+            "has_more": len(rows) > limit,
+            "next_after_sequence": items[-1]["sequence"] if items else after_sequence,
+            "total": self.count_scan_events(scan_id, owner_user_id),
+        }
+
+    def count_scan_events(self, scan_id: str, owner_user_id: str | None = None) -> int:
+        self.migrate()
+        query = "select count(*) as count from scan_events join scans on scans.id = scan_events.scan_id where scan_events.scan_id = %s"
+        params: tuple[Any, ...] = (scan_id,)
+        if owner_user_id:
+            query += " and scans.owner_user_id = %s"
+            params = (scan_id, owner_user_id)
+        with connect(self.settings) as conn:
+            row = conn.execute(query, params).fetchone()
+        return int(row["count"] if row else 0)
+
+    def backfill_scan_events_from_snapshot(self, scan: Scan, owner_user_id: str | None = None) -> int:
+        if self.count_scan_events(scan.id, owner_user_id) > 0:
+            return 0
+        progress = 0
+        inserted = 0
+        created = self.record_scan_event(
+            scan.id,
+            "scan_created",
+            owner_user_id=owner_user_id,
+            new_state="queued",
+            progress=progress,
+            message="Backfilled from persisted scan snapshot.",
+            idempotency_key="backfill:scan_created",
+        )
+        inserted += 1 if created else 0
+        stage_total = max(len(scan.stages), 1)
+        for index, stage in enumerate(scan.stages):
+            status = str(stage.get("status") or "completed")
+            event_type = _stage_event_type(status)
+            progress = min(99, max(progress, round(((index + 1) / stage_total) * 80)))
+            event = self.record_scan_event(
+                scan.id,
+                event_type,
+                owner_user_id=owner_user_id,
+                stage_id=f"stage:{index}",
+                new_state=status,
+                progress=progress,
+                message=str(stage.get("message") or stage.get("name") or ""),
+                metadata={"stage": stage, "backfilled": True},
+                idempotency_key=f"backfill:stage:{index}:{status}",
+            )
+            inserted += 1 if event else 0
+        for index, run in enumerate(scan.scanner_runs):
+            started = self.record_scan_event(
+                scan.id,
+                "scanner_started",
+                owner_user_id=owner_user_id,
+                scanner_run_id=f"scanner:{index}:{run.scanner}",
+                new_state="running",
+                progress=progress,
+                message=f"{run.scanner} started.",
+                metadata={"scanner": run.scanner, "backfilled": True},
+                idempotency_key=f"backfill:scanner:{index}:started",
+            )
+            inserted += 1 if started else 0
+            terminal_type = _scanner_event_type(run.status, run.message)
+            event = self.record_scan_event(
+                scan.id,
+                terminal_type,
+                owner_user_id=owner_user_id,
+                scanner_run_id=f"scanner:{index}:{run.scanner}",
+                new_state=run.status,
+                progress=progress,
+                message=run.message or f"{run.scanner} {run.status}.",
+                metadata={"scanner": run.model_dump(mode="json"), "backfilled": True},
+                error_code=run.status if run.status != "passed" else None,
+                error_details=run.message if run.status != "passed" else None,
+                idempotency_key=f"backfill:scanner:{index}:{run.status}",
+            )
+            inserted += 1 if event else 0
+        if scan.ai_review.status not in {"Not tested"}:
+            event_type = "qwen_completed" if scan.ai_review.status in {"Complete", "Partial"} else "qwen_failed"
+            event = self.record_scan_event(
+                scan.id,
+                event_type,
+                owner_user_id=owner_user_id,
+                new_state=scan.ai_review.status,
+                progress=95,
+                message=scan.ai_review.message,
+                metadata={"ai_review": scan.ai_review.model_dump(mode="json"), "backfilled": True},
+                error_code="qwen_failed" if event_type == "qwen_failed" else None,
+                error_details=scan.ai_review.message if event_type == "qwen_failed" else None,
+                idempotency_key=f"backfill:qwen:{scan.ai_review.status}",
+            )
+            inserted += 1 if event else 0
+        terminal_type = {"completed": "scan_completed", "partial": "scan_partial", "failed": "scan_failed", "cancelled": "scan_cancelled"}.get(scan.status, "scan_started")
+        event = self.record_scan_event(
+            scan.id,
+            terminal_type,
+            owner_user_id=owner_user_id,
+            new_state=scan.status,
+            progress=100 if scan.status in {"completed", "partial", "failed", "cancelled"} else progress,
+            message=scan.verdict,
+            idempotency_key=f"backfill:terminal:{scan.status}",
+        )
+        inserted += 1 if event else 0
+        return inserted
 
     def delete_scan(self, scan_id: str, owner_user_id: str | None = None) -> bool:
         self.migrate()

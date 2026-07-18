@@ -39,6 +39,7 @@ def downgrade() -> None:
         "finding_evidence",
         "findings",
         "scanner_runs",
+        "scan_events",
         "scan_stages",
         "scans",
         "repository_snapshots",

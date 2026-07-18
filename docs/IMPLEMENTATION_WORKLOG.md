@@ -1318,3 +1318,33 @@ Complete the final documentation and cleanup phase: refresh every required docum
 ### Closure
 
 Phase 16 is complete for final documentation and cleanup: all required documents are current, pipeline and troubleshooting docs exist, stale status language is removed, production placeholder/pass cleanup is done, dependency audit findings are fixed, refreshed Docker images start successfully, health checks pass, tests/builds pass, image scans are clean for high/critical findings, Qwen runs with CPU+GPU split at 28 layers, and measured VRAM is 4485 MiB under the 5000 MiB cap.
+
+## 2026-07-18 Stage 2 Durable Scan Events and Progress
+
+### Objective
+
+Complete only Stage 2 of the canonical completion program: durable scan events and progress. Do not begin Stage 3.
+
+### Pre-stage state
+
+- Pre-stage commit: `6c6ea63c7729c495886ca0b0c140e7874e191302`.
+- Existing queue/worker execution worked, but event history was reconstructed from mutable `scan.stages`.
+- Known defect: a completed E2E scan could return zero events.
+
+### Implemented
+
+- Added durable `scan_events` with event id, scan id, stage/scanner identifiers, type, previous/new state, progress, message, metadata, redacted error details, attempt, worker identity, timestamp, deterministic sequence, and idempotency key.
+- Added additive SQL/Alembic migration `0003_scan_events` and fresh-database schema support.
+- Persisted scan, stage, scanner, retry, cancellation, worker heartbeat/lost, Qwen, report, timeout, partial, failed, cancelled, and completed events.
+- Added ordered/idempotent event insertion with per-scan advisory locking and `(scan_id, idempotency_key)` duplicate prevention.
+- Added `/api/scans/{scan_id}/events?after_sequence=&limit=` paginated replay.
+- Added snapshot backfill so old completed scans with no event rows produce a non-empty durable timeline.
+- Updated frontend scan-event proxy to pass incremental pagination parameters.
+
+### Verification results
+
+- `python -m pytest apps/api/tests/test_queue.py apps/api/tests/test_stage2_scan_events.py -vv --tb=short`: passed, `9 passed, 2 warnings`.
+
+### Closure
+
+Stage 2 implementation is complete pending full regression, Docker rebuild/refresh, final docs update, commit, and push.

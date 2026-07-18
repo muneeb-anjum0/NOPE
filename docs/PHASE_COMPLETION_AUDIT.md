@@ -7,7 +7,7 @@ Date: 2026-07-18
 | 0 Audit/reconciliation | Honest state tracking | New audit created | Current evidence collected | Historical docs still overclaim | 65% | Needs doc cleanup |
 | 1 PostgreSQL | Durable DB persistence | Postgres store/migrations | Migration clean, tests/E2E | More restart-persistence tests | 85% | Approve local |
 | 2 Scanner execution | Real scanners | Docker CLIs run | Versions, E2E, benchmark execution | Benchmark quality fails; missing scanner families | 64% | Do not approve as 100% |
-| 3 Redis queue | Async worker pipeline | Redis/worker live | E2E worker scan, tests | Events empty; live retry/restart not rerun | 75% | Approve partial |
+| 3 Redis queue | Async worker pipeline | Redis/worker live plus Stage 2 durable Postgres event replay | Stage 2 tests for ordered/idempotent events, retry, cancellation, stuck worker, pagination, auth, and restart-style reload | Stage 3 security hardening remains separate | 100% locally achievable for Stage 2 event/progress durability | Approve Stage 2 local gate |
 | 4 Findings normalization | Canonical findings/dedupe | Model/parsers/evidence gate | Tests, E2E normalized findings | Benchmark FP/FN issues | 76% | Needs quality work |
 | 5 Qwen | Local GGUF with GPU under 5 GB | Base Docker Qwen live | 28 layers, 4049 MiB, actions complete | First-run latency high | 78% | Approve local, not speed-complete |
 | 6 RAG | Ground Qwen in evidence | Lexical/graph RAG | Evidence payload and tests | No embeddings by design; ranking can improve | 70% | Approve partial |

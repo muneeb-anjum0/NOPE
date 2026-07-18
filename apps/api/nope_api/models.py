@@ -276,6 +276,26 @@ class Scan(BaseModel):
     report_formats: list[str] = Field(default_factory=lambda: ["json", "md", "sarif", "pdf"])
 
 
+class ScanEvent(BaseModel):
+    id: str = Field(default_factory=lambda: new_id("evt"))
+    scan_id: str
+    stage_id: str | None = None
+    scanner_run_id: str | None = None
+    event_type: str
+    previous_state: str | None = None
+    new_state: str | None = None
+    progress: int | None = None
+    message: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    error_code: str | None = None
+    error_details: str | None = None
+    attempt: int = 1
+    worker_identity: str | None = None
+    created_at: datetime = Field(default_factory=now_utc)
+    sequence: int = 0
+    idempotency_key: str | None = None
+
+
 class SystemSettings(BaseModel):
     qwen_endpoint: str = "http://nope-ai:8080"
     runtime: str = "llama.cpp"
