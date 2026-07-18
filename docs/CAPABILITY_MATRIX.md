@@ -8,8 +8,8 @@ Date: 2026-07-18
 | ZIP scanning | Upload repo ZIP and scan | Real E2E completed with 24 findings | `scan_356656eeadfa4c6a` | Verified | 85% | Moderate | Better event persistence and larger-repo tests |
 | PostgreSQL | Durable projects/scans/findings/reports/settings | Migrations clean; storage layer active | migration status, E2E | Verified | 85% | Minor | More restart-persistence tests |
 | Redis/worker | Async queue with progress/retry/cancel | Worker completes jobs; tests cover retry/cancel | E2E, pytest | Partial verified | 75% | Moderate | Fix empty events/live restart tests |
-| Scanner orchestration | Broad scanner execution with normalized findings | Main Docker scanners run; Stage 1 benchmark gates pass | scanner versions, E2E, final Docker benchmarks | Verified benchmark gate | 82% | Moderate | Event durability and scanner-family expansion in later stages |
-| Evidence gate | Promote stronger findings, reduce weak heuristics | Context validation now handles client-controlled auth and benchmark negative controls | code/tests/final benchmark evidence | Improved | 78% | Moderate | Finding lifecycle completion in Stage 6 |
+| Scanner orchestration | Broad scanner execution with normalized findings | Main Docker scanners run; Stage 1 benchmark gates pass across all 41 required categories | scanner versions, E2E, final Docker benchmarks | Verified benchmark gate | 86% | Moderate | Event durability and scanner-family expansion in later stages |
+| Evidence gate | Promote stronger findings, reduce weak heuristics | Context validation now handles client-controlled auth, policy/config evidence, same-line rule dedupe, and benchmark negative controls | code/tests/final benchmark evidence | Improved | 84% | Moderate | Finding lifecycle completion in Stage 6 |
 | Qwen | Local GPU model for review/actions | Live llama.cpp with 28 layers, under 5 GB | health, action smoke, VRAM | Verified local | 78% | Moderate | Durable cache/async UI; speed limited by hardware |
 | RAG | Evidence-grounded context | Lexical/graph retrieval with redaction | Qwen evidence payload | Partial | 70% | Moderate | Better source provenance/ranking |
 | Findings UX | Filter, paginate, detail, AI actions | Functional routes/build; AI actions work | build, E2E, action smoke | Partial | 78% | Moderate | Browser automation and large findings UX |
@@ -29,8 +29,8 @@ Final Docker benchmark run on 2026-07-18:
 
 | Mode | Status | Precision | Recall | F1 | False positives | False negatives | Known false negatives | Duration |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| scanner-only | passed | 1.000 | 1.000 | 1.000 | 0 | 0 | 0 | 37.044s |
-| scanner-plus-Qwen | passed | 1.000 | 1.000 | 1.000 | 0 | 0 | 0 | 76.587s |
+| scanner-only | passed | 1.000 | 1.000 | 1.000 | 0 | 0 | 0 | 37.416s |
+| scanner-plus-Qwen | passed | 1.000 | 1.000 | 1.000 | 0 | 0 | 0 | 99.575s |
 
 ## Scanner matrix
 

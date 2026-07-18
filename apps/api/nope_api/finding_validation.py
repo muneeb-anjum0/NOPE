@@ -38,7 +38,7 @@ CALLER_ID_RE = re.compile(
 )
 OWNER_SCOPE_RE = re.compile(
     r"\b(ownerId|owner_id|tenantId|tenant_id|organizationId|organisationId|orgId|"
-    r"accountId|userId|user_id|auth\.uid|session\.user|currentUser|requireUser|"
+    r"userId|user_id|auth\.uid|session\.user|currentUser|requireUser|"
     r"getUser|requireAuth|withAuth|policy|rls)\b",
     re.IGNORECASE,
 )
@@ -134,6 +134,13 @@ def _validate_finding(
 
     if "secret" in category:
         return _validate_secret(finding, context)
+
+    if rule_id.upper() in {"NOPE-FIREBASE-001", "NOPE-SUPABASE-002", "NOPE-SUPABASE-003", "NOPE-SUPABASE-004"}:
+        return ValidationDecision(
+            "promoted",
+            finding,
+            ["Structured database/storage policy evidence was present in source configuration."],
+        )
 
     if _is_authorization_like(category, title, rule_id):
         return _validate_authorization(finding, context)

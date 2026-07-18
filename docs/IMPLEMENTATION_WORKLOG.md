@@ -1067,8 +1067,8 @@ Add reproducible benchmarks and vulnerable fixtures with versioned expected outp
 - `docker compose config --quiet`: passed.
 - `docker compose build nope-api nope-worker nope-web`: passed; final rebuilt images include `nope-nope-api@sha256:9cccee15b7b1`, `nope-nope-worker@sha256:c3c698d9730c`, and `nope-nope-web@sha256:05a37327fbe7`.
 - `docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml up -d`: passed; API and worker refreshed from the Phase 12 images.
-- `docker compose run --rm --no-deps nope-api python -m nope_api.benchmarks --mode scanner-only --output /tmp/nope-benchmark-scanner-only.json`: passed; 30 actual findings, 8 true positives, 0 unexpected false negatives, 14 known false negatives, scanner sources from NOPE rules, Semgrep, OSV-Scanner, Trivy, and Bandit.
-- `docker compose run --rm --no-deps -e NOPE_AI_PROVIDER=llama.cpp -e NOPE_QWEN_ENDPOINT=http://nope-ai:8080 -e NOPE_AI_RUNTIME_URL=http://nope-ai:8080 -e NOPE_QWEN_GPU_LAYERS=28 -e NOPE_QWEN_GPU_MEMORY_TARGET_MB=5000 nope-api python -m nope_api.benchmarks --mode scanner-plus-qwen`: passed; 30 actual findings, 8 true positives, 0 unexpected false negatives, 14 known false negatives, Qwen contribution `Complete`.
+- Original Phase 12 Docker scanner-only baseline: 30 actual findings, 8 true positives, and 14 known false negatives. This historical baseline is superseded by the 2026-07-18 Stage 1 review below.
+- Original Phase 12 Docker scanner-plus-Qwen baseline: 30 actual findings, 8 true positives, and 14 known false negatives with Qwen contribution `Complete`. This historical baseline is superseded by the 2026-07-18 Stage 1 review below.
 - `docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml ps`: passed; web, API, AI, Postgres, Redis, and MinIO healthy; worker running.
 - `Invoke-RestMethod http://localhost:8000/health`: passed; scanners installed, Qwen reachable, GPU layers `28`, GPU memory target `5000`.
 - `docker compose run --rm --no-deps nope-api gitleaks detect --no-git --redact --source /app/apps/api/nope_api`: passed, no leaks found.
@@ -1078,7 +1078,40 @@ Add reproducible benchmarks and vulnerable fixtures with versioned expected outp
 
 ### Closure
 
-Phase 12 is complete for reproducible benchmark fixtures, versioned expected output, scanner-only and scanner-plus-Qwen commands, machine-readable comparison metrics, resource timing, explicit known false negatives, and documentation. Future scanner-quality phases can reduce known false negatives, but Phase 12 now makes the benchmark gaps visible and comparable.
+Phase 12 originally made benchmark gaps visible and comparable. The 2026-07-18 Stage 1 Benchmark Completion Review below supersedes this entry with the final 41-category pass and zero known false negatives.
+
+## 2026-07-18 Stage 1 Benchmark Completion Review
+
+### Goal
+
+Review Stage 1 against the original completion prompt before starting Stage 2. Fix any non-passing criterion that is locally achievable, rerun benchmark and regression tests, update documentation, commit, push, and return an evidence-based completion dossier.
+
+### Changes
+
+- Expanded the benchmark fixture contract from the earlier 22-category pass to all 41 required Stage 1 categories.
+- Added missing vulnerable fixtures for environment exposure, archive extraction, auth/reset/signup/OTP abuse, CSRF, Dockerfile, IaC, Firebase, headers, cookies, staging, build scripts, and credential logging.
+- Added deterministic NOPE rules for the new categories and taught the rule engine to scan `.tf`, `.rules`, `.env`, Dockerfile, and other benchmark-relevant text inputs.
+- Excluded benchmark control metadata from rule scanning so fixture descriptions do not become findings.
+- Fixed evidence validation so resource IDs such as `accountId` are not mistaken for owner-scope authorization and policy/config findings such as Firebase/Supabase evidence are promoted through the correct path.
+- Fixed dedupe so different rules on the same file/line are preserved instead of being merged into one finding.
+- Added Stage 1 regression tests for every required category, NOPE-rule-backed coverage, negative controls, dedupe, deterministic comparison, scanner-unavailable, scanner-timeout, Qwen-unavailable deterministic preservation, Firebase policy validation, and OSV parser normalization.
+- Refreshed benchmark/status documentation with the current 41-category Docker results.
+
+### Verification
+
+- `python -m json.tool security-packs/nope-core-rules.json`
+- `python -m json.tool benchmarks/fixtures/nope-benchmark-v1/benchmark-manifest.json`
+- `python -m json.tool benchmarks/expected/nope-benchmark-v1.expected.json`
+- `python -m pytest apps/api/tests/test_phase12_benchmarks.py apps/api/tests/test_scanners.py -vv --tb=short`: 59 passed before the final validation additions.
+- `python -m pytest apps/api/tests/test_phase12_benchmarks.py apps/api/tests/test_finding_validation.py -vv --tb=short`: 57 passed.
+- `python -m pytest apps/api/tests -vv --tb=short`: 144 passed, 2 warnings.
+- `docker compose build nope-api nope-worker`: passed.
+- `docker compose run --rm --no-deps -v "${PWD}/.nope-benchmark-results:/results" nope-api python -m nope_api.benchmarks --mode scanner-only --output /results/scanner-only.json --markdown-output /results/scanner-only.md`: passed, 41 expected, 70 actual, 41 true positives, 0 false positives, 0 false negatives, 0 known false negatives, 31 related duplicates, precision/recall/F1 `1.000`, duration `37.416s`.
+- `docker compose run --rm --no-deps -v "${PWD}/.nope-benchmark-results:/results" nope-api python -m nope_api.benchmarks --mode scanner-plus-qwen --output /results/scanner-plus-qwen.json --markdown-output /results/scanner-plus-qwen.md`: passed, 41 expected, 70 actual, 41 true positives, 0 false positives, 0 false negatives, 0 known false negatives, 31 related duplicates, precision/recall/F1 `1.000`, duration `99.575s`, Qwen status `Complete`.
+
+### Result
+
+Stage 1 is complete for the locally achievable scope. Stage 2 was not started.
 
 ## 2026-07-16 Phase 13 Test Expansion
 

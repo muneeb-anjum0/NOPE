@@ -1,5 +1,8 @@
 import asyncio
+import json
 from pathlib import Path
+
+import pytest
 
 from nope_api import benchmarks
 from nope_api.benchmarks import (
@@ -8,8 +11,8 @@ from nope_api.benchmarks import (
     validate_expected_manifest,
     validate_fixture_manifest,
 )
-from nope_api.models import Confidence, Finding, Scan, ScanMode, ScannerRun, Severity
-from nope_api.rules_engine import run_rules
+from nope_api.models import AIReview, Confidence, Finding, Scan, ScanMode, ScannerRun, Severity
+from nope_api.rules_engine import dedupe_findings, run_rules
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -56,6 +59,38 @@ def test_phase12_expected_output_is_versioned_and_machine_readable():
     assert all("severity" in item and "confidence" in item and "cwe" in item for item in expected["expected_findings"])
 
 
+@pytest.mark.parametrize("category_id", REQUIRED_BENCHMARK_CATEGORIES)
+def test_phase12_each_required_category_has_a_detection_contract(category_id):
+    manifest = benchmarks.load_json(FIXTURE / "benchmark-manifest.json")
+    expected = benchmarks.load_json(EXPECTED)
+    manifest_items = {item["id"]: item for item in manifest["categories"]}
+    expected_items = {item["id"]: item for item in expected["expected_findings"]}
+
+    assert category_id in manifest_items
+    assert category_id in expected_items
+    assert (FIXTURE / manifest_items[category_id]["file"]).exists()
+    assert expected_items[category_id]["match"]["any"]
+    assert expected_items[category_id]["expected_scanner"]
+
+
+def test_phase12_nope_rules_detect_all_rule_backed_categories():
+    expected = benchmarks.load_json(EXPECTED)
+    rule_expected = {
+        **expected,
+        "expected_findings": [
+            item for item in expected["expected_findings"] if item["expected_scanner"] == "NOPE rules"
+        ],
+    }
+    scan = Scan(mode=ScanMode.repository)
+    scan.findings = run_rules(FIXTURE)
+
+    metrics = compare_findings(scan, rule_expected)
+
+    assert metrics["false_negatives"] == []
+    assert metrics["known_false_negatives"] == []
+    assert metrics["recall"] == 1.0
+
+
 def test_phase12_negative_controls_are_not_flagged_by_nope_rules():
     findings = run_rules(FIXTURE)
     files = {finding.affected_file for finding in findings}
@@ -87,6 +122,111 @@ def test_compare_findings_tracks_true_positive_false_positive_and_known_false_ne
     assert metrics["false_negatives"] == []
     assert metrics["precision"] == 0.5
     assert metrics["recall"] == 0.5
+
+
+def test_compare_findings_is_deterministic_for_same_scan():
+    expected = {
+        "expected_findings": [
+            {"id": "secret", "category": "Secrets", "file": "src/secret.ts", "match": {"any": ["secret"]}},
+        ]
+    }
+    scan = Scan(mode=ScanMode.repository)
+    scan.findings = [finding("Potential hardcoded secret", "Secrets", "src/secret.ts", "NOPE-SEC-001")]
+
+    first = compare_findings(scan, expected)
+    second = compare_findings(scan, expected)
+
+    assert first == second
+
+
+def test_phase12_distinct_rules_on_same_line_are_not_deduped():
+    first = finding("Debug endpoint exposes runtime internals", "Staging", "scripts/build.js", "NOPE-DEBUG-001")
+    second = finding("Build script executes caller-controlled shell", "CI/CD", "scripts/build.js", "NOPE-BUILD-001")
+    for item in (first, second):
+        item.start_line = 3
+        item.end_line = 3
+
+    merged = dedupe_findings([first, second])
+
+    assert len(merged) == 2
+    assert {item.original_rule_id for item in merged} == {"NOPE-DEBUG-001", "NOPE-BUILD-001"}
+
+
+def write_tiny_expected(tmp_path: Path) -> Path:
+    expected = {
+        "benchmark_id": "tiny-benchmark",
+        "version": 1,
+        "expected_findings": [
+            {
+                "id": "backend-hardcoded-secret",
+                "category": "Secrets",
+                "file": "src/config/secrets.ts",
+                "line": 1,
+                "severity": "high",
+                "confidence": "high",
+                "cwe": "CWE-798",
+                "owasp": "A02:2021-Cryptographic Failures",
+                "expected_scanner": "NOPE rules",
+                "qwen_enrichment_expected": True,
+                "dedupe_expected": True,
+                "match": {"any": ["secret", "NOPE-SEC-001"]},
+            }
+        ],
+    }
+    path = tmp_path / "expected.json"
+    path.write_text(json.dumps(expected), encoding="utf-8")
+    return path
+
+
+def test_run_benchmark_fails_when_scanner_is_unavailable(monkeypatch, tmp_path):
+    async def fake_run_repository_scan(scan, root, settings):
+        scan.status = "partial"
+        scan.findings = [finding("Potential hardcoded secret", "Secrets", "src/config/secrets.ts", "NOPE-SEC-001")]
+        scan.scanner_runs = [ScannerRun(scanner="Semgrep", status="failed", message="scanner unavailable")]
+        return scan
+
+    monkeypatch.setattr(benchmarks, "run_repository_scan", fake_run_repository_scan)
+    result = asyncio.run(benchmarks.run_benchmark(FIXTURE, write_tiny_expected(tmp_path), "scanner-only"))
+
+    assert result["status"] == "failed"
+    assert result["scan"]["failed_scanners"][0]["scanner"] == "Semgrep"
+    assert "unavailable" in result["scan"]["failed_scanners"][0]["message"]
+
+
+def test_run_benchmark_fails_when_scanner_times_out(monkeypatch, tmp_path):
+    async def fake_run_repository_scan(scan, root, settings):
+        scan.status = "partial"
+        scan.findings = [finding("Potential hardcoded secret", "Secrets", "src/config/secrets.ts", "NOPE-SEC-001")]
+        scan.scanner_runs = [ScannerRun(scanner="Trivy", status="failed", message="scanner timeout after 300s")]
+        return scan
+
+    monkeypatch.setattr(benchmarks, "run_repository_scan", fake_run_repository_scan)
+    result = asyncio.run(benchmarks.run_benchmark(FIXTURE, write_tiny_expected(tmp_path), "scanner-only"))
+
+    assert result["status"] == "failed"
+    assert result["scan"]["failed_scanners"][0]["scanner"] == "Trivy"
+    assert "timeout" in result["scan"]["failed_scanners"][0]["message"]
+
+
+def test_run_benchmark_preserves_deterministic_pass_when_qwen_is_unavailable(monkeypatch, tmp_path):
+    expected = benchmarks.load_json(EXPECTED)
+
+    async def fake_run_repository_scan(scan, root, settings):
+        scan.status = "completed"
+        scan.findings = [
+            finding(str(item["match"]["any"][0]), str(item["category"]), str(item["file"]), str(item["id"]))
+            for item in expected["expected_findings"]
+        ]
+        scan.scanner_runs = [ScannerRun(scanner="NOPE rules", status="passed", findings_count=len(scan.findings))]
+        scan.ai_review = AIReview(status="Failed", provider="qwen", model="local", message="Qwen unavailable")
+        return scan
+
+    monkeypatch.setattr(benchmarks, "run_repository_scan", fake_run_repository_scan)
+    result = asyncio.run(benchmarks.run_benchmark(FIXTURE, EXPECTED, "scanner-plus-qwen"))
+
+    assert result["status"] == "passed"
+    assert result["qwen_contribution"]["status"] == "Failed"
+    assert result["metrics"]["recall"] == 1.0
 
 
 def test_run_benchmark_emits_result_schema(monkeypatch):

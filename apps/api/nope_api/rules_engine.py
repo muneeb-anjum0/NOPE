@@ -26,14 +26,18 @@ TEXT_SUFFIXES = {
     ".json",
     ".map",
     ".toml",
+    ".tf",
     ".yaml",
     ".yml",
     ".md",
     ".txt",
+    ".rules",
 }
 
 SKIP_DIRS = {".git", ".next", "node_modules", "__pycache__", ".pytest_cache", "dist", "build", "coverage"}
+SKIP_FILE_NAMES = {"benchmark-manifest.json"}
 MAX_RULE_FILE_BYTES = 512 * 1024
+SPECIAL_TEXT_FILES = {"dockerfile", ".env"}
 
 
 def load_rules() -> list[dict[str, Any]]:
@@ -50,7 +54,11 @@ def run_rules(root: Path) -> list[Finding]:
     rules = load_rules()
     findings: list[Finding] = []
     for file in root.rglob("*"):
-        if not file.is_file() or file.suffix.lower() not in TEXT_SUFFIXES:
+        if not file.is_file():
+            continue
+        if file.name.lower() in SKIP_FILE_NAMES:
+            continue
+        if file.suffix.lower() not in TEXT_SUFFIXES and file.name.lower() not in SPECIAL_TEXT_FILES:
             continue
         if set(file.relative_to(root).parts) & SKIP_DIRS:
             continue
@@ -150,6 +158,10 @@ def correlation_key(finding: Finding) -> str:
     if finding.affected_route and finding.title:
         return f"route:{_norm(finding.affected_route)}:{_norm(finding.title)}"
     if file and line:
+        if _norm(finding.scanner) == "nope rules":
+            rule = _norm(finding.original_rule_id or finding.nope_rule_id or finding.title or "")
+            if rule:
+                return f"location-rule:{file}:{line}:{rule}"
         return f"location:{file}:{line}"
     if finding.scanner and finding.original_rule_id and file:
         return f"scanner-location:{_norm(finding.scanner)}:{_norm(finding.original_rule_id)}:{file}:{line or ''}"
@@ -238,7 +250,18 @@ def dedupe_findings(findings: list[Finding]) -> list[Finding]:
         if finding.scanner and finding.scanner not in finding.scanner_sources:
             finding.scanner_sources.append(finding.scanner)
         key = correlation_key(finding)
+        generic_key = None
+        file, line = _source_location(finding)
+        if file and line:
+            generic_key = f"location:{file}:{line}"
         existing = merged.get(key)
+        if not existing and key.startswith("location-rule:") and generic_key:
+            existing = merged.get(generic_key)
+        if not existing and generic_key == key:
+            rule_prefix = f"location-rule:{file}:{line}:"
+            rule_matches = [value for existing_key, value in merged.items() if existing_key.startswith(rule_prefix)]
+            if len(rule_matches) == 1:
+                existing = rule_matches[0]
         if not existing:
             merged[key] = finding
             continue

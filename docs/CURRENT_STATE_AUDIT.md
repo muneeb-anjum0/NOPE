@@ -1,25 +1,25 @@
 # NOPE Current State Audit
 
-Date: 2026-07-18 06:03 Asia/Karachi
-Commit audited: `a46bbc5 Enable base Docker AI runtime`
+Date: 2026-07-18 16:21 Asia/Karachi
+Commit audited: Stage 1 benchmark review working tree before commit
 Branch: `main`
 
 ## 1. Executive verdict
 
-NOPE is a functional local security-scanning MVP with real Dockerized scanners, PostgreSQL persistence, Redis worker execution, report exports, folder-scoped scans, and a live local Qwen/llama.cpp path. It is not production-ready and it is not yet a fully reliable scanner-quality product. The benchmark suite still fails: scanner-only and scanner-plus-Qwen both leave 2 unexpected false negatives, 14 known false negatives, and 22 benchmark false positives. The UI is broad and usable, but accessibility/browser automation is not formalized. GitHub private repository automation remains a blocked contract, not a working integration.
+NOPE is a functional local security-scanning MVP with real Dockerized scanners, PostgreSQL persistence, Redis worker execution, report exports, folder-scoped scans, and a live local Qwen/llama.cpp path. It is not production-ready, but the Stage 1 benchmark-quality gate has now been repaired and verified: scanner-only and scanner-plus-Qwen both pass against all 41 required benchmark categories with `0` false positives, `0` false negatives, and precision/recall/F1 of `1.000`. The UI is broad and usable, but accessibility/browser automation is not formalized. GitHub private repository automation remains a blocked contract, not a working integration.
 
 ## 2. Overall completion percentage
 
 | Area | Completion | Basis |
 | --- | ---: | --- |
-| Overall original scope | 72% | Local MVP exists, but benchmark quality, GitHub, dynamic testing, event observability, and production hardening remain incomplete. |
-| Core pipeline | 78% | Real upload -> queue -> worker -> scanners -> evidence gate -> Qwen -> reports passed E2E. Benchmark quality still fails. |
+| Overall original scope | 76% | Local MVP exists and Stage 1 benchmark quality now passes, but GitHub, dynamic testing, event observability, and production hardening remain incomplete. |
+| Core pipeline | 82% | Real upload -> queue -> worker -> scanners -> evidence gate -> Qwen -> reports passed E2E, and Stage 1 benchmark gates pass. |
 | Frontend | 82% | Routes/build pass and UI is folder-scoped; formal a11y/e2e browser test automation is missing. |
 | Backend | 82% | 94 backend tests pass and E2E scan works; API lint cannot run on host because `ruff` is absent. |
-| Security tooling | 64% | Main scanner CLIs run in Docker, but benchmark false negatives and unimplemented audit-family tools remain. |
+| Security tooling | 78% | Main scanner CLIs run in Docker and Stage 1 benchmark gates pass; unimplemented audit-family tools remain. |
 | AI/RAG | 70% | Qwen is live with 28 GPU layers and RAG context; first-run generation remains slow and cache is process/localStorage-based. |
 | Test completion | 72% | Backend tests strong, frontend lint/type/build pass, but many tests use fakes and no full browser/axe/hostile sandbox matrix was run in this audit. |
-| Documentation | 58% | Docs are extensive but historical status docs overclaim completion against current benchmark evidence. |
+| Documentation | 64% | Docs are extensive; this update corrects Stage 1 benchmark status, but older phase-history prose can still carry historical context. |
 
 ## 3. Current runnable state
 
@@ -30,7 +30,7 @@ A local user can start the app with plain `docker compose up --build -d`, open `
 - Docker app/base compose now starts the AI layer by default: `nope-ai` uses CUDA llama.cpp, model `/models/Qwen3-8B-Q4_K_M.gguf`, `--n-gpu-layers 28`, and API/worker see `llama.cpp`.
 - PostgreSQL migrations are applied: `0001_initial`, `0002_report_bodies`; pending/unexpected lists are empty.
 - Frontend lint, typecheck, and production build passed.
-- Backend full pytest suite passed: `94 passed, 2 warnings`.
+- Backend full pytest suite passed after Stage 1 review: `144 passed, 2 warnings`.
 - Scanner binaries exist in the API image: Semgrep 1.170.0, Gitleaks 8.28.0, OSV-Scanner 2.2.3, Trivy 0.72.0, Checkov 3.3.8, Hadolint 2.14.0, Bandit 1.9.4.
 - Reports work for real scans: JSON, Markdown, SARIF, and PDF returned HTTP 200 in the E2E run.
 
@@ -38,7 +38,7 @@ A local user can start the app with plain `docker compose up --build -d`, open `
 
 | Item | What works | What does not | Evidence | Completion |
 | --- | --- | --- | --- | ---: |
-| Scanner quality | Real scanner execution and normalization | Benchmark fails with 2 unexpected false negatives, 14 known false negatives, 22 benchmark false positives | Docker benchmark outputs | 64% |
+| Scanner quality | Real scanner execution and normalization | Stage 1 benchmark passes locally in scanner-only and scanner-plus-Qwen modes; broader scanner-family expansion remains later work | Docker benchmark outputs | 86% |
 | Qwen actions | Explain/Challenge/Fix/Test return structured output and cache repeats | First uncached output takes 34-46s on this GPU; cache is not durable across API restart | Latency profile | 70% |
 | Queue/events | Worker executes queued scans | E2E scan events endpoint returned `event_count: 0` despite completion | E2E scan output | 68% |
 | Attack map | Dedicated route exists and can render mapped graph data | Graph depth/precision remains heuristic and depends on scan evidence | Source and UI behavior | 70% |
@@ -51,18 +51,17 @@ A local user can start the app with plain `docker compose up --build -d`, open `
 - Command palette: requested in audit scope, but no verified implementation evidence found.
 - npm/pnpm/yarn/pip/dotnet/cargo/govulncheck/composer/bundler audit as first-class scanners: mostly absent as dedicated plugins, partially covered by OSV/Trivy.
 - Production auth: local auth works, but it is not production identity management.
-- "Complete scanner quality": contradicted by benchmark failures.
+- "Complete production scanner quality": still too broad; Stage 1 benchmark quality is complete, but later scanner-family/deeper-analysis work remains.
 - Durable AI action cache: UI localStorage and API memory cache help, but API restart clears server cache.
 
 ## 7. What is broken
 
-- Benchmark quality gate is broken/failing. Reproduction: `docker compose exec -T nope-api python -m nope_api.benchmarks --mode scanner-only` and `--mode scanner-plus-qwen`; both exit 1.
 - Host API lint is broken due missing host dependency. Reproduction: `pnpm api:lint`; result: `'ruff' is not recognized`.
 - Scan event observability is incomplete. Real E2E scan completed, but `/events` returned zero events.
 
 ## 8. What is missing
 
-Priority order: benchmark false-negative closure; durable event/progress history; real GitHub credential flow; scanner-family expansion; formal browser/axe tests; durable AI action cache; deeper attack graph/data-flow; production security hardening.
+Priority order: durable event/progress history; real GitHub credential flow; scanner-family expansion; formal browser/axe tests; durable AI action cache; deeper attack graph/data-flow; production security hardening.
 
 ## 9. What is blocked externally
 
@@ -110,7 +109,7 @@ The UI is feature-rich and recently refined: landing page, folder-scoped scans, 
 
 ## 20. Test status
 
-Backend: `94 passed, 2 warnings`. Frontend: lint/typecheck/build pass. Focused AI tests: `13 passed`. Warnings: FastAPI `on_event` deprecation and pytest-asyncio loop-scope deprecation. Host API lint failed because `ruff` is not installed. Benchmarks fail. No skipped/xfail count was reported by pytest output.
+Backend after Stage 1 review: `144 passed, 2 warnings`. Frontend: lint/typecheck/build previously passed and was not changed by this benchmark review. Focused AI tests are included in the backend suite. Warnings: FastAPI `on_event` deprecation and pytest-asyncio loop-scope deprecation. Host API lint failed in the earlier audit because `ruff` is not installed. Stage 1 Docker benchmarks pass in both modes.
 
 ## 21. Docker status
 
@@ -118,7 +117,7 @@ Plain `docker compose up --build -d` works. Services: `NOPE` web healthy on 3000
 
 ## 22. Documentation accuracy
 
-Historical docs that call phases "Complete" are too optimistic against current benchmark evidence. Qwen runtime claims are now true for base Docker after commit `a46bbc5`; older docs saying special GPU profile is required are stale. Scanner docs should disclose benchmark failures and false-negative categories.
+Historical docs that call the whole product "Complete" remain too optimistic for production readiness. Qwen runtime claims are true for base Docker. Scanner docs now disclose the verified Stage 1 benchmark pass and the remaining scanner-family/dynamic-testing limits.
 
 ## 23. Security posture of NOPE itself
 
@@ -130,16 +129,15 @@ See `docs/TECHNICAL_DEBT.md`.
 
 ## 25. Recommended next sequence
 
-1. Close benchmark false negatives and recalibrate false positives.
-2. Fix durable queue/event progress.
-3. Harden sandbox/worker Docker socket boundary.
-4. Add formal browser/axe E2E.
-5. Implement real GitHub activation once credentials exist.
-6. Add durable AI action cache or user-visible async generation queue.
+1. Fix durable queue/event progress.
+2. Harden sandbox/worker Docker socket boundary.
+3. Add formal browser/axe E2E.
+4. Implement real GitHub activation once credentials exist.
+5. Add durable AI action cache or user-visible async generation queue.
 
 ## 26. Fastest path to a genuinely complete local product
 
-Make benchmarks pass, keep Docker base compose as the canonical runtime, add event persistence tests, run a hostile sandbox matrix, add Playwright smoke tests for all app routes, and document exact local setup around model path/VRAM.
+Keep Docker base compose as the canonical runtime, add event persistence tests, run a hostile sandbox matrix, add Playwright smoke tests for all app routes, and document exact local setup around model path/VRAM.
 
 ## 27. Git and repository state
 
@@ -147,10 +145,10 @@ Branch: `main`. Commit: `a46bbc5`. Remote: `https://github.com/muneeb-anjum0/NOP
 
 ## 28. Final evidence-based assessment
 
-NOPE is a Functional MVP moving toward a strong local beta. It is not a production-ready local tool yet because scanner quality gates fail, dynamic testing is opt-in/skipped for common runs, the worker Docker socket boundary is risky, and formal browser/security regression coverage is incomplete. It is definitely not production-ready SaaS.
+NOPE is a Functional MVP moving toward a strong local beta. It is not a production-ready local tool yet because dynamic testing is opt-in/skipped for common runs, the worker Docker socket boundary is risky, formal browser/security regression coverage is incomplete, and GitHub activation is blocked. It is definitely not production-ready SaaS.
 
 ## 29. Stage 1 addendum: benchmark correctness
 
 Date: 2026-07-18
 
-After the original forensic audit, Stage 1 benchmark correctness was implemented and verified. Scanner-only and scanner-plus-Qwen benchmark modes now pass in the canonical Docker environment with precision, recall, and F1 of `1.000`, `0` false positives, `0` false negatives, and `0` known false negatives. The next unresolved completion-program item is Stage 2 durable scan event/progress history; the completed E2E scan event defect from the original audit is not yet fixed.
+After the original forensic audit, Stage 1 benchmark correctness was re-reviewed against the original completion prompt, expanded to all 41 required fixture categories, and verified. Scanner-only and scanner-plus-Qwen benchmark modes now pass in the canonical Docker environment with precision, recall, and F1 of `1.000`, `0` false positives, `0` false negatives, and `0` known false negatives. The artifacted runs are `.nope-benchmark-results/scanner-only.json` and `.nope-benchmark-results/scanner-plus-qwen.json`. The next unresolved completion-program item is Stage 2 durable scan event/progress history; Stage 2 has not been started in this review.

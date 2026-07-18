@@ -135,3 +135,46 @@ def test_secret_in_generated_output_is_still_promoted(tmp_path: Path):
 
     assert len(promoted) == 1
     assert validation_counts(decisions)["promoted"] == 1
+
+
+def test_firebase_policy_evidence_is_promoted(tmp_path: Path):
+    rules = tmp_path / "firebase.rules"
+    rules.write_text(
+        "service cloud.firestore {\n"
+        "  match /databases/{database}/documents {\n"
+        "    allow read, write: if true;\n"
+        "  }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    finding = Finding(
+        fingerprint="firebase-public",
+        scanner="NOPE rules",
+        original_rule_id="NOPE-FIREBASE-001",
+        nope_rule_id="NOPE-FIREBASE-001",
+        title="Firebase rules allow public access",
+        description="Firebase security rules appear to allow all reads or writes.",
+        severity=Severity.critical,
+        confidence=Confidence.high,
+        category="Authorization",
+        affected_file="firebase.rules",
+        start_line=3,
+        end_line=3,
+        scanner_sources=["NOPE rules"],
+        evidence=[
+            Evidence(
+                source="NOPE-FIREBASE-001",
+                file="firebase.rules",
+                line=3,
+                end_line=3,
+                snippet="allow read, write: if true;",
+                message="Matched NOPE rule NOPE-FIREBASE-001.",
+            )
+        ],
+        remediation="Require authenticated users and ownership checks.",
+    )
+
+    promoted, decisions = validate_findings([finding], tmp_path)
+
+    assert len(promoted) == 1
+    assert validation_counts(decisions)["promoted"] == 1

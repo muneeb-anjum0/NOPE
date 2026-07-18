@@ -8,7 +8,7 @@ NOPE includes a reproducible local benchmark fixture and a machine-readable runn
 - Manifest: `benchmarks/fixtures/nope-benchmark-v1/benchmark-manifest.json`
 - Expected output: `benchmarks/expected/nope-benchmark-v1.expected.json`
 
-The fixture intentionally covers hardcoded secrets, frontend secrets, SQL injection, NoSQL injection, command injection, XSS, unsafe HTML, SSRF, path traversal, file upload, IDOR, missing tenant scope, frontend-only authorization, insecure CORS, missing rate limit, AI cost abuse, vulnerable dependency, debug endpoint, public source map, unsafe Supabase RLS, public storage bucket, and tracker-before-consent.
+The fixture intentionally covers 41 Stage 1 categories: backend and frontend secrets, committed `.env`, public source maps, SQL and NoSQL injection, command injection, stored/reflected XSS, unsafe HTML rendering, SSRF, path traversal, unsafe archive extraction, unsafe upload handling, IDOR, missing ownership and tenant scope, frontend-only authorization, authentication bypass, weak password reset, login brute force, signup abuse, OTP flooding, missing API rate limiting, AI cost abuse, insecure CORS, missing CSRF protection, vulnerable dependencies, unsafe Dockerfile, unsafe IaC, debug/staging exposure, missing and overly permissive Supabase RLS, public Supabase storage, permissive Firebase rules, tracker-before-consent, missing security headers, unsafe cookies, shell-command injection in build scripts, and credential leakage in logs/config.
 
 It also includes safe negative controls for parameterized SQL, correctly scoped authorization, consent-gated trackers, and placeholder/example secrets.
 
@@ -71,8 +71,8 @@ Verified on 2026-07-18 from the canonical Docker stack after rebuilding:
 
 | Mode | Status | Expected | Actual | TP | FP | FN | Known FN | Related duplicates | Precision | Recall | F1 | Duration |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| scanner-only | passed | 22 | 43 | 22 | 0 | 0 | 0 | 22 | 1.000 | 1.000 | 1.000 | 37.044s |
-| scanner-plus-Qwen | passed | 22 | 43 | 22 | 0 | 0 | 0 | 22 | 1.000 | 1.000 | 1.000 | 76.587s |
+| scanner-only | passed | 41 | 70 | 41 | 0 | 0 | 0 | 31 | 1.000 | 1.000 | 1.000 | 37.416s |
+| scanner-plus-Qwen | passed | 41 | 70 | 41 | 0 | 0 | 0 | 31 | 1.000 | 1.000 | 1.000 | 99.575s |
 
 The duplicate count represents related supporting evidence from multiple scanners or overlapping expected fixture concepts. It is not counted as a false positive when it is tied to a matched expected file/category.
 

@@ -6,6 +6,7 @@ from nope_api.models import Severity
 from nope_api.scanners import (
     BanditPlugin,
     GitleaksPlugin,
+    OsvScannerPlugin,
     ScannerPlugin,
     SemgrepPlugin,
     TrivyPlugin,
@@ -95,6 +96,31 @@ def test_bandit_parser_normalizes_python_issues(tmp_path):
     assert findings[0].affected_file == "app.py"
     assert findings[0].severity == Severity.low
     assert findings[0].scanner_sources == ["Bandit"]
+
+
+def test_osv_parser_normalizes_vulnerable_dependencies(tmp_path):
+    payload = {
+        "results": [
+            {
+                "source": {"path": str(tmp_path / "package-lock.json")},
+                "packages": [
+                    {
+                        "package": {"name": "lodash"},
+                        "vulnerabilities": [
+                            {"id": "GHSA-test-0001", "summary": "Prototype pollution"}
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    findings = OsvScannerPlugin().parse_results(json.dumps(payload), "", tmp_path)
+
+    assert findings[0].affected_file == "package-lock.json"
+    assert findings[0].category == "Dependencies"
+    assert findings[0].scanner_sources == ["OSV-Scanner"]
+    assert findings[0].cve == "GHSA-test-0001"
 
 
 class EchoScanner(ScannerPlugin):

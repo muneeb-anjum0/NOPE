@@ -12,28 +12,47 @@ from nope_api.scan_engine import run_repository_scan
 
 
 REQUIRED_BENCHMARK_CATEGORIES = [
-    "hardcoded-secret",
-    "frontend-secret",
+    "backend-hardcoded-secret",
+    "frontend-exposed-secret",
+    "env-exposure",
+    "public-source-map",
     "sql-injection",
     "nosql-injection",
     "command-injection",
-    "xss",
+    "stored-xss",
+    "reflected-xss",
     "unsafe-html",
     "ssrf",
     "path-traversal",
+    "unsafe-archive-extraction",
     "file-upload",
     "idor",
+    "missing-ownership-check",
     "missing-tenant-scope",
     "frontend-only-authorization",
+    "authentication-bypass",
+    "weak-password-reset",
+    "login-brute-force",
+    "signup-abuse",
+    "otp-flooding",
     "insecure-cors",
-    "missing-rate-limit",
+    "missing-csrf-protection",
+    "missing-api-rate-limit",
     "ai-cost-abuse",
     "vulnerable-dependency",
+    "unsafe-dockerfile",
+    "unsafe-iac",
     "debug-endpoint",
-    "public-source-map",
-    "unsafe-supabase-rls",
-    "public-storage-bucket",
+    "staging-exposure",
+    "supabase-missing-rls",
+    "supabase-overly-permissive-rls",
+    "public-supabase-storage-bucket",
+    "firebase-permissive-rules",
     "tracker-before-consent",
+    "missing-security-headers",
+    "unsafe-cookie-configuration",
+    "shell-command-injection-build-script",
+    "credential-leakage-logs",
 ]
 
 
@@ -89,6 +108,23 @@ def write_markdown(path: Path, payload: dict[str, Any]) -> None:
         lines.append("- None")
     lines.extend(["", "## Per Scanner", ""])
     lines.extend(f"- `{scanner}`: `{count}`" for scanner, count in sorted(metrics["scanner_source"].items()))
+    lines.extend(["", "## Per-Category Metrics", ""])
+    for category, bucket in sorted(metrics.get("per_category", {}).items()):
+        lines.append(
+            f"- `{category}`: precision `{bucket['precision']:.3f}`, recall `{bucket['recall']:.3f}`, "
+            f"F1 `{bucket['f1']:.3f}`"
+        )
+    lines.extend(["", "## Per-Expected-Scanner Metrics", ""])
+    for scanner, bucket in sorted(metrics.get("per_scanner", {}).items()):
+        lines.append(
+            f"- `{scanner}`: precision `{bucket['precision']:.3f}`, recall `{bucket['recall']:.3f}`, "
+            f"F1 `{bucket['f1']:.3f}`"
+        )
+    lines.extend(["", "## Scanner Health Summary", ""])
+    failed = payload["scan"].get("failed_scanners", [])
+    skipped = payload["scan"].get("skipped_scanners", [])
+    lines.append(f"- Failed scanners: `{len(failed)}`")
+    lines.append(f"- Skipped scanners: `{len(skipped)}`")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -213,6 +249,46 @@ def _score(tp: int, fp: int, fn: int, expected_count: int) -> dict[str, float]:
     return {"precision": precision, "recall": recall, "f1": f1}
 
 
+def _bucket_metrics(expected_items: list[dict[str, Any]], matched_ids: set[str], false_positive_payloads: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    by_category: dict[str, dict[str, Any]] = {}
+    for item in expected_items:
+        category = str(item.get("category") or "unknown")
+        bucket = by_category.setdefault(category, {"expected": 0, "true_positives": 0, "false_negatives": 0, "false_positives": 0})
+        bucket["expected"] += 1
+        if str(item.get("id")) in matched_ids:
+            bucket["true_positives"] += 1
+        else:
+            bucket["false_negatives"] += 1
+    for finding in false_positive_payloads:
+        category = str(finding.get("category") or "unknown")
+        bucket = by_category.setdefault(category, {"expected": 0, "true_positives": 0, "false_negatives": 0, "false_positives": 0})
+        bucket["false_positives"] += 1
+    for bucket in by_category.values():
+        scores = _score(bucket["true_positives"], bucket["false_positives"], bucket["false_negatives"], bucket["expected"])
+        bucket.update(scores)
+    return by_category
+
+
+def _scanner_metrics(expected_items: list[dict[str, Any]], matched_ids: set[str], false_positive_payloads: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    by_scanner: dict[str, dict[str, Any]] = {}
+    for item in expected_items:
+        scanner = str(item.get("expected_scanner") or "unknown")
+        bucket = by_scanner.setdefault(scanner, {"expected": 0, "true_positives": 0, "false_negatives": 0, "false_positives": 0})
+        bucket["expected"] += 1
+        if str(item.get("id")) in matched_ids:
+            bucket["true_positives"] += 1
+        else:
+            bucket["false_negatives"] += 1
+    for finding in false_positive_payloads:
+        scanner = str(finding.get("scanner") or "unknown")
+        bucket = by_scanner.setdefault(scanner, {"expected": 0, "true_positives": 0, "false_negatives": 0, "false_positives": 0})
+        bucket["false_positives"] += 1
+    for bucket in by_scanner.values():
+        scores = _score(bucket["true_positives"], bucket["false_positives"], bucket["false_negatives"], bucket["expected"])
+        bucket.update(scores)
+    return by_scanner
+
+
 def compare_findings(scan: Scan, expected: dict[str, Any]) -> dict[str, Any]:
     findings = scan.findings
     matched_fingerprints: set[str] = set()
@@ -254,6 +330,7 @@ def compare_findings(scan: Scan, expected: dict[str, Any]) -> dict[str, Any]:
     for finding in findings:
         for source in finding.scanner_sources or [finding.scanner or "unknown"]:
             by_scanner[source] = by_scanner.get(source, 0) + 1
+    matched_ids = {item["expected_id"] for item in true_positives}
     scores = _score(
         len(true_positives),
         len(false_positives),
@@ -272,6 +349,8 @@ def compare_findings(scan: Scan, expected: dict[str, Any]) -> dict[str, Any]:
         "precision": scores["precision"],
         "recall": scores["recall"],
         "f1": scores["f1"],
+        "per_category": _bucket_metrics(expected.get("expected_findings", []), matched_ids, false_positives),
+        "per_scanner": _scanner_metrics(expected.get("expected_findings", []), matched_ids, false_positives),
         "scanner_source": by_scanner,
         "fix_verification": {
             "fix_available_findings": sum(1 for finding in findings if finding.fix_available),
@@ -314,10 +393,18 @@ async def run_benchmark(fixture: Path, expected_path: Path, mode: str, settings:
     resources = _resource_usage(started_wall, started_cpu)
     comparison = compare_findings(scan, expected)
     ai_review = scan.ai_review.model_dump(mode="json")
+    failed_scanners = [run.model_dump(mode="json") for run in scan.scanner_runs if run.status == "failed"]
+    skipped_scanners = [run.model_dump(mode="json") for run in scan.scanner_runs if run.status == "skipped"]
+    coverage_reductions = []
+    for record in scan.coverage:
+        status_value = getattr(record.status, "value", record.status)
+        if str(status_value) in {"failed", "not_tested", "not_applicable"}:
+            coverage_reductions.append(record.model_dump(mode="json"))
     status = "passed"
     if (
         manifest_errors
         or expected_errors
+        or failed_scanners
         or comparison["false_negatives"]
         or comparison["known_false_negatives"]
         or comparison["precision"] < 0.90
@@ -343,6 +430,9 @@ async def run_benchmark(fixture: Path, expected_path: Path, mode: str, settings:
                 "max_rss_bytes": resources.max_rss_bytes,
             },
             "coverage_percent": scan.coverage_percent,
+            "failed_scanners": failed_scanners,
+            "skipped_scanners": skipped_scanners,
+            "coverage_reductions": coverage_reductions,
             "score": scan.score,
             "verdict": scan.verdict,
             "scanner_runs": [run.model_dump(mode="json") for run in scan.scanner_runs],
@@ -355,6 +445,11 @@ async def run_benchmark(fixture: Path, expected_path: Path, mode: str, settings:
             "model": ai_review.get("model"),
             "evidence_provided": ai_review.get("evidence_provided", []),
             "message": ai_review.get("message"),
+        },
+        "reproducibility": {
+            "fixture_manifest_version": load_json(fixture / "benchmark-manifest.json").get("version"),
+            "expected_version": expected.get("version"),
+            "required_categories": REQUIRED_BENCHMARK_CATEGORIES,
         },
     }
 
