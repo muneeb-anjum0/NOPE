@@ -39,3 +39,4 @@ jobs:
           name: scanner-only-benchmark
           path: .nope-benchmark-results/
           if-no-files-found: error
+          include-hidden-files: true
