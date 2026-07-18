@@ -173,6 +173,21 @@ Scanner failures are not hidden. They are recorded as failed or not-applicable c
 
 Raw candidate findings that fail evidence validation are also not hidden. The scan stage audit records how many candidates were promoted, withheld for more context, or rejected before the dashboard Findings view was populated.
 
+### How does dynamic scanning work?
+
+Stage 4 supports four scan modes:
+
+- static repository scans
+- authorized URL scans
+- repository build-and-run dynamic scans
+- combined repository-plus-URL scans
+
+Repository dynamic scanning is opt-in through `.nope/sandbox.json`. For supported manifests, NOPE runs allowlisted Node or Python build/start commands, waits for readiness, creates a private Docker network, runs OWASP ZAP baseline against only the internal app container, captures the ZAP version/config/raw JSON report, parses alerts into normal findings, and tears everything down.
+
+Supported initial app starts are `node server.js`, `python app.py`, and `python -m http.server 8080 --bind 0.0.0.0`. External URL scans remain non-destructive and scope-checked; ZAP is not pointed at arbitrary public hosts.
+
+In short: **dynamic testing is real when a repository declares a safe supported runtime, and skipped/partial/failed states are reported honestly.**
+
 ---
 
 ## Data Flow Diagram

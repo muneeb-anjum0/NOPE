@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     sandbox_log_bytes: int = 64 * 1024
     sandbox_network_enabled: bool = False
     sandbox_allow_images: str = "node:,python:,ghcr.io/zaproxy/zaproxy:"
-    sandbox_allow_commands: str = "python -m compileall .,python -m http.server 8080,python -m http.server 8080 --bind 0.0.0.0,pytest -q,npm test,npm run test,npm run build,pnpm test,pnpm build,yarn test,yarn build"
+    sandbox_allow_commands: str = "python -m compileall .,python app.py,python -m http.server 8080,python -m http.server 8080 --bind 0.0.0.0,node server.js,pytest -q,npm test,npm run test,npm run build,pnpm test,pnpm build,yarn test,yarn build"
     url_scan_timeout_seconds: int = 15
     url_scan_max_response_bytes: int = 1024 * 1024
     url_scan_max_redirects: int = 0

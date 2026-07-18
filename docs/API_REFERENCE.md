@@ -55,6 +55,8 @@ Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `
 - Private network targets are rejected unless local sandbox mode is explicitly allowed.
 - Sandbox manifests are optional; repositories without `.nope/sandbox.json` are marked not applicable instead of faked.
 - Sandbox containers run with bounded CPU, memory, process, timeout, tmpfs, and log limits; repository mounts are read-only and network is disabled by default.
+- Repository dynamic scans use `.nope/sandbox.json` only, support allowlisted Node/Python starts, and run ZAP against a private internal Docker-network target rather than arbitrary external hosts.
+- ZAP version, baseline configuration, raw JSON alerts, parsed alerts, artifacts, and unauthenticated/partial/skipped/failed coverage states are persisted through normal scanner-run, stage, coverage, and report payloads.
 - AI failures do not fail deterministic scans.
 - Project, scan, report, settings, GitHub contract, and AI explanation routes are scoped to the authenticated local user.
 - Sensitive settings are encrypted at rest and are not returned after save.

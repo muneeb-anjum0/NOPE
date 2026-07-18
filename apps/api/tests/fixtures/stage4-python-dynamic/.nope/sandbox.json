@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "workflows": [
+    {
+      "name": "python compile",
+      "kind": "python",
+      "command": "python -m compileall ."
+    }
+  ],
+  "startup": {
+    "kind": "python",
+    "command": "python app.py",
+    "port": 8080,
+    "readiness_path": "/"
+  },
+  "zap": {
+    "enabled": true,
+    "max_minutes": 1,
+    "auth_state": "unauthenticated",
+    "target_path": "/"
+  }
+}

@@ -60,6 +60,8 @@ export default async function CoveragePage({
   const untested = coverage.filter((record) => record.status === "Not tested").length;
   const partial = coverage.filter((record) => record.status === "Partial").length;
   const groups = groupCoverage(coverage);
+  const dynamicRecords = coverage.filter((record) => record.domain === "Dynamic testing" || record.domain === "URL scanning");
+  const dynamicRuns = (scan.scanner_runs ?? []).filter((run) => ["OWASP ZAP", "NOPE URL scanner", "NOPE sandbox"].includes(run.scanner));
 
   return (
     <>
@@ -76,6 +78,15 @@ export default async function CoveragePage({
           <CoverageMetric label="Partial" tone="is-partial" value={partial} />
           <CoverageMetric label="Failed" tone="is-failed" value={failed} />
           <CoverageMetric label="Not tested" tone="is-untested" value={untested} />
+        </div>
+        <div className="dynamic-coverage-strip">
+          <span className="mono">dynamic</span>
+          {dynamicRecords.length ? dynamicRecords.map((record) => (
+            <span key={record.domain}>{record.domain}: {record.status}</span>
+          )) : <span>No dynamic coverage recorded</span>}
+          {dynamicRuns.length ? dynamicRuns.map((run) => (
+            <span key={`${run.scanner}-${run.status}`}>{run.scanner}: {run.status}</span>
+          )) : null}
         </div>
         <div className="coverage-lane-board">
           {groups.map((group) => (

@@ -72,6 +72,30 @@ def _failed_scanners(scan: Scan) -> list[str]:
     return [f"{run.scanner}: {run.message or 'failed'}" for run in scan.scanner_runs if run.status == "failed"]
 
 
+def _dynamic_summary(scan: Scan) -> dict[str, Any]:
+    runs = [run for run in scan.scanner_runs if run.scanner in {"OWASP ZAP", "NOPE URL scanner", "NOPE sandbox"}]
+    coverage = [record for record in scan.coverage if record.domain in {"Dynamic testing", "URL scanning"}]
+    findings = [finding for finding in scan.findings if "Dynamic" in finding.category or finding.scanner in {"OWASP ZAP", "NOPE URL scanner"}]
+    return {
+        "scanner_runs": [
+            {
+                "scanner": _redact(run.scanner),
+                "version": _redact(run.version),
+                "status": _redact(run.status),
+                "message": _redact(run.message),
+                "findings_count": run.findings_count,
+                "raw_artifact_id": run.raw_artifact_id,
+            }
+            for run in runs
+        ],
+        "coverage": [
+            {"domain": _redact(record.domain), "status": _redact(record.status.value), "notes": _redact(record.notes)}
+            for record in coverage
+        ],
+        "findings_count": len(findings),
+    }
+
+
 def _privacy_warnings(scan: Scan) -> list[str]:
     warnings: list[str] = []
     if any("tracker" in finding.title.lower() or "privacy" in finding.category.lower() for finding in scan.findings):
@@ -125,6 +149,7 @@ def report_json(scan: Scan, context: ReportContext | None = None) -> dict:
             "suppressed": _suppressed_count(scan),
             "failed_scanners": len(_failed_scanners(scan)),
         },
+        "dynamic_testing": _dynamic_summary(scan),
         "baseline_comparison": baseline,
         "limitations": _limitations(scan),
         "methodology": _methodology(),
@@ -165,6 +190,15 @@ def report_markdown(scan: Scan, context: ReportContext | None = None) -> str:
     lines.extend(["", "## Coverage"])
     for row in _coverage_rows(scan):
         lines.append(f"- {row[0]}: {row[1]} - {row[2]}")
+    lines.extend(["", "## Dynamic Testing"])
+    dynamic = _dynamic_summary(scan)
+    if not dynamic["scanner_runs"]:
+        lines.append("- No dynamic scanner run was recorded.")
+    for run in dynamic["scanner_runs"]:
+        artifact = f"; artifact: {run['raw_artifact_id']}" if run.get("raw_artifact_id") else ""
+        lines.append(f"- {run['scanner']} {run['version']}: {run['status']} - {run['message']}{artifact}")
+    for record in dynamic["coverage"]:
+        lines.append(f"- Coverage {record['domain']}: {record['status']} - {record['notes']}")
     lines.extend(["", "## Findings"])
     if not scan.findings:
         lines.append("No findings were produced in the tested scope.")
@@ -289,6 +323,19 @@ def report_pdf(scan: Scan, context: ReportContext | None = None) -> bytes:
 
     heading("Coverage", 2)
     _table(story, [["Domain", "Status", "Notes"], *_coverage_rows(scan)], header=True)
+    heading("Dynamic Testing", 2)
+    dynamic = _dynamic_summary(scan)
+    if dynamic["scanner_runs"]:
+        _table(
+            story,
+            [["Scanner", "Version", "Status", "Message"], *[
+                [run["scanner"], run["version"], run["status"], run["message"]]
+                for run in dynamic["scanner_runs"]
+            ]],
+            header=True,
+        )
+    else:
+        para("No dynamic scanner run was recorded.")
     heading("Scanner Status", 2)
     _table(story, [["Scanner", "Version", "Status", "Message"], *_scanner_rows(scan)], header=True)
 

@@ -28,7 +28,7 @@ Repository ZIP / Authorized URL
   -> Attack-surface and code graph builders
   -> Scanner plugin orchestrator
   -> Optional repository sandbox workflows
-  -> Optional internal ZAP dynamic scan
+  -> Optional internal ZAP dynamic baseline scan
   -> NOPE rules engine
   -> Finding normalization and deduplication
   -> Focused retrieval
@@ -76,7 +76,7 @@ The API validates scan requests, persists a queued `Scan`, extracts repository u
 
 Repositories can opt into sandbox execution with `.nope/sandbox.json`. The worker delegates those requests to the internal `nope-runner` service, the only Compose service with Docker socket access. The runner accepts only token-authenticated requests for workspaces under `NOPE_TEMP_ROOT`, then launches disposable Docker containers for allowlisted Node, Python, static, or ZAP commands with non-root users, dropped capabilities, `no-new-privileges`, read-only repository mounts, no sandbox Docker socket, no host home, no NOPE service secrets, bounded CPU/memory/PID/tmpfs/log limits, network disabled for normal workflows, and timeout cleanup.
 
-For dynamic ZAP coverage, NOPE creates a private internal Docker network, starts the declared app container, runs the ZAP container against that internal target only, records bounded evidence, and tears down the containers/network.
+For dynamic ZAP coverage, NOPE supports manifest-declared Node and Python application starts. The runner executes allowlisted build/workflow commands first, starts the declared application container, waits for readiness from inside a private internal Docker network, runs OWASP ZAP baseline against that internal target only, captures ZAP version/config/raw JSON alerts, normalizes parsed alerts into findings, and tears down the containers/network. If build, startup, readiness, ZAP, or authentication state is incomplete, coverage is marked skipped, partial, or failed rather than completed.
 
 ## Evidence policy
 

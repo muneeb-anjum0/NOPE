@@ -58,6 +58,8 @@ def test_manifest_contract_loads_workflows_and_zap(tmp_path):
     assert error is None
     assert manifest is not None
     assert manifest.workflows[0].name == "python compile"
+    assert manifest.startup is not None
+    assert manifest.startup.kind == "python"
     assert manifest.zap.enabled is True
 
 
@@ -133,7 +135,7 @@ def test_timed_out_workflow_forces_container_cleanup(tmp_path):
 
 
 def test_zap_workflow_uses_private_network_and_cleans_up(tmp_path):
-    executor = FakeExecutor(["passed", "passed", "passed", "passed", "passed"])
+    executor = FakeExecutor(["passed", "passed", "passed", "passed", "passed", "passed"])
     sandbox = DockerSandbox(Settings(), tmp_path, executor)
 
     result = sandbox.run_zap(
@@ -144,6 +146,7 @@ def test_zap_workflow_uses_private_network_and_cleans_up(tmp_path):
     rendered = [" ".join(command) for command in executor.commands]
     assert result.status == "passed"
     assert any("network create --internal" in command for command in rendered)
+    assert any("urllib.request.urlopen" in command for command in rendered)
     assert any("zap-baseline.py -t http://nope-sandbox-app-" in command for command in rendered)
     assert any(" rm -f nope-sandbox-app-" in command for command in rendered)
     assert any("network rm nope-sandbox-net-" in command for command in rendered)

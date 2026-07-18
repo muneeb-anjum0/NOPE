@@ -945,6 +945,26 @@ textarea:focus-visible {
   gap: 10px;
 }
 
+.dynamic-coverage-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.dynamic-coverage-strip span {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 6px 9px;
+  background: rgba(16, 18, 17, 0.5);
+  color: var(--muted);
+}
+
+.dynamic-coverage-strip span:first-child {
+  color: var(--brand-primary);
+  border-color: rgba(240, 22, 131, 0.35);
+}
+
 .coverage-metric {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);

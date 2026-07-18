@@ -14,11 +14,11 @@ Date: 2026-07-18
 | RAG | Evidence-grounded context | Lexical/graph retrieval with redaction | Qwen evidence payload | Partial | 70% | Moderate | Better source provenance/ranking |
 | Findings UX | Filter, paginate, detail, AI actions | Functional routes/build; AI actions work | build, E2E, action smoke | Partial | 78% | Moderate | Browser automation and large findings UX |
 | Attack map | Show route/file/data/risk paths | Heuristic graph renders when evidence exists | code/UI/E2E scan has graph | Partial | 70% | Moderate | More parser-backed graph precision |
-| Coverage | Explain tested/untested areas | UI and backend records exist | route/build/E2E coverage 70% | Partial | 72% | Moderate | More actionable coverage taxonomy |
+| Coverage | Explain tested/untested areas | UI/backend records include static, URL, sandbox, and ZAP dynamic state | route/build/E2E plus Stage 4 dynamic tests | Improved | 80% | Moderate | More actionable coverage taxonomy in later stages |
 | Assets | Folder-scoped inventory | UI summarizes evidence-connected assets | route/build/source | Partial | 72% | Moderate | Full indexed inventory and search |
 | Reports | JSON/MD/SARIF/PDF | All four returned 200 in E2E | E2E report outputs | Verified | 84% | Minor | Async generation/large report tests |
 | Drift/baselines | Same-folder comparisons | Implemented and tested | pytest and UI source | Partial | 74% | Moderate | More transparent baseline UX |
-| Sandbox | Safe dynamic testing | Internal `nope-runner` owns Docker access; worker is socketless; sandbox jobs enforce image/command/network/mount/env/resource limits | Stage 3 hostile matrix, E2E scanner run | Verified hardening boundary | 76% | Moderate | Broader dynamic-app detection and browser/ZAP depth in later stages |
+| Sandbox | Safe dynamic testing | Internal `nope-runner` owns Docker access; worker is socketless; sandbox jobs enforce image/command/network/mount/env/resource limits; Stage 4 adds supported Node/Python app starts and private-network ZAP baseline | Stage 3 hostile matrix, Stage 4 dynamic suite, live ZAP smoke | Verified local Stage 4 | 88% | Minor | Broader browser-authenticated dynamic depth in later stages |
 | Settings | Persist AI/scanner/project settings | Implemented; encrypted test secrets | source/tests | Partial | 78% | Moderate | Verify all settings consumed at runtime |
 | GitHub | Private repo/PR workflow | Blocked adapter/contracts only | routes/docs/source | Superficial/blocked | 35% local, 0% activated | Major | OAuth/App credentials and implementation |
 | Documentation | Accurate setup/status | Extensive but overclaims | audit comparison | Partial | 58% | Moderate | Update stale completion claims |
@@ -43,7 +43,7 @@ Final Docker benchmark run on 2026-07-18:
 | Checkov | Yes | 3.3.8 | Yes | Yes | Captured | Yes | 75% |
 | Bandit | Yes | 1.9.4 | Yes | Yes | Captured | Yes | 78% |
 | Hadolint | Yes | 2.14.0 | Yes | Yes | Captured | Yes | 78% |
-| ZAP | Image/config exists | Not version-verified here | Skipped for repo scans | Sandbox path only | Not in ordinary E2E | Skipped/not applicable | 35% |
+| ZAP | Image/config exists | Version captured from runtime output | Private internal-network baseline verified for supported manifests | Alerts parsed into NOPE findings | Raw JSON/config artifact captured | Skipped/partial/failed/readiness/timeout handled | 85% |
 | npm audit | No first-class plugin | No | No | No | No | No | 10% |
 | pnpm audit | No first-class plugin | No | No | No | No | No | 10% |
 | yarn audit | No first-class plugin | No | No | No | No | No | 0% |

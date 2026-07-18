@@ -28,6 +28,7 @@ NOPE treats every uploaded repository and every scanned target as potentially ho
 - Network is disabled for repository workflows.
 - ZAP dynamic scans use a private internal Docker network: one constrained application container is started from the declared manifest, one ZAP container scans only that internal target, and both are removed after the run.
 - The ZAP scanner image keeps its writable root filesystem because the upstream image writes runtime files during startup; it still receives dropped capabilities, `no-new-privileges`, private-network-only access, tmpfs work paths, and memory/PID/time limits.
+- Stage 4 dynamic scans perform readiness checks before ZAP, capture ZAP version/config/raw JSON as bounded artifacts, parse alerts into normal findings, and mark unauthenticated, skipped, partial, failed-build, failed-startup, readiness, timeout, and crash states explicitly.
 - Target application containers and scanner containers are separated in the architecture.
 
 ## URL boundaries

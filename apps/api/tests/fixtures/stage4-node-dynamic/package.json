@@ -1,0 +1,7 @@
+{
+  "name": "nope-stage4-node-dynamic",
+  "private": true,
+  "scripts": {
+    "build": "node -e \"console.log('build ok')\""
+  }
+}
