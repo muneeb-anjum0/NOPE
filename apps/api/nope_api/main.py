@@ -859,19 +859,33 @@ async def test_model(authorization: str | None = Header(default=None)) -> dict:
 
 @app.post("/api/findings/explain")
 async def explain_finding_endpoint(finding: dict, authorization: str | None = Header(default=None)) -> dict:
-    _require_owner_user_id(authorization)
+    owner_user_id = _require_owner_user_id(authorization)
     from nope_api.models import Finding
 
     parsed = Finding(**finding)
-    return await explain_finding(settings, parsed)
+    scan, root = _scan_context_for_finding(parsed.scan_id, owner_user_id)
+    return await explain_finding(settings, parsed, root=root, scan=scan)
 
 
 @app.post("/api/findings/{action}")
 async def finding_action_endpoint(action: str, finding: dict, authorization: str | None = Header(default=None)) -> dict:
-    _require_owner_user_id(authorization)
+    owner_user_id = _require_owner_user_id(authorization)
     if action not in {"explain", "challenge", "fix", "test"}:
         raise HTTPException(status_code=404, detail="Unsupported finding AI action.")
     from nope_api.models import Finding
 
     parsed = Finding(**finding)
-    return await finding_action(settings, parsed, action)  # type: ignore[arg-type]
+    scan, root = _scan_context_for_finding(parsed.scan_id, owner_user_id)
+    return await finding_action(settings, parsed, action, root=root, scan=scan)  # type: ignore[arg-type]
+
+
+def _scan_context_for_finding(scan_id: str | None, owner_user_id: str) -> tuple[Scan | None, Path | None]:
+    if not scan_id:
+        return None, None
+    scan = store.get_scan(scan_id, owner_user_id)
+    if not scan:
+        return None, None
+    root = Path(scan.repository_workspace_path) if scan.repository_workspace_path else None
+    if root and not root.exists():
+        root = None
+    return scan, root

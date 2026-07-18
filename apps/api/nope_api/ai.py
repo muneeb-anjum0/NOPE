@@ -536,5 +536,11 @@ async def finding_action(
         }
 
 
-async def explain_finding(settings: Settings, finding: Finding) -> dict:
-    return await finding_action(settings, finding, "explain")
+async def explain_finding(
+    settings: Settings,
+    finding: Finding,
+    *,
+    root: Path | None = None,
+    scan: Scan | None = None,
+) -> dict:
+    return await finding_action(settings, finding, "explain", root=root, scan=scan)
