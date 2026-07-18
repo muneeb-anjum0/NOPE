@@ -24,5 +24,11 @@
     { "id": "unsafe-supabase-rls", "file": "supabase/policies.sql", "description": "RLS policy allows all users." },
     { "id": "public-storage-bucket", "file": "supabase/storage.sql", "description": "Storage bucket is public." },
     { "id": "tracker-before-consent", "file": "src/app/tracker.tsx", "description": "Tracker loads before consent is checked." }
+  ],
+  "negative_controls": [
+    { "id": "safe-parameterized-sql", "file": "safe-controls/safe-query.ts", "description": "Parameterized SQL should not be flagged as SQL injection." },
+    { "id": "safe-authorization-scope", "file": "safe-controls/safe-authz.ts", "description": "Database lookup scoped by session owner should not be promoted." },
+    { "id": "safe-consent-tracker", "file": "safe-controls/safe-tracker.tsx", "description": "Tracker loaded only after consent should not be flagged." },
+    { "id": "safe-placeholder-secret", "file": "safe-controls/example-env.ts", "description": "Short example placeholder should not be treated as a concrete secret." }
   ]
 }

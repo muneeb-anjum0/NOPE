@@ -1,6 +1,6 @@
 # NOPE Benchmarks
 
-Phase 12 adds a reproducible local benchmark fixture and a machine-readable runner.
+NOPE includes a reproducible local benchmark fixture and a machine-readable runner for scanner quality gates.
 
 ## Fixture
 
@@ -9,6 +9,8 @@ Phase 12 adds a reproducible local benchmark fixture and a machine-readable runn
 - Expected output: `benchmarks/expected/nope-benchmark-v1.expected.json`
 
 The fixture intentionally covers hardcoded secrets, frontend secrets, SQL injection, NoSQL injection, command injection, XSS, unsafe HTML, SSRF, path traversal, file upload, IDOR, missing tenant scope, frontend-only authorization, insecure CORS, missing rate limit, AI cost abuse, vulnerable dependency, debug endpoint, public source map, unsafe Supabase RLS, public storage bucket, and tracker-before-consent.
+
+It also includes safe negative controls for parameterized SQL, correctly scoped authorization, consent-gated trackers, and placeholder/example secrets.
 
 ## Commands
 
@@ -32,6 +34,13 @@ The same command works inside the API container:
 docker compose run --rm nope-api python -m nope_api.benchmarks --mode scanner-only --output /tmp/nope-benchmark-scanner-only.json
 ```
 
+When the stack is already running, use `exec`:
+
+```powershell
+docker compose exec -T nope-api python -m nope_api.benchmarks --mode scanner-only --output /tmp/nope-benchmark-scanner-only.json
+docker compose exec -T nope-api python -m nope_api.benchmarks --mode scanner-plus-qwen --output /tmp/nope-benchmark-scanner-plus-qwen.json
+```
+
 ## Output
 
 The JSON output includes:
@@ -42,13 +51,30 @@ The JSON output includes:
 - `false_positives`
 - `known_false_negatives`
 - `false_negatives`
+- `duplicate_count`
+- `precision`
+- `recall`
+- `f1`
 - `scanner_source`
 - `qwen_contribution`
 - `duration_ms`
 - `resource_use`
 - `fix_verification`
 
-Known false negatives are explicit expected items that the fixture contains but the current scanner set does not yet detect reliably. They keep benchmark gaps visible without falsely failing a reproducible run.
+The runner also writes a Markdown summary next to the JSON output unless `--markdown-output` is set explicitly.
+
+Known false negatives are no longer accepted as a passing state. If any expected item is missing, scanner-only and scanner-plus-Qwen modes fail.
+
+## Current verified Stage 1 result
+
+Verified on 2026-07-18 from the canonical Docker stack after rebuilding:
+
+| Mode | Status | Expected | Actual | TP | FP | FN | Known FN | Related duplicates | Precision | Recall | F1 | Duration |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| scanner-only | passed | 22 | 43 | 22 | 0 | 0 | 0 | 22 | 1.000 | 1.000 | 1.000 | 37.044s |
+| scanner-plus-Qwen | passed | 22 | 43 | 22 | 0 | 0 | 0 | 22 | 1.000 | 1.000 | 1.000 | 76.587s |
+
+The duplicate count represents related supporting evidence from multiple scanners or overlapping expected fixture concepts. It is not counted as a false positive when it is tied to a matched expected file/category.
 
 ## Modes
 

@@ -52,6 +52,11 @@ SECRET_SIGNAL_RE = re.compile(
     r"AKIA[0-9A-Z]{16}|-----BEGIN)",
     re.IGNORECASE,
 )
+CLIENT_AUTH_RE = re.compile(
+    r"\b(localStorage\.(?:getItem|setItem)\(['\"](?:role|isAdmin)|"
+    r"(?:body|query|params)\.(?:role|tenantId|ownerId|isAdmin))",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -181,6 +186,27 @@ def _validate_secret(finding: Finding, context: FileContext) -> ValidationDecisi
 def _validate_authorization(finding: Finding, context: FileContext) -> ValidationDecision:
     evidence_text = _evidence_text(finding)
     combined = "\n".join([finding.title, finding.description, evidence_text, context.window])
+    rule_id = (finding.nope_rule_id or finding.original_rule_id or "").upper()
+
+    if rule_id == "NOPE-AUTHZ-002" or CLIENT_AUTH_RE.search(combined):
+        if context.generated:
+            return ValidationDecision(
+                "needs_context",
+                finding,
+                [
+                    "Client-controlled authorization evidence is in generated output; "
+                    "source context is required before promotion."
+                ],
+            )
+        if CLIENT_AUTH_RE.search(combined):
+            return ValidationDecision(
+                "promoted",
+                finding,
+                [
+                    "Source context shows role, tenant, owner, or admin authority being "
+                    "read from request-controlled or browser-controlled state."
+                ],
+            )
 
     if context.generated:
         return ValidationDecision(

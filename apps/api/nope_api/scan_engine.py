@@ -138,11 +138,12 @@ async def run_repository_scan(
     scan.stages.append({"name": "Running NOPE rules", "status": "running"})
     await _checkpoint(scan, progress_callback, cancellation_checker)
     findings = run_rules(root)
+    rule_categories = sorted({finding.category for finding in findings})
     scan.scanner_runs.append(
         ScannerRun(
             scanner="NOPE rules",
             status="passed",
-            coverage_categories=["Secrets", "Authorization", "CORS", "Supabase", "AI abuse"],
+            coverage_categories=rule_categories,
             findings_count=len(findings),
         )
     )

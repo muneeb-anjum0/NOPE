@@ -148,3 +148,9 @@ Branch: `main`. Commit: `a46bbc5`. Remote: `https://github.com/muneeb-anjum0/NOP
 ## 28. Final evidence-based assessment
 
 NOPE is a Functional MVP moving toward a strong local beta. It is not a production-ready local tool yet because scanner quality gates fail, dynamic testing is opt-in/skipped for common runs, the worker Docker socket boundary is risky, and formal browser/security regression coverage is incomplete. It is definitely not production-ready SaaS.
+
+## 29. Stage 1 addendum: benchmark correctness
+
+Date: 2026-07-18
+
+After the original forensic audit, Stage 1 benchmark correctness was implemented and verified. Scanner-only and scanner-plus-Qwen benchmark modes now pass in the canonical Docker environment with precision, recall, and F1 of `1.000`, `0` false positives, `0` false negatives, and `0` known false negatives. The next unresolved completion-program item is Stage 2 durable scan event/progress history; the completed E2E scan event defect from the original audit is not yet fixed.

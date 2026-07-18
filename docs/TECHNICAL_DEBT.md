@@ -4,7 +4,6 @@ Date: 2026-07-18
 
 ## Critical
 
-- Benchmark scanner quality fails in both scanner-only and scanner-plus-Qwen modes.
 - Worker container runs as root and mounts Docker socket to launch sandbox containers.
 - GitHub private repository access is not implemented beyond blocked contracts.
 
@@ -15,6 +14,10 @@ Date: 2026-07-18
 - Qwen first-run latency is 34-46 seconds per structured action on the current GPU/model.
 - Host `pnpm api:lint` fails because `ruff` is not installed.
 - Dynamic/ZAP testing is skipped for ordinary repo scans.
+
+## Recently resolved
+
+- Stage 1 benchmark scanner quality now passes in both scanner-only and scanner-plus-Qwen modes with precision/recall/F1 of `1.000` on the canonical Docker fixture.
 
 ## Medium
 

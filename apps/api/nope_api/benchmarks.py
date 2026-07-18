@@ -53,6 +53,46 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def write_markdown(path: Path, payload: dict[str, Any]) -> None:
+    metrics = payload["metrics"]
+    lines = [
+        f"# NOPE Benchmark: {payload['benchmark_id']} ({payload['mode']})",
+        "",
+        f"- Status: **{payload['status']}**",
+        f"- Expected fixtures: `{metrics['expected_findings']}`",
+        f"- Actual findings: `{metrics['actual_findings']}`",
+        f"- True positives: `{len(metrics['true_positives'])}`",
+        f"- False positives: `{len(metrics['false_positives'])}`",
+        f"- False negatives: `{len(metrics['false_negatives'])}`",
+        f"- Related duplicate/supporting findings: `{metrics['duplicate_count']}`",
+        f"- Precision: `{metrics['precision']:.3f}`",
+        f"- Recall: `{metrics['recall']:.3f}`",
+        f"- F1: `{metrics['f1']:.3f}`",
+        f"- Duration: `{payload['scan']['duration_ms']} ms`",
+        f"- Coverage: `{payload['scan']['coverage_percent']}%`",
+        f"- Qwen status: `{payload['qwen_contribution']['status']}`",
+        "",
+        "## False Negatives",
+        "",
+    ]
+    if metrics["false_negatives"]:
+        lines.extend(f"- `{item['id']}` in `{item.get('file')}`" for item in metrics["false_negatives"])
+    else:
+        lines.append("- None")
+    lines.extend(["", "## False Positives", ""])
+    if metrics["false_positives"]:
+        lines.extend(
+            f"- `{item['title']}` in `{item.get('file')}` from `{item.get('scanner')}`"
+            for item in metrics["false_positives"]
+        )
+    else:
+        lines.append("- None")
+    lines.extend(["", "## Per Scanner", ""])
+    lines.extend(f"- `{scanner}`: `{count}`" for scanner, count in sorted(metrics["scanner_source"].items()))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def validate_fixture_manifest(fixture: Path) -> list[str]:
     manifest_path = fixture / "benchmark-manifest.json"
     if not manifest_path.exists():
@@ -65,6 +105,38 @@ def validate_fixture_manifest(fixture: Path) -> list[str]:
         rel = item.get("file")
         if rel and not (fixture / str(rel)).exists():
             problems.append(f"Fixture file is missing for {item.get('id')}: {rel}")
+    for item in manifest.get("negative_controls", []):
+        rel = item.get("file")
+        if rel and not (fixture / str(rel)).exists():
+            problems.append(f"Negative-control file is missing for {item.get('id')}: {rel}")
+    return problems
+
+
+def validate_expected_manifest(expected: dict[str, Any]) -> list[str]:
+    required = {
+        "id",
+        "category",
+        "file",
+        "severity",
+        "confidence",
+        "cwe",
+        "owasp",
+        "expected_scanner",
+        "qwen_enrichment_expected",
+        "dedupe_expected",
+        "match",
+    }
+    problems: list[str] = []
+    expected_ids = set()
+    for item in expected.get("expected_findings", []):
+        expected_ids.add(str(item.get("id")))
+        missing = sorted(required - set(item))
+        if missing:
+            problems.append(f"Expected finding {item.get('id')} is missing fields: {', '.join(missing)}")
+        if not (item.get("line") or item.get("line_range")):
+            problems.append(f"Expected finding {item.get('id')} must define line or line_range.")
+    missing_categories = [category for category in REQUIRED_BENCHMARK_CATEGORIES if category not in expected_ids]
+    problems.extend(f"Missing expected finding: {category}" for category in missing_categories)
     return problems
 
 
@@ -121,26 +193,73 @@ def _matches_expected(finding: Finding, expected: dict[str, Any]) -> bool:
     return all(term in text for term in all_terms) and (not any_terms or any(term in text for term in any_terms))
 
 
+def _related_to_matched_expected(finding: Finding, matched_expected: list[dict[str, Any]]) -> bool:
+    file = str(finding.affected_file or "").lower()
+    category = finding.category.lower()
+    for expected in matched_expected:
+        expected_file = str(expected.get("file") or "").lower()
+        expected_category = str(expected.get("category") or "").lower()
+        if expected_file and expected_file in file:
+            return True
+        if expected_category and expected_category == category and expected.get("dedupe_expected"):
+            return True
+    return False
+
+
+def _score(tp: int, fp: int, fn: int, expected_count: int) -> dict[str, float]:
+    precision = tp / (tp + fp) if tp + fp else 1.0
+    recall = tp / expected_count if expected_count else 1.0
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+    return {"precision": precision, "recall": recall, "f1": f1}
+
+
 def compare_findings(scan: Scan, expected: dict[str, Any]) -> dict[str, Any]:
     findings = scan.findings
     matched_fingerprints: set[str] = set()
     true_positives: list[dict[str, Any]] = []
     known_false_negatives: list[dict[str, Any]] = []
     false_negatives: list[dict[str, Any]] = []
+    matched_expected: list[dict[str, Any]] = []
     for item in expected.get("expected_findings", []):
-        match = next((finding for finding in findings if finding.fingerprint not in matched_fingerprints and _matches_expected(finding, item)), None)
+        allow_shared_finding = bool(item.get("dedupe_expected"))
+        match = next(
+            (
+                finding
+                for finding in findings
+                if (allow_shared_finding or finding.fingerprint not in matched_fingerprints)
+                and _matches_expected(finding, item)
+            ),
+            None,
+        )
         if match:
             matched_fingerprints.add(match.fingerprint)
             true_positives.append({"expected_id": item["id"], "finding": finding_payload(match)})
+            matched_expected.append(item)
         elif item.get("known_false_negative"):
             known_false_negatives.append(item)
         else:
             false_negatives.append(item)
-    false_positives = [finding_payload(finding) for finding in findings if finding.fingerprint not in matched_fingerprints]
+    related_duplicates = [
+        finding
+        for finding in findings
+        if finding.fingerprint not in matched_fingerprints and _related_to_matched_expected(finding, matched_expected)
+    ]
+    duplicate_fingerprints = {finding.fingerprint for finding in related_duplicates}
+    false_positives = [
+        finding_payload(finding)
+        for finding in findings
+        if finding.fingerprint not in matched_fingerprints and finding.fingerprint not in duplicate_fingerprints
+    ]
     by_scanner: dict[str, int] = {}
     for finding in findings:
         for source in finding.scanner_sources or [finding.scanner or "unknown"]:
             by_scanner[source] = by_scanner.get(source, 0) + 1
+    scores = _score(
+        len(true_positives),
+        len(false_positives),
+        len(false_negatives) + len(known_false_negatives),
+        len(expected.get("expected_findings", [])),
+    )
     return {
         "expected_findings": len(expected.get("expected_findings", [])),
         "actual_findings": len(findings),
@@ -148,6 +267,11 @@ def compare_findings(scan: Scan, expected: dict[str, Any]) -> dict[str, Any]:
         "false_positives": false_positives,
         "known_false_negatives": known_false_negatives,
         "false_negatives": false_negatives,
+        "duplicate_count": len(related_duplicates),
+        "duplicates": [finding_payload(finding) for finding in related_duplicates],
+        "precision": scores["precision"],
+        "recall": scores["recall"],
+        "f1": scores["f1"],
         "scanner_source": by_scanner,
         "fix_verification": {
             "fix_available_findings": sum(1 for finding in findings if finding.fix_available),
@@ -176,6 +300,7 @@ async def run_benchmark(fixture: Path, expected_path: Path, mode: str, settings:
     fixture = fixture.resolve()
     expected = load_json(expected_path)
     manifest_errors = validate_fixture_manifest(fixture)
+    expected_errors = validate_expected_manifest(expected)
     configured_settings = _settings_for_mode(settings or get_settings(), mode)
     scan = Scan(
         id=f"bench_{expected.get('benchmark_id', 'local')}_{mode}",
@@ -189,14 +314,26 @@ async def run_benchmark(fixture: Path, expected_path: Path, mode: str, settings:
     resources = _resource_usage(started_wall, started_cpu)
     comparison = compare_findings(scan, expected)
     ai_review = scan.ai_review.model_dump(mode="json")
+    status = "passed"
+    if (
+        manifest_errors
+        or expected_errors
+        or comparison["false_negatives"]
+        or comparison["known_false_negatives"]
+        or comparison["precision"] < 0.90
+        or comparison["recall"] < 0.95
+        or comparison["f1"] < 0.925
+    ):
+        status = "failed"
     return {
         "schema_version": 1,
         "benchmark_id": expected.get("benchmark_id"),
         "mode": mode,
         "fixture": str(fixture),
         "expected_version": expected.get("version"),
-        "status": "failed" if manifest_errors or comparison["false_negatives"] else "passed",
+        "status": status,
         "manifest_errors": manifest_errors,
+        "expected_errors": expected_errors,
         "scan": {
             "id": scan.id,
             "status": scan.status,
@@ -228,13 +365,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expected", default="benchmarks/expected/nope-benchmark-v1.expected.json")
     parser.add_argument("--mode", choices=["scanner-only", "scanner-plus-qwen"], default="scanner-only")
     parser.add_argument("--output", default=".nope-benchmark-results/nope-benchmark.json")
+    parser.add_argument("--markdown-output", default=None)
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     result = asyncio.run(run_benchmark(Path(args.fixture), Path(args.expected), args.mode))
-    write_json(Path(args.output), result)
+    output = Path(args.output)
+    write_json(output, result)
+    markdown_output = Path(args.markdown_output) if args.markdown_output else output.with_suffix(".md")
+    write_markdown(markdown_output, result)
     print(json.dumps(result, indent=2, sort_keys=True))
     if result["status"] != "passed":
         raise SystemExit(1)

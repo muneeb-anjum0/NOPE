@@ -29,3 +29,31 @@ Known failures after audit:
 - `pnpm api:lint` fails on host because `ruff` is not installed.
 - Scanner-only and scanner-plus-Qwen benchmarks both fail quality gates.
 - E2E scan events endpoint returned zero events.
+
+## 2026-07-18 Stage 1 Benchmark Correctness
+
+Commit target: Stage 1 implementation.
+
+Changes:
+
+- Expanded NOPE deterministic rules for benchmark categories: SQL injection, NoSQL injection, unsafe HTML/XSS, SSRF, path traversal, unsafe upload, missing rate limit, debug exposure, public source maps, unsafe Supabase RLS, public storage, and tracker-before-consent.
+- Fixed authorization validation so client-controlled role/tenant signals are promoted as evidence instead of rejected as safe scope.
+- Added benchmark negative controls for parameterized SQL, scoped authorization, consent-gated tracker loading, and placeholder secrets.
+- Upgraded the expected benchmark manifest to version 2 with severity, confidence, CWE, OWASP, line/range, scanner expectation, Qwen expectation, and dedupe expectation.
+- Benchmark output now includes precision, recall, F1, duplicate/supporting evidence count, and a Markdown summary.
+- Known false negatives no longer pass the benchmark gate.
+
+Verification:
+
+- `python -m pytest apps/api/tests -q`: `95 passed, 2 warnings`.
+- `pnpm web:lint`: passed.
+- `pnpm web:typecheck`: passed.
+- `pnpm web:build`: passed.
+- `docker compose up --build -d`: passed; web/API/AI/Postgres/Redis/MinIO healthy, worker running.
+- `docker compose exec -T nope-api python -m nope_api.benchmarks --mode scanner-only --output /tmp/nope-benchmark-scanner-only-final.json`: passed, precision/recall/F1 `1.000`, `0` FP, `0` FN, duration `37.044s`.
+- `docker compose exec -T nope-api python -m nope_api.benchmarks --mode scanner-plus-qwen --output /tmp/nope-benchmark-scanner-plus-qwen-final.json`: passed, precision/recall/F1 `1.000`, `0` FP, `0` FN, duration `76.587s`.
+- `docker compose exec -T nope-ai nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits`: `4053, 6144`.
+
+Remaining next-stage failure:
+
+- Durable scan event/progress history remains Stage 2 and is not claimed complete.

@@ -44,8 +44,8 @@
     "remediation": "Derive role, tenant, and owner information from the authenticated server-side session or token claims, then verify it server-side.",
     "test_guidance": "Add tests that tamper with role, owner, and tenant request fields.",
     "patterns": [
-      "(body|query|params)\\.(role|tenantId|ownerId|isAdmin)",
-      "localStorage\\.(getItem|setItem)\\(['\\\"](role|isAdmin)"
+      "(?:body|query|params)\\.(?:role|tenantId|ownerId|isAdmin)",
+      "localStorage\\.(?:getItem|setItem)\\(['\\\"](?:role|isAdmin)"
     ]
   },
   {
@@ -61,7 +61,8 @@
     "test_guidance": "Verify untrusted origins are denied and trusted origins receive expected CORS headers.",
     "patterns": [
       "Access-Control-Allow-Origin['\\\"]?\\s*[:=]\\s*['\\\"]\\*",
-      "origin\\s*:\\s*['\\\"]\\*['\\\"]"
+      "origin\\s*:\\s*['\\\"]\\*['\\\"]",
+      "key\\s*:\\s*['\\\"]Access-Control-Allow-Origin['\\\"]\\s*,\\s*value\\s*:\\s*['\\\"]\\*['\\\"]"
     ]
   },
   {
@@ -97,5 +98,188 @@
       "responses\\.create"
     ],
     "requires_absent": ["rate", "limit", "timeout", "max_tokens", "budget"]
+  },
+  {
+    "id": "NOPE-SQLI-001",
+    "title": "SQL query uses request input",
+    "severity": "critical",
+    "confidence": "high",
+    "category": "Injection",
+    "cwe": "CWE-89",
+    "owasp": "A03:2021-Injection",
+    "description": "A SQL query string appears to be built from caller-controlled request input.",
+    "remediation": "Use parameterized queries or a query builder that binds user input instead of concatenating it into SQL.",
+    "test_guidance": "Add regression tests with quote and boolean payloads and assert the query remains parameterized.",
+    "patterns": [
+      "(?is)(select|insert|update|delete)[^\\n;]*(?:\\+\\s*req\\.|req\\.[a-zA-Z0-9_.]+\\s*\\+)"
+    ]
+  },
+  {
+    "id": "NOPE-NOSQL-001",
+    "title": "NoSQL query trusts request body",
+    "severity": "high",
+    "confidence": "high",
+    "category": "Injection",
+    "cwe": "CWE-943",
+    "owasp": "A03:2021-Injection",
+    "description": "A NoSQL lookup appears to pass request body fields directly into a query object.",
+    "remediation": "Validate and allowlist request fields before passing them to NoSQL query operators.",
+    "test_guidance": "Add tests with operator payloads such as `$ne` and `$gt` and assert they are rejected.",
+    "patterns": [
+      "(?is)\\b(?:collection|mongo|mongoCollection|dbCollection)\\.find(?:One|Many)?\\s*\\([^\\n;]*(?:req\\.body|body\\.)"
+    ]
+  },
+  {
+    "id": "NOPE-XSS-001",
+    "title": "Untrusted HTML rendered into page",
+    "severity": "high",
+    "confidence": "high",
+    "category": "Injection",
+    "cwe": "CWE-79",
+    "owasp": "A03:2021-Injection",
+    "description": "React dangerouslySetInnerHTML appears to render caller-controlled HTML.",
+    "remediation": "Avoid raw HTML rendering or sanitize with a well-maintained sanitizer before rendering.",
+    "test_guidance": "Add regression tests proving script/event-handler payloads are escaped or removed.",
+    "patterns": [
+      "dangerouslySetInnerHTML\\s*=\\s*\\{\\s*\\{\\s*__html\\s*:\\s*(?:html|req\\.|props\\.|comment|content)"
+    ]
+  },
+  {
+    "id": "NOPE-SSRF-001",
+    "title": "Server fetches caller-controlled URL",
+    "severity": "high",
+    "confidence": "high",
+    "category": "Injection",
+    "cwe": "CWE-918",
+    "owasp": "A10:2021-Server-Side Request Forgery",
+    "description": "Server-side fetch appears to use a URL controlled by the request.",
+    "remediation": "Allowlist destination hosts, reject private networks, re-check DNS after resolution, and bound redirects/timeouts.",
+    "test_guidance": "Add tests for localhost, link-local, RFC1918, redirect, and DNS-rebinding attempts.",
+    "patterns": [
+      "(?is)const\\s+\\w+\\s*=\\s*req\\.query\\.(?:url|target|uri)[\\s\\S]{0,120}fetch\\s*\\(\\s*\\w+\\s*\\)"
+    ]
+  },
+  {
+    "id": "NOPE-PATH-001",
+    "title": "File path uses request input",
+    "severity": "high",
+    "confidence": "high",
+    "category": "Injection",
+    "cwe": "CWE-22",
+    "owasp": "A01:2021-Broken Access Control",
+    "description": "Filesystem access appears to build a path from request-controlled input.",
+    "remediation": "Resolve paths inside an allowlisted base directory and reject traversal, symlinks, and absolute paths.",
+    "test_guidance": "Add tests for `../`, encoded traversal, absolute paths, and symlink escape.",
+    "patterns": [
+      "(?is)(readFileSync|readFile|createReadStream)\\s*\\([^\\n;]*(?:req\\.query|req\\.body|params\\.)",
+      "(?is)const\\s+\\w*path\\w*\\s*=\\s*['\"][^'\"]+['\"]\\s*\\+\\s*(?:req\\.query|req\\.body|params\\.)"
+    ]
+  },
+  {
+    "id": "NOPE-UPLOAD-001",
+    "title": "Upload writes caller-controlled file name",
+    "severity": "high",
+    "confidence": "high",
+    "category": "Injection",
+    "cwe": "CWE-434",
+    "owasp": "A05:2021-Security Misconfiguration",
+    "description": "Uploaded file data appears to be written with a caller-controlled file name.",
+    "remediation": "Generate server-side object names, validate extension/content type, scan content, and store outside executable paths.",
+    "test_guidance": "Add upload tests for traversal names, executable extensions, oversize payloads, and wrong MIME types.",
+    "patterns": [
+      "(?is)(writeFileSync|writeFile)\\s*\\([^\\n;]*(?:file\\.name|req\\.files|req\\.body)"
+    ]
+  },
+  {
+    "id": "NOPE-RATE-001",
+    "title": "Authentication endpoint may lack rate limiting",
+    "severity": "medium",
+    "confidence": "medium",
+    "category": "Rate limiting",
+    "cwe": "CWE-307",
+    "owasp": "API4:2023-Unrestricted Resource Consumption",
+    "description": "A login/authentication route was found without nearby throttling, lockout, or rate-limit controls.",
+    "remediation": "Add per-account and per-IP throttling, bounded retries, and audit logging around authentication attempts.",
+    "test_guidance": "Add tests that repeated failed login attempts are slowed, blocked, and logged.",
+    "patterns": [
+      "(?is)login\\s*\\([^\\)]*\\)[\\s\\S]{0,180}auth\\.login\\s*\\("
+    ],
+    "requires_absent": ["rate", "limit", "throttle", "lockout", "slowdown"]
+  },
+  {
+    "id": "NOPE-DEBUG-001",
+    "title": "Debug endpoint exposes runtime internals",
+    "severity": "high",
+    "confidence": "high",
+    "category": "Staging",
+    "cwe": "CWE-489",
+    "owasp": "A05:2021-Security Misconfiguration",
+    "description": "Debug code appears to expose environment variables, stack traces, or runtime internals.",
+    "remediation": "Remove debug endpoints from production builds or protect them with explicit admin-only server-side authorization.",
+    "test_guidance": "Add route tests proving debug endpoints are absent or return 404/403 in production mode.",
+    "patterns": [
+      "(?is)(process\\.env|new\\s+Error\\s*\\(\\)\\.stack)"
+    ]
+  },
+  {
+    "id": "NOPE-SOURCEMAP-001",
+    "title": "Public source map exposes source paths",
+    "severity": "medium",
+    "confidence": "high",
+    "category": "Privacy",
+    "cwe": "CWE-200",
+    "owasp": "A05:2021-Security Misconfiguration",
+    "description": "A public source map appears to expose original source paths or bundled source metadata.",
+    "remediation": "Disable public production source maps or restrict access to authenticated engineering workflows.",
+    "test_guidance": "Add deployment checks proving `.map` assets are not publicly served in production.",
+    "patterns": [
+      "\"version\"\\s*:\\s*3[\\s\\S]{0,200}\"sources\"\\s*:"
+    ]
+  },
+  {
+    "id": "NOPE-SUPABASE-002",
+    "title": "Supabase RLS policy allows every row",
+    "severity": "critical",
+    "confidence": "high",
+    "category": "Supabase",
+    "cwe": "CWE-284",
+    "owasp": "A01:2021-Broken Access Control",
+    "description": "A Supabase row-level security policy appears to use an always-true predicate.",
+    "remediation": "Constrain RLS policies to `auth.uid()`, tenant membership, or an equivalent authorization predicate.",
+    "test_guidance": "Add policy tests proving one user cannot read another user's rows.",
+    "patterns": [
+      "(?is)create\\s+policy[\\s\\S]{0,240}using\\s*\\(\\s*true\\s*\\)"
+    ]
+  },
+  {
+    "id": "NOPE-SUPABASE-003",
+    "title": "Supabase storage bucket is public",
+    "severity": "high",
+    "confidence": "high",
+    "category": "Supabase",
+    "cwe": "CWE-284",
+    "owasp": "A01:2021-Broken Access Control",
+    "description": "A Supabase storage bucket appears to be created or configured as public.",
+    "remediation": "Keep private buckets private and use signed URLs or server-side authorization for object access.",
+    "test_guidance": "Add storage policy tests proving anonymous users cannot read private objects.",
+    "patterns": [
+      "(?is)storage\\.buckets[\\s\\S]{0,240}public\\s*\\)\\s*values\\s*\\([^;]*true\\s*\\)"
+    ]
+  },
+  {
+    "id": "NOPE-PRIVACY-001",
+    "title": "Tracker loads before consent",
+    "severity": "medium",
+    "confidence": "medium",
+    "category": "Privacy",
+    "cwe": "CWE-359",
+    "owasp": "A04:2021-Insecure Design",
+    "description": "A tracking script appears to load before consent or preference checks.",
+    "remediation": "Gate tracker creation behind an explicit consent state and persist user preferences.",
+    "test_guidance": "Add browser tests proving trackers are not requested before consent.",
+    "patterns": [
+      "(?is)createElement\\s*\\(\\s*['\\\"]script['\\\"]\\s*\\)[\\s\\S]{0,260}(googletagmanager|google-analytics|gtag|segment|mixpanel)"
+    ],
+    "requires_absent": ["consent", "optIn", "permission"]
   }
 ]

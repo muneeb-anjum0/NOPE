@@ -24,6 +24,7 @@ TEXT_SUFFIXES = {
     ".sql",
     ".env",
     ".json",
+    ".map",
     ".toml",
     ".yaml",
     ".yml",
@@ -102,6 +103,10 @@ def run_rules(root: Path) -> list[Finding]:
                         )
                     )
     return findings
+
+
+def rule_coverage_categories() -> list[str]:
+    return sorted({str(rule.get("category")) for rule in load_rules() if rule.get("category")})
 
 
 SEVERITY_RANK = {
