@@ -30,7 +30,7 @@ Latest scanner-only benchmark summary:
 | True positives | 41 |
 | False positives | 0 |
 | False negatives | 0 |
-| Precision / recall / F1 | 1.000 / 1.000 / 1.000 |
+| Precision / recall / F1 | 1.000  |
 | Failed scanners | 0 |
 
 The full small summary is in [`examples/nope-benchmark/scanner-only-summary.md`](examples/nope-benchmark/scanner-only-summary.md).
