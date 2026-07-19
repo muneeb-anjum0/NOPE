@@ -2,7 +2,7 @@
 
 Date: 2026-07-19
 
-This file tracks remaining debt after Stage 11 approval and before the final Stage 12 clean-room audit. Items that were fixed in Stages 1-11 have been removed from active debt and are preserved in `docs/IMPLEMENTATION_WORKLOG.md`.
+This file tracks current known debt and explicit external blocks. Historical fixed items are preserved in `docs/audits/IMPLEMENTATION_WORKLOG.md`.
 
 ## High
 

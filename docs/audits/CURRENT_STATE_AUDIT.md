@@ -51,4 +51,4 @@ The following are outside the local-product completion scope and must not be cla
 
 ## Final Audit Status
 
-Stage 12 is responsible for replacing stale claims, verifying documented commands from a clean environment, running the full regression/benchmark/security matrix, committing final cleanup, and producing the final completion report. Evidence is recorded in `docs/FINAL_CLEAN_ROOM_AUDIT.md`.
+Stage 12 was responsible for replacing stale claims, verifying documented commands from a clean environment, running the full regression/benchmark/security matrix, committing final cleanup, and producing the final completion report. Historical evidence is recorded in `docs/audits/FINAL_CLEAN_ROOM_AUDIT.md`.

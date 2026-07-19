@@ -1,7 +1,7 @@
 # NOPE Capability Matrix
 
 Date: 2026-07-19
-Stage 12 pre-stage commit: `6267b3c6b05c0671d2d311876b3b25f3e4885dd1`
+Current source-of-truth companion to the GitHub-facing README. Historical stage evidence lives in [`audits/`](audits/).
 
 | Capability | Local-product status | Evidence | External or production limit |
 | --- | --- | --- | --- |

@@ -98,7 +98,7 @@ Result: PASS with classified matches.
 | `placeholder` in web inputs | User-facing form ghost text, not fake behavior. |
 | `pending`, `skipped`, `unsupported`, `disabled` in runtime code | Legitimate scan/event/coverage states that must be reported honestly. |
 | `fake` in GitHub docs/settings | Explicit statement that production paths do not fake repository access. |
-| Historical `docs/IMPLEMENTATION_WORKLOG.md` entries | Preserved dated history; file now has a header warning that old entries are not current status. |
+| Historical `docs/audits/IMPLEMENTATION_WORKLOG.md` entries | Preserved dated history; file has a header warning that old entries are not current status. |
 
 Skipped test classification:
 

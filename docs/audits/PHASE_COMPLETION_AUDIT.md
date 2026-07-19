@@ -2,7 +2,7 @@
 
 Date: 2026-07-19
 
-This file preserves a high-level phase/program view after Stages 1-11 were approved and Stage 12 began. Detailed evidence lives in `docs/COMPLETION_MASTER_PLAN.md`, `docs/IMPLEMENTATION_WORKLOG.md`, and `docs/FINAL_CLEAN_ROOM_AUDIT.md`.
+This file preserves a high-level phase/program view after Stages 1-11 were approved and Stage 12 began. Detailed historical evidence lives in this `docs/audits/` folder.
 
 | Program area | Intended scope | Current status before final Stage 12 verification | Completion classification |
 | --- | --- | --- | --- |
