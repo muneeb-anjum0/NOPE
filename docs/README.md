@@ -1,8 +1,5 @@
 ﻿# NOPE Documentation
 
-Human note: this doc is meant to explain the thing plainly. If something is still limited or local-only, I would rather say that out loud than hide it behind shiny wording.
-
-
 Current-facing docs live in this directory. Older build notes and audit ledgers live in [`audits/`](audits/) so the repo root stays focused.
 
 ## Start Here

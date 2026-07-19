@@ -1,8 +1,5 @@
 ﻿# NOPE Feature Ledger
 
-Human note: this doc is meant to explain the thing plainly. If something is still limited or local-only, I would rather say that out loud than hide it behind shiny wording.
-
-
 This file is the quick version. It says what works today, what is still local-only, and where I would be careful before treating NOPE like production infrastructure.
 
 The long phase-by-phase history is archived in [`audits/`](audits/). I keep it around because it is useful when tracing old decisions, but it should not be the first thing someone reads when they land in this repo.

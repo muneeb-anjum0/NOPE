@@ -1,8 +1,5 @@
 ﻿# NOPE Development
 
-Human note: this doc is meant to explain the thing plainly. If something is still limited or local-only, I would rather say that out loud than hide it behind shiny wording.
-
-
 ## Prerequisites
 
 - Node.js 22+ or 24+

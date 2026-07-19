@@ -1,8 +1,5 @@
 ﻿# NOPE Benchmark Example
 
-Tiny note: this file is dry on purpose. It is here so a reviewer can check the numbers without opening a giant generated artifact.
-
-
 This folder gives reviewers a quick, concrete artifact to inspect before running the whole stack.
 
 The benchmark fixture lives in [`../../benchmarks/fixtures/nope-benchmark-v1`](../../benchmarks/fixtures/nope-benchmark-v1), and its expected findings live in [`../../benchmarks/expected/nope-benchmark-v1.expected.json`](../../benchmarks/expected/nope-benchmark-v1.expected.json).

@@ -1,6 +1,4 @@
-# Archived Current-State Audit
-
-Reader note: this is an archived build log. It is intentionally blunt and checklist-heavy because I used it to keep the work honest while building, not because it is meant to be a polished product page.
+﻿# Archived Current-State Audit
 
 This audit was written when I needed to stop and ask, "what is actually real here?" That question was worth asking. The old version answered it with a wall of status text, which was accurate enough for development but not fun to read.
 

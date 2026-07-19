@@ -1,8 +1,5 @@
 ﻿# NOPE Testing
 
-Human note: this doc is meant to explain the thing plainly. If something is still limited or local-only, I would rather say that out loud than hide it behind shiny wording.
-
-
 Use these commands from the repository root unless noted.
 
 ## Backend

@@ -1,8 +1,5 @@
 ﻿# NOPE Design System
 
-Human note: this doc is meant to explain the thing plainly. If something is still limited or local-only, I would rather say that out loud than hide it behind shiny wording.
-
-
 NOPE uses one theme only: dark graphite. There is no light mode and no theme switcher.
 
 ## Tokens

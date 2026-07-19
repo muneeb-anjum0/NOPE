@@ -1,8 +1,5 @@
 ﻿# NOPE Benchmarks
 
-Human note: this doc is meant to explain the thing plainly. If something is still limited or local-only, I would rather say that out loud than hide it behind shiny wording.
-
-
 Benchmarks are where I try to keep myself honest. NOPE should not get to claim "it finds things" unless a small, reviewable fixture proves what it found, what it missed, and what it duplicated.
 
 ## Fixture

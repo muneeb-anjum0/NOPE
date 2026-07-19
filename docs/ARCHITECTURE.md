@@ -1,8 +1,5 @@
 ﻿# NOPE Architecture
 
-Human note: this doc is meant to explain the thing plainly. If something is still limited or local-only, I would rather say that out loud than hide it behind shiny wording.
-
-
 NOPE is a rules-first security review workbench. The local app is structured as a monorepo:
 
 ```text

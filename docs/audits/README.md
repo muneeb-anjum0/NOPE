@@ -1,8 +1,5 @@
 ﻿# NOPE Audit Archive
 
-Reader note: this is an archived build log. It is intentionally blunt and checklist-heavy because I used it to keep the work honest while building, not because it is meant to be a polished product page.
-
-
 This folder preserves older build notes and cleanup records.
 
 These files are intentionally not the first thing a GitHub visitor sees. They remain available for traceability, but current project status lives in:

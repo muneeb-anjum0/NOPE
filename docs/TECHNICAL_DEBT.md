@@ -1,8 +1,5 @@
 ﻿# NOPE Technical Debt
 
-Human note: this doc is meant to explain the thing plainly. If something is still limited or local-only, I would rather say that out loud than hide it behind shiny wording.
-
-
 Date: 2026-07-19
 
 This file tracks current known debt and explicit external blocks. Historical fixed items are preserved in `docs/audits/IMPLEMENTATION_WORKLOG.md`.

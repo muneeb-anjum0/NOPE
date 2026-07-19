@@ -1,6 +1,4 @@
-# Archived Completion Audit
-
-Reader note: this is an archived build log. It is intentionally blunt and checklist-heavy because I used it to keep the work honest while building, not because it is meant to be a polished product page.
+﻿# Archived Completion Audit
 
 The old version of this file was full of phase language. It was useful for making sure I did not skip hard things, but it now reads like a prompt transcript.
 

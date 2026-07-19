@@ -1,6 +1,4 @@
-# Archived Reconciliation Notes
-
-Reader note: this is an archived build log. It is intentionally blunt and checklist-heavy because I used it to keep the work honest while building, not because it is meant to be a polished product page.
+﻿# Archived Reconciliation Notes
 
 This file used to reconcile old phase labels with the real repository state. That was important during cleanup because older docs had started to drift from the code.
 

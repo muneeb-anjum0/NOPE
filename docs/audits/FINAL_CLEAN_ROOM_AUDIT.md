@@ -1,6 +1,4 @@
-# Archived Clean-Room Audit
-
-Reader note: this is an archived build log. It is intentionally blunt and checklist-heavy because I used it to keep the work honest while building, not because it is meant to be a polished product page.
+﻿# Archived Clean-Room Audit
 
 The old clean-room audit was a giant verification ledger. It helped while I was checking migrations, Docker startup, scanner behavior, reports, Qwen, browser tests, and security boundaries. It also made the repo look like it was written by a checklist machine.
 

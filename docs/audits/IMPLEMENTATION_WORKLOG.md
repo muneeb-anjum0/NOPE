@@ -1,6 +1,4 @@
-# Archived Implementation Worklog
-
-Reader note: this is an archived build log. It is intentionally blunt and checklist-heavy because I used it to keep the work honest while building, not because it is meant to be a polished product page.
+﻿# Archived Implementation Worklog
 
 This used to be the running diary of the build. It had value at the time: every scanner, UI pass, Docker refresh, Qwen fix, report change, and pipeline hardening step had somewhere to land.
 

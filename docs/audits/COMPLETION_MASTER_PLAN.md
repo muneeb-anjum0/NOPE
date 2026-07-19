@@ -1,6 +1,4 @@
-# Archived Build Plan
-
-Reader note: this is an archived build log. It is intentionally blunt and checklist-heavy because I used it to keep the work honest while building, not because it is meant to be a polished product page.
+﻿# Archived Build Plan
 
 This file used to hold a very long stage-by-stage completion plan. It was useful while the project was moving fast, but it read terribly on GitHub. Too much ceremony, too many percentages, too much "acceptance criteria" energy.
 

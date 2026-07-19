@@ -1,8 +1,5 @@
 ﻿# NOPE<span style="color:#f02a56">.</span>
 
-Quick note: this is a real local project, with sharp edges and all. I care more about showing what it actually does than making it sound magically finished.
-
-
 **NOPE is a local-first AppSec review workbench for authorized repository and URL scans.**
 
 I built it around a simple frustration: fast builders often get scanner output, but not enough evidence to understand what is real, what was missed, and what still needs a human decision.

@@ -1,8 +1,5 @@
 ﻿# NOPE Capability Matrix
 
-Human note: this doc is meant to explain the thing plainly. If something is still limited or local-only, I would rather say that out loud than hide it behind shiny wording.
-
-
 Date: 2026-07-19
 This is the companion table to the GitHub-facing README. Older build/audit notes live in [`audits/`](audits/).
 

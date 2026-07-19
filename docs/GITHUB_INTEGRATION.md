@@ -1,8 +1,5 @@
 ﻿# NOPE GitHub Integration
 
-Human note: this doc is meant to explain the thing plainly. If something is still limited or local-only, I would rather say that out loud than hide it behind shiny wording.
-
-
 NOPE supports a secure local GitHub integration contract and real private repository activation when the operator supplies credentials.
 
 ## Current Model
