@@ -1,4 +1,7 @@
-# NOPE Troubleshooting
+﻿# NOPE Troubleshooting
+
+Human note: this doc is meant to explain the thing plainly. If something is still limited or local-only, I would rather say that out loud than hide it behind shiny wording.
+
 
 ## Docker Stack Will Not Start
 

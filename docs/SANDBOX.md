@@ -1,6 +1,9 @@
-# NOPE Sandbox
+﻿# NOPE Sandbox
 
-Phase 10 adds a local Docker sandbox for repository workflows that need limited code execution. The sandbox is opt-in per repository through `.nope/sandbox.json`; repositories without a manifest are marked not applicable for dynamic sandbox coverage.
+Human note: this doc is meant to explain the thing plainly. If something is still limited or local-only, I would rather say that out loud than hide it behind shiny wording.
+
+
+NOPE has a local Docker sandbox for repository workflows that need limited code execution. The sandbox is opt-in per repository through `.nope/sandbox.json`; repositories without a manifest are marked not applicable for dynamic sandbox coverage.
 
 ## Manifest
 

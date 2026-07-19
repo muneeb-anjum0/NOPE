@@ -1,6 +1,9 @@
-# NOPE Pipeline
+﻿# NOPE Pipeline
 
-This document describes the verified local pipeline as of Phase 16.
+Human note: this doc is meant to explain the thing plainly. If something is still limited or local-only, I would rather say that out loud than hide it behind shiny wording.
+
+
+This is the path a scan takes through NOPE. I wrote it down because a security tool that cannot explain its own pipeline is hard to trust.
 
 ## 1. Authentication
 
@@ -26,7 +29,7 @@ Supported modes:
 
 Redis stores queued jobs, active-scan locks, cancellation flags, processing jobs, retry metadata, and worker heartbeat. The worker consumes jobs, checkpoints scan snapshots and stage progress to Postgres, honors cancellation between stages, retries bounded failures with backoff, and exposes queue/worker health through API endpoints.
 
-Durable progress does not depend on Redis or the browser staying connected. Stage 2 adds a `scan_events` table that records ordered, idempotent events for scan creation, queueing, preparation, stage transitions, scanner starts/completions/failures/timeouts/unavailable states, retries, cancellation request/acknowledgement, worker heartbeat/lost recovery, Qwen start/completion/failure, report generation, and terminal scan states. `/api/scans/{scan_id}/events` replays that table with `after_sequence` and `limit`, so frontend polling is only a transport layer.
+Durable progress does not depend on Redis or the browser staying connected. The `scan_events` table records ordered, idempotent events for scan creation, queueing, preparation, stage transitions, scanner starts/completions/failures/timeouts/unavailable states, retries, cancellation request/acknowledgement, worker heartbeat/lost recovery, Qwen start/completion/failure, report generation, and terminal scan states. `/api/scans/{scan_id}/events` replays that table with `after_sequence` and `limit`, so frontend polling is only a transport layer.
 
 ## 5. Repository Analysis
 
@@ -56,7 +59,7 @@ URL checks are non-destructive. They inspect headers, cookies, exposed paths, CO
 
 ## 8. Findings
 
-Findings are normalized into the canonical model with scanner, original rule, NOPE rule, severity, original severity, confidence, CWE, OWASP, file, line, route, package, CVE, evidence, raw artifact, remediation, lifecycle, baseline, recurrence, and suppression fields.
+Findings are normalized into one shared model with scanner, original rule, NOPE rule, severity, original severity, confidence, CWE, OWASP, file, line, route, package, CVE, evidence, raw artifact, remediation, lifecycle, baseline, recurrence, and suppression fields.
 
 Deduplication merges repeated evidence for the same issue while preserving scanner/custom/dynamic evidence.
 
@@ -86,4 +89,4 @@ Baselines snapshot scan, repository, target, scanner, rule, model, RAG, coverage
 
 ## 12. UI
 
-The landing page lives at `/`. The dashboard lives under `/app/projects/local/*` with routes for overview, findings, attack map, coverage, scans, assets, reports, and settings. Phase 15 verified these routes at 1440, 1280, 1024, 768, 390, and 360 pixel widths.
+The landing page lives at `/`. The dashboard lives under `/app/projects/local/*` with routes for overview, findings, attack map, coverage, scans, assets, reports, and settings. Browser checks cover desktop, tablet, and small mobile widths.

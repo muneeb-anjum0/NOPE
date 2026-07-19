@@ -1,4 +1,7 @@
-# Scanner-Plus-Qwen Benchmark Summary
+﻿# Scanner-Plus-Qwen Benchmark Summary
+
+Tiny note: this file is dry on purpose. It is here so a reviewer can check the numbers without opening a giant generated artifact.
+
 
 Generated from `nope-benchmark-v1` with local Qwen enrichment available.
 

@@ -1,4 +1,7 @@
-# NOPE Benchmark Example
+﻿# NOPE Benchmark Example
+
+Tiny note: this file is dry on purpose. It is here so a reviewer can check the numbers without opening a giant generated artifact.
+
 
 This folder gives reviewers a quick, concrete artifact to inspect before running the whole stack.
 

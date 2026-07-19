@@ -1,4 +1,7 @@
-# NOPE Scanners
+﻿# NOPE Scanners
+
+Human note: this doc is meant to explain the thing plainly. If something is still limited or local-only, I would rather say that out loud than hide it behind shiny wording.
+
 
 NOPE treats scanner output as evidence. Scanner findings are normalized into the shared `Finding` model, scanner runs are persisted with command/exit-code/output metadata, and missing tools are reported as failed coverage instead of being faked.
 
@@ -14,7 +17,7 @@ The API image installs:
 - `checkov` for Terraform, Dockerfile, and CI/CD policy checks.
 - `hadolint` for Dockerfile lint/security checks.
 - `bandit` for Python security analysis.
-- `OWASP ZAP baseline` is represented in the scanner contract. Static repository scans mark it skipped/not applicable, while Stage 4 sandbox scans can run it against a declared internal target.
+- `OWASP ZAP baseline` is represented in the scanner contract. Static repository scans mark it skipped/not applicable, while sandbox scans can run it against a declared internal target.
 
 These tools run during repository scans when applicable to the uploaded project.
 
@@ -22,7 +25,7 @@ Semgrep runs with the local NOPE ruleset at `security-packs/semgrep/nope.yml` so
 
 ## Parser Coverage
 
-Phase 2 parser support exists for:
+Parser support exists for:
 
 - Semgrep JSON
 - Gitleaks JSON
@@ -40,13 +43,13 @@ Phase 2 parser support exists for:
 - Checkov JSON
 - Hadolint JSON
 - Bandit JSON
-- OWASP ZAP baseline is not parsed during static repository scans because it is not applicable without a dynamic target. Stage 4 stores the bounded ZAP stdout/stderr evidence as sandbox artifacts.
+- OWASP ZAP baseline is not parsed during static repository scans because it is not applicable without a dynamic target. Sandbox scans store bounded ZAP stdout/stderr evidence as artifacts.
 
 Parsers produce normalized severity, confidence, category, affected file, line, package coordinates, advisory/CVE identity, dependency path when the scanner provides it, fixed version guidance when available, evidence, remediation, source, and stable fingerprints.
 
 ## Finding Normalization And Lifecycle
 
-Scanner-native identifiers are preserved as `original_fingerprint` and source metadata. NOPE then assigns a canonical fingerprint from the normalized correlation key so unchanged findings keep stable identity across scans and true duplicates can merge without losing evidence.
+Scanner-native identifiers are preserved as `original_fingerprint` and source metadata. NOPE then assigns a stable fingerprint from the normalized correlation key so unchanged findings keep the same identity across scans and true duplicates can merge without losing evidence.
 
 Merged findings keep original scanner rule IDs and severities, normalized NOPE severity and confidence, scanner source lists, raw artifact references where available, evidence rows from every contributing source, package/CVE identity, route/file/line/symbol metadata, and graph correlation hints.
 

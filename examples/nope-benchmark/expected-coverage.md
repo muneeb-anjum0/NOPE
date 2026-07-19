@@ -1,4 +1,7 @@
-# Benchmark Expected Coverage
+﻿# Benchmark Expected Coverage
+
+Tiny note: this file is dry on purpose. It is here so a reviewer can check the numbers without opening a giant generated artifact.
+
 
 The `nope-benchmark-v1` fixture is intentionally small enough to audit, but broad enough to exercise the scanner pipeline.
 

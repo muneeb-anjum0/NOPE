@@ -1,6 +1,9 @@
-# NOPE Architecture
+﻿# NOPE Architecture
 
-NOPE is a rules-first, evidence-driven application security orchestration platform. The local MVP is structured as a monorepo:
+Human note: this doc is meant to explain the thing plainly. If something is still limited or local-only, I would rather say that out loud than hide it behind shiny wording.
+
+
+NOPE is a rules-first security review workbench. The local app is structured as a monorepo:
 
 ```text
 apps/
@@ -70,11 +73,11 @@ Current scan objects are also stored as JSON snapshots so the API contract remai
 
 ## Finding lifecycle
 
-Promoted findings use a canonical NOPE fingerprint for recurrence, drift, and deduplication while preserving the original scanner fingerprint and source metadata in the finding payload. Duplicate evidence from static scanners, dependency scanners, dynamic checks, custom rules, graph hints, Qwen review, and tests is merged into one finding without dropping scanner sources or evidence rows.
+Promoted findings use a stable NOPE fingerprint for recurrence, drift, and deduplication while preserving the original scanner fingerprint and source metadata in the finding payload. Duplicate evidence from static scanners, dependency scanners, dynamic checks, custom rules, graph hints, Qwen review, and tests is merged into one finding without dropping scanner sources or evidence rows.
 
 Lifecycle updates are persisted through `finding_lifecycle_events`, `finding_history`, and `audit_logs`. Valid states are `new`, `confirmed`, `fixing`, `fixed`, `verified`, `false_positive`, `accepted_risk`, `suppressed`, `reopened`, and `reintroduced`. Updates are owner-scoped and optimistic-versioned through `lifecycle_version`.
 
-Suppressions require a reason, actor, timestamp, scope, and optional expiry. Expired suppressions reopen automatically when the scan/finding is read. A finding is marked reintroduced when its canonical fingerprint appears again in the same project after a prior fixed or verified lifecycle state.
+Suppressions require a reason, actor, timestamp, scope, and optional expiry. Expired suppressions reopen automatically when the scan/finding is read. A finding is marked reintroduced when the same stable fingerprint appears again in the same project after a prior fixed or verified lifecycle state.
 
 ## Job flow
 

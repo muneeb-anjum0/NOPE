@@ -1,4 +1,7 @@
-# NOPE<span style="color:#f02a56">.</span>
+﻿# NOPE<span style="color:#f02a56">.</span>
+
+Quick note: this is a real local project, with sharp edges and all. I care more about showing what it actually does than making it sound magically finished.
+
 
 **NOPE is a local-first AppSec review workbench for authorized repository and URL scans.**
 
@@ -248,7 +251,7 @@ apps/
 benchmarks/  Versioned scanner benchmark fixture and expected output
 docker/      API and web Dockerfiles
 docs/        Current project documentation
-docs/audits/ Historical completion and clean-room audit ledgers
+docs/audits/ Older build/audit notes kept for archaeology
 examples/    Small benchmark summaries for quick review
 packages/    Shared TypeScript types
 security-packs/

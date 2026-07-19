@@ -1,4 +1,7 @@
-# NOPE Security Model
+﻿# NOPE Security Model
+
+Human note: this doc is meant to explain the thing plainly. If something is still limited or local-only, I would rather say that out loud than hide it behind shiny wording.
+
 
 NOPE treats every uploaded repository and every scanned target as potentially hostile.
 
@@ -33,7 +36,7 @@ NOPE treats every uploaded repository and every scanned target as potentially ho
 - Network is disabled for repository workflows.
 - ZAP dynamic scans use a private internal Docker network: one constrained application container is started from the declared manifest, one ZAP container scans only that internal target, and both are removed after the run.
 - The ZAP scanner image keeps its writable root filesystem because the upstream image writes runtime files during startup; it still receives dropped capabilities, `no-new-privileges`, private-network-only access, tmpfs work paths, and memory/PID/time limits.
-- Stage 4 dynamic scans perform readiness checks before ZAP, capture ZAP version/config/raw JSON as bounded artifacts, parse alerts into normal findings, and mark unauthenticated, skipped, partial, failed-build, failed-startup, readiness, timeout, and crash states explicitly.
+- Dynamic scans perform readiness checks before ZAP, capture ZAP version/config/raw JSON as bounded artifacts, parse alerts into normal findings, and mark unauthenticated, skipped, partial, failed-build, failed-startup, readiness, timeout, and crash states explicitly.
 - Target application containers and scanner containers are separated in the architecture.
 
 ## URL boundaries
@@ -49,7 +52,7 @@ NOPE treats every uploaded repository and every scanned target as potentially ho
 ## Residual risk
 
 - The default Compose file is still a local-development deployment and publishes Postgres, Redis, MinIO, API, web, and llama.cpp ports on localhost for operator access and debugging. Production deployments should bind data services to private networks only, use real secrets/TLS, and restrict host firewall exposure.
-- The local `nope-runner` service still holds Docker daemon authority because local Docker sandboxing requires a daemon boundary. A runner compromise can become a Docker-host compromise. The important Stage 3 change is that the general worker, API, web app, scanner code, and uploaded repositories no longer receive unrestricted Docker daemon access.
+- The local `nope-runner` service still holds Docker daemon authority because local Docker sandboxing requires a daemon boundary. A runner compromise can become a Docker-host compromise. The important design choice is that the general worker, API, web app, scanner code, and uploaded repositories no longer receive unrestricted Docker daemon access.
 - Rootless Docker, a Docker authorization proxy, or a separate runner host would further reduce this residual risk in production deployments.
 - ZAP runs on a runner-created internal Docker network only when a repository explicitly opts in with a sandbox manifest.
 - `nope-runner` remains root inside its own container because it must reach the Docker socket. The general API, worker, and web services run non-root with dropped capabilities, `no-new-privileges`, read-only roots, tmpfs scratch space, and CPU/memory/PID limits.

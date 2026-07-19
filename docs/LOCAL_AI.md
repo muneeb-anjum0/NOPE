@@ -1,4 +1,7 @@
-# NOPE Local AI
+﻿# NOPE Local AI
+
+Human note: this doc is meant to explain the thing plainly. If something is still limited or local-only, I would rather say that out loud than hide it behind shiny wording.
+
 
 NOPE integrates local Qwen through a dedicated llama.cpp server container. Ollama is not used.
 
@@ -71,13 +74,13 @@ GPU mode requests an NVIDIA GPU through Docker Compose device reservations. The 
 
 ## Current Verification
 
-Verified on 2026-07-15 and refreshed during Phase 16:
+Verified on 2026-07-15 and refreshed after the later cleanup work:
 
 - GGUF file exists at `D:\Desktop\Model\Qwen3-8B-Q4_K_M.gguf`.
 - GPU is `NVIDIA GeForce GTX 1060 with Max-Q Design`, 6144 MiB total.
 - `ghcr.io/ggml-org/llama.cpp:server-cuda` loads the model in `nope-ai`.
 - Stable GPU setting is `NOPE_QWEN_GPU_LAYERS=28`.
-- Measured VRAM at 28 layers is about 4041-4485 MiB depending on runtime state; the Phase 16 CUDA-container sample was 4485 MiB out of 6144 MiB, below the 5000 MiB ceiling.
+- Measured VRAM at 28 layers is about 4041-4485 MiB depending on runtime state; the later CUDA-container sample was 4485 MiB out of 6144 MiB, below the 5000 MiB ceiling.
 - `NOPE_QWEN_GPU_LAYERS=30` failed to fit in available GPU memory, so 28 is the final verified setting.
 - Direct `/completion`, structured `/v1/chat/completions`, API health, and NOPE finding explanation all succeeded.
 - With `nope-ai` stopped, repository scan `scan_443bb3dbdb9b4568` still completed with 7 deterministic findings and recorded Qwen review as failed.

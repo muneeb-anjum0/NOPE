@@ -1,4 +1,7 @@
-# NOPE Testing
+﻿# NOPE Testing
+
+Human note: this doc is meant to explain the thing plainly. If something is still limited or local-only, I would rather say that out loud than hide it behind shiny wording.
+
 
 Use these commands from the repository root unless noted.
 
@@ -22,7 +25,7 @@ python -m pytest apps/api/tests/test_stage9_github_integration.py apps/api/tests
 python -m pytest apps/api/tests/test_stage11_self_security.py apps/api/tests/test_api_auth.py apps/api/tests/test_security.py -q
 ```
 
-Host Ruff is optional. The canonical Docker image contains the scanner/runtime dependencies used by the product; do not treat missing host Ruff as a product failure.
+Host Ruff is optional. The Docker image contains the scanner/runtime dependencies used by the product; do not treat missing host Ruff as a product failure.
 
 ## Frontend
 
@@ -105,7 +108,7 @@ docker compose run --rm --no-deps -e TRIVY_CACHE_DIR=/app/.nope-workspaces/trivy
 
 ## Clean-Room Verification
 
-Stage 12 clean-room verification may remove local Compose volumes:
+Full clean-room verification may remove local Compose volumes:
 
 ```powershell
 docker compose down -v

@@ -1,6 +1,9 @@
-# NOPE Audit Archive
+﻿# NOPE Audit Archive
 
-This folder preserves historical implementation, phase, stage, and clean-room audit records.
+Reader note: this is an archived build log. It is intentionally blunt and checklist-heavy because I used it to keep the work honest while building, not because it is meant to be a polished product page.
+
+
+This folder preserves older build notes and cleanup records.
 
 These files are intentionally not the first thing a GitHub visitor sees. They remain available for traceability, but current project status lives in:
 
@@ -13,9 +16,9 @@ These files are intentionally not the first thing a GitHub visitor sees. They re
 
 | File | Purpose |
 | --- | --- |
-| [`COMPLETION_MASTER_PLAN.md`](COMPLETION_MASTER_PLAN.md) | Historical stage-by-stage completion ledger |
-| [`CURRENT_STATE_AUDIT.md`](CURRENT_STATE_AUDIT.md) | Historical state audit snapshot |
-| [`FINAL_CLEAN_ROOM_AUDIT.md`](FINAL_CLEAN_ROOM_AUDIT.md) | Final clean-room verification evidence |
-| [`IMPLEMENTATION_WORKLOG.md`](IMPLEMENTATION_WORKLOG.md) | Long-form historical implementation worklog |
-| [`PHASE_COMPLETION_AUDIT.md`](PHASE_COMPLETION_AUDIT.md) | Phase completion summary |
-| [`PHASE_RECONCILIATION.md`](PHASE_RECONCILIATION.md) | Phase/status reconciliation audit |
+| [`COMPLETION_MASTER_PLAN.md`](COMPLETION_MASTER_PLAN.md) | Old build-plan notes |
+| [`CURRENT_STATE_AUDIT.md`](CURRENT_STATE_AUDIT.md) | Old state snapshot |
+| [`FINAL_CLEAN_ROOM_AUDIT.md`](FINAL_CLEAN_ROOM_AUDIT.md) | Old clean-room check notes |
+| [`IMPLEMENTATION_WORKLOG.md`](IMPLEMENTATION_WORKLOG.md) | Old implementation diary |
+| [`PHASE_COMPLETION_AUDIT.md`](PHASE_COMPLETION_AUDIT.md) | Old completion notes |
+| [`PHASE_RECONCILIATION.md`](PHASE_RECONCILIATION.md) | Old status reconciliation notes |

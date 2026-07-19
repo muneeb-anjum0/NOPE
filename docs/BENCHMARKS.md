@@ -1,6 +1,9 @@
-# NOPE Benchmarks
+﻿# NOPE Benchmarks
 
-NOPE includes a reproducible local benchmark fixture and a machine-readable runner for scanner quality gates.
+Human note: this doc is meant to explain the thing plainly. If something is still limited or local-only, I would rather say that out loud than hide it behind shiny wording.
+
+
+Benchmarks are where I try to keep myself honest. NOPE should not get to claim "it finds things" unless a small, reviewable fixture proves what it found, what it missed, and what it duplicated.
 
 ## Fixture
 
@@ -8,7 +11,7 @@ NOPE includes a reproducible local benchmark fixture and a machine-readable runn
 - Manifest: `benchmarks/fixtures/nope-benchmark-v1/benchmark-manifest.json`
 - Expected output: `benchmarks/expected/nope-benchmark-v1.expected.json`
 
-The fixture intentionally covers 41 Stage 1 categories: backend and frontend secrets, committed `.env`, public source maps, SQL and NoSQL injection, command injection, stored/reflected XSS, unsafe HTML rendering, SSRF, path traversal, unsafe archive extraction, unsafe upload handling, IDOR, missing ownership and tenant scope, frontend-only authorization, authentication bypass, weak password reset, login brute force, signup abuse, OTP flooding, missing API rate limiting, AI cost abuse, insecure CORS, missing CSRF protection, vulnerable dependencies, unsafe Dockerfile, unsafe IaC, debug/staging exposure, missing and overly permissive Supabase RLS, public Supabase storage, permissive Firebase rules, tracker-before-consent, missing security headers, unsafe cookies, shell-command injection in build scripts, and credential leakage in logs/config.
+The fixture intentionally covers 41 security categories: backend and frontend secrets, committed `.env`, public source maps, SQL and NoSQL injection, command injection, stored/reflected XSS, unsafe HTML rendering, SSRF, path traversal, unsafe archive extraction, unsafe upload handling, IDOR, missing ownership and tenant scope, frontend-only authorization, authentication bypass, weak password reset, login brute force, signup abuse, OTP flooding, missing API rate limiting, AI cost abuse, insecure CORS, missing CSRF protection, vulnerable dependencies, unsafe Dockerfile, unsafe IaC, debug/staging exposure, missing and overly permissive Supabase RLS, public Supabase storage, permissive Firebase rules, tracker-before-consent, missing security headers, unsafe cookies, shell-command injection in build scripts, and credential leakage in logs/config.
 
 It also includes safe negative controls for parameterized SQL, correctly scoped authorization, consent-gated trackers, and placeholder/example secrets.
 
@@ -65,9 +68,9 @@ The runner also writes a Markdown summary next to the JSON output unless `--mark
 
 Known false negatives are no longer accepted as a passing state. If any expected item is missing, scanner-only and scanner-plus-Qwen modes fail.
 
-## Current verified Stage 1 result
+## Current Local Result
 
-Verified on 2026-07-18 from the canonical Docker stack after rebuilding:
+Verified on 2026-07-18 from a rebuilt Docker stack:
 
 | Mode | Status | Expected | Actual | TP | FP | FN | Known FN | Related duplicates | Precision | Recall | F1 | Duration |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -80,7 +83,7 @@ The duplicate count represents related supporting evidence from multiple scanner
 
 `.github/workflows/benchmarks.yml` runs the scanner-only benchmark in the API scanner image on pushes and pull requests. It uploads `.nope-benchmark-results/scanner-only.json` and `.nope-benchmark-results/scanner-only.md` as the `scanner-only-benchmark` artifact.
 
-The scanner-plus-Qwen benchmark remains a canonical local Docker verification because CI runners do not have the local GGUF model, NVIDIA GPU access, or the user-owned model mount by default.
+The scanner-plus-Qwen benchmark stays local because GitHub runners do not have the GGUF model, NVIDIA GPU access, or the user-owned model mount.
 
 ## Modes
 
