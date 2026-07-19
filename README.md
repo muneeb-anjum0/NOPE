@@ -200,7 +200,7 @@ flowchart TB
     direction TB
     scanner["Scanner evidence"]
     route["Route and attack-surface context"]
-    graph["Code graph neighbors"]
+    codeGraph["Code graph neighbors"]
     repo["Focused repository files"]
     symbols["Function and class snippets"]
     stack["Stack and scanner metadata"]
@@ -219,7 +219,7 @@ flowchart TB
 
   finding --> scanner
   finding --> route
-  finding --> graph
+  finding --> codeGraph
   finding --> repo
   finding --> symbols
   finding --> stack
@@ -227,17 +227,17 @@ flowchart TB
 
   scanner --> score
   route --> score
-  graph --> score
+  codeGraph --> score
   repo --> score
   symbols --> score
   stack --> score
   guidance --> score
   score --> limits --> safety --> packet --> prompt --> qwen --> validate --> cache --> result
 
-  classDef node fill:#101211,stroke:#f02a56,stroke-width:1.5px,color:#f5f7f5;
+  classDef ragNode fill:#101211,stroke:#f02a56,stroke-width:1.5px,color:#f5f7f5;
   classDef important fill:#171012,stroke:#f02a56,stroke-width:2px,color:#f5f7f5;
   class finding,packet,prompt,qwen,validate,cache,result important;
-  class scanner,route,graph,repo,symbols,stack,guidance,score,limits,safety node;
+  class scanner,route,codeGraph,repo,symbols,stack,guidance,score,limits,safety ragNode;
 ```
 
 Qwen action prompts are mode-specific:
