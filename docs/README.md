@@ -11,11 +11,13 @@ Current-facing docs live in this directory. Historical completion logs and audit
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Service boundaries and system design |
 | [`PIPELINE.md`](PIPELINE.md) | Scan flow, durable events, evidence gate, reports, drift |
 | [`SECURITY_MODEL.md`](SECURITY_MODEL.md) | Threat model, safeguards, and residual risk |
+| [`TRUST_AND_LIMITS.md`](TRUST_AND_LIMITS.md) | Fast reviewer guide to what is proven and what is not |
 | [`SCANNERS.md`](SCANNERS.md) | Scanner adapters, parsing, evidence handling |
 | [`SANDBOX.md`](SANDBOX.md) | Opt-in dynamic/ZAP scanning model |
 | [`LOCAL_AI.md`](LOCAL_AI.md) | Qwen, llama.cpp, model mount, GPU/CPU profiles |
 | [`TESTING.md`](TESTING.md) | Backend, frontend, benchmark, browser, and Docker checks |
 | [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) | Common local setup and runtime issues |
+| [`../examples/nope-benchmark`](../examples/nope-benchmark) | Small benchmark summaries for quick reviewer proof |
 
 ## Reference
 

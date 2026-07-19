@@ -8,20 +8,33 @@ NOPE runs deterministic scanners first, validates candidate findings against sur
 
 NOPE does **not** prove an application is secure, compliant, or safe to ship. It reports evidence-backed findings, coverage gaps, scanner failures, dynamic-scan limitations, and residual risk so a human reviewer can make a better decision.
 
+## Quick Proof
+
+If you only want to judge the repo quickly, start here:
+
+1. Read the small benchmark artifacts in [`examples/nope-benchmark`](examples/nope-benchmark).
+2. Check the current capability table in [`docs/CAPABILITY_MATRIX.md`](docs/CAPABILITY_MATRIX.md).
+3. Run the scanner-only benchmark if Docker is available:
+
+```powershell
+docker build -f docker/api.Dockerfile -t nope-api-benchmark .
+docker run --rm -v "${PWD}/.nope-benchmark-results:/app/.nope-benchmark-results" nope-api-benchmark python -m nope_api.benchmarks --mode scanner-only --output .nope-benchmark-results/scanner-only.json --markdown-output .nope-benchmark-results/scanner-only.md
+```
+
 ## Current State
 
 | Area | Status | Honest limit |
 | --- | --- | --- |
-| Local Docker stack | Working | Production deployment still needs real secrets, TLS, backups, and hardened service exposure. |
-| ZIP repository scans | Working | Scan only code you own or are explicitly authorized to test. |
-| URL checks | Working for non-destructive authorized checks | Authenticated crawling of arbitrary production apps is not included. |
-| Dynamic/ZAP scans | Working for supported `.nope/sandbox.json` Node/Python workflows | Unsupported stacks are reported as skipped, partial, or failed. |
-| Scanner pipeline | Working | Some ecosystem CLIs report unavailable unless installed in the scanner image. |
-| Evidence gate | Working | It reduces weak heuristic findings; it does not replace expert review. |
-| Findings lifecycle | Working | More semantic graph precision can improve future root-cause grouping. |
-| Reports | Working | JSON, Markdown, SARIF, and PDF use persisted scan data. |
-| Baselines and drift | Working inside project folders | Different project folders are not compared. |
-| Qwen actions | Working when local model is mounted | First uncached responses are hardware/model-bound. |
+| Local Docker stack | Verified locally | Production deployment still needs real secrets, TLS, backups, and hardened service exposure. |
+| ZIP repository scans | Verified locally | Scan only code you own or are explicitly authorized to test. |
+| URL checks | Verified for non-destructive authorized checks | Authenticated crawling of arbitrary production apps is not included. |
+| Dynamic/ZAP scans | Verified for supported `.nope/sandbox.json` Node/Python workflows | Unsupported stacks are reported as skipped, partial, or failed. |
+| Scanner pipeline | Verified locally | Some ecosystem CLIs report unavailable unless installed in the scanner image. |
+| Evidence gate | Verified locally | It reduces weak heuristic findings; it does not replace expert review. |
+| Findings lifecycle | Verified locally | More semantic graph precision can improve future root-cause grouping. |
+| Reports | Verified locally | JSON, Markdown, SARIF, and PDF use persisted scan data. |
+| Baselines and drift | Verified inside project folders | Different project folders are not compared. |
+| Qwen actions | Verified when local model is mounted | First uncached responses are hardware/model-bound. |
 | GitHub integration | Locally implemented, externally blocked | Real private repository access requires operator credentials and installation. |
 
 ## What NOPE Checks
@@ -236,6 +249,7 @@ benchmarks/  Versioned scanner benchmark fixture and expected output
 docker/      API and web Dockerfiles
 docs/        Current project documentation
 docs/audits/ Historical completion and clean-room audit ledgers
+examples/    Small benchmark summaries for quick review
 packages/    Shared TypeScript types
 security-packs/
   semgrep/   Local Semgrep rules
@@ -250,12 +264,13 @@ security-packs/
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System boundaries and service structure |
 | [`docs/PIPELINE.md`](docs/PIPELINE.md) | Scan lifecycle from input to reports |
 | [`docs/SECURITY_MODEL.md`](docs/SECURITY_MODEL.md) | Threat model, residual risk, and safety boundaries |
+| [`docs/TRUST_AND_LIMITS.md`](docs/TRUST_AND_LIMITS.md) | Fast reviewer guide to what is proven and what is not |
 | [`docs/SCANNERS.md`](docs/SCANNERS.md) | Scanner behavior and evidence handling |
 | [`docs/SANDBOX.md`](docs/SANDBOX.md) | Opt-in sandbox and dynamic scan workflow |
 | [`docs/LOCAL_AI.md`](docs/LOCAL_AI.md) | Qwen and llama.cpp setup |
 | [`docs/TESTING.md`](docs/TESTING.md) | Test and benchmark commands |
 | [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Common local setup issues |
-| [`docs/audits/`](docs/audits/) | Historical phase/stage audit evidence |
+| [`examples/nope-benchmark`](examples/nope-benchmark) | Small reproducible benchmark summaries |
 
 ## Security Notes
 
