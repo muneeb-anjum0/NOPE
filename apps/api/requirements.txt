@@ -7,10 +7,13 @@ python-multipart>=0.0.9
 psycopg[binary]>=3.2.0
 alembic>=1.13.0
 bandit>=1.7.10
-semgrep>=1.80.0
-checkov>=3.2.0
+semgrep==1.121.0
+checkov==3.2.531
 minio>=7.2.0
 redis>=5.0.0
 reportlab>=4.2.0
 cryptography>=42.0.0
-pip-audit>=2.7.3
+pip-audit==2.9.0
+mcp>=1.28.1
+click>=8.3.3
+aiohttp>=3.14.1

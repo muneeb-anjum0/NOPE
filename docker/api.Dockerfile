@@ -45,7 +45,8 @@ RUN curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEA
     && chmod 0777 /app/.nope-workspaces
 
 COPY apps/api/requirements.txt /app/apps/api/requirements.txt
-RUN pip install --no-cache-dir -r /app/apps/api/requirements.txt
+RUN pip install --no-cache-dir -r /app/apps/api/requirements.txt \
+    && pip uninstall -y wheel
 
 COPY apps/api /app/apps/api
 COPY apps/worker /app/apps/worker

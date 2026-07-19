@@ -2,11 +2,12 @@
 
 FastAPI exposes interactive OpenAPI documentation at `/docs`.
 
-Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `Authorization: Bearer <token>` header from the local login flow.
+Except for sanitized `GET /health` and `POST /api/auth/login`, endpoints require a valid `Authorization: Bearer <token>` header from the local login flow.
 
 ## Core endpoints
 
-- `GET /health` - service health, version, scanner availability, AI runtime status, and sandbox configuration health.
+- `GET /health` - sanitized public liveness status only.
+- `GET /api/health/details` - authenticated database, scanner, AI runtime, and sandbox configuration health.
 - `GET /api/projects` - list projects.
 - `POST /api/projects` - create project.
 - `POST /api/scans/url` - start authorized URL scan.
@@ -67,6 +68,9 @@ Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `
 - Repository dynamic scans use `.nope/sandbox.json` only, support allowlisted Node/Python starts, and run ZAP against a private internal Docker-network target rather than arbitrary external hosts.
 - ZAP version, baseline configuration, raw JSON alerts, parsed alerts, artifacts, and unauthenticated/partial/skipped/failed coverage states are persisted through normal scanner-run, stage, coverage, and report payloads.
 - AI failures do not fail deterministic scans.
+- Browser-origin state-changing requests are rejected when the `Origin` header is outside the configured web origins.
+- API responses include conservative security headers and oversized requests are rejected before route handling.
+- Session tokens are stored as digests and Redis-backed login failure counters are used when Redis is reachable.
 - Report failures are durable, redacted, and retryable; failed or running report rows are never served as completed downloads.
 - Retention cleanup is owner-scoped and removes expired scan-linked reports, artifacts, events, and drift rows through database-owned cascading state.
 - Finding AI actions are owner-scoped, durable, restart-recoverable, and cached for 24 hours using finding fingerprint, action, model, quantization, prompt version, RAG version, evidence hash, and settings hash.

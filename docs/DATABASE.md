@@ -8,7 +8,7 @@ Migrations are SQL files in `apps/api/migrations` and also have Alembic revision
 
 At API startup, `nope_api.db.run_migrations()` creates `schema_migrations` and applies any unapplied SQL files in lexical order. Applied migration filenames are recorded by stem, for example `0001_initial`.
 
-The startup runner is intentionally small and local-first. It does not drop data on startup. `GET /health` also exposes migration status with available, applied, pending, and unexpected versions.
+The startup runner is intentionally small and local-first. It does not drop data on startup. Public `GET /health` is sanitized; authenticated `GET /api/health/details` exposes migration status with available, applied, pending, and unexpected versions.
 
 Alembic is available for explicit migration verification and downgrade/re-upgrade checks:
 

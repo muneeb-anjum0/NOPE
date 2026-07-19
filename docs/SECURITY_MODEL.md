@@ -5,6 +5,10 @@ NOPE treats every uploaded repository and every scanned target as potentially ho
 ## Authorization boundaries
 
 - URL scans require explicit authorization confirmation.
+- API routes use bearer tokens from the local login flow; state-changing requests with a browser `Origin` header must come from an allowlisted web origin.
+- Local session tokens are stored as SHA-256 digests, expire, and are deleted on logout.
+- Login brute-force protection uses Redis-backed shared counters when Redis is available and falls back to process-local counters only if Redis is unreachable.
+- Public `/health` is intentionally sanitized. Detailed database, scanner, AI, and sandbox health is available only through authenticated API routes.
 - Approved hosts are derived from the requested target and optional scope settings.
 - Redirects to unrelated domains are blocked.
 - Private IP and localhost targets are blocked by default unless local sandbox scanning is explicitly enabled.
@@ -12,6 +16,7 @@ NOPE treats every uploaded repository and every scanned target as potentially ho
 
 ## Upload boundaries
 
+- API requests with excessive `Content-Length` are rejected before route handling.
 - ZIP extraction rejects absolute paths and `..` traversal.
 - Symlinks, hardlinks/special files, duplicate normalized paths, excessive path length, excessive nesting, oversized compressed archives, oversized extracted content, high compression-ratio archives, and excessive file counts are rejected.
 - ZIP paths are normalized before extraction so Unicode and case tricks cannot create duplicate or escaping members.
@@ -43,9 +48,12 @@ NOPE treats every uploaded repository and every scanned target as potentially ho
 
 ## Residual risk
 
+- The default Compose file is still a local-development deployment and publishes Postgres, Redis, MinIO, API, web, and llama.cpp ports on localhost for operator access and debugging. Production deployments should bind data services to private networks only, use real secrets/TLS, and restrict host firewall exposure.
 - The local `nope-runner` service still holds Docker daemon authority because local Docker sandboxing requires a daemon boundary. A runner compromise can become a Docker-host compromise. The important Stage 3 change is that the general worker, API, web app, scanner code, and uploaded repositories no longer receive unrestricted Docker daemon access.
 - Rootless Docker, a Docker authorization proxy, or a separate runner host would further reduce this residual risk in production deployments.
 - ZAP runs on a runner-created internal Docker network only when a repository explicitly opts in with a sandbox manifest.
+- `nope-runner` remains root inside its own container because it must reach the Docker socket. The general API, worker, and web services run non-root with dropped capabilities, `no-new-privileges`, read-only roots, tmpfs scratch space, and CPU/memory/PID limits.
+- Dependency scan residual: `pip-audit` reports `protobuf 4.25.9` / `CVE-2026-0994` (`PYSEC-2026-1805`) through the Semgrep/OpenTelemetry scanner dependency chain. The fixed protobuf versions are `5.29.6` or `6.33.5`, while the installed `opentelemetry-proto 1.25.0` requires `protobuf<5`. NOPE does not expose protobuf JSON parsing as a user-facing API path, scanner execution is time/resource bounded, and this residual should be removed when Semgrep's compatible dependency chain supports protobuf 5+.
 
 ## Secrets
 

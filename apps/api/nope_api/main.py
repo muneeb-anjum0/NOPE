@@ -2,9 +2,9 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from nope_api import __version__
@@ -68,11 +68,34 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.web_url, "http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=settings.allowed_web_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
 )
+
+
+@app.middleware("http")
+async def security_boundary(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > settings.api_max_request_bytes:
+                return JSONResponse({"detail": "Request body is too large."}, status_code=413)
+        except ValueError:
+            return JSONResponse({"detail": "Invalid Content-Length header."}, status_code=400)
+    origin = request.headers.get("origin")
+    if request.method not in {"GET", "HEAD", "OPTIONS"} and origin:
+        normalized_origin = origin.rstrip("/")
+        if normalized_origin not in settings.allowed_web_origins:
+            return JSONResponse({"detail": "Origin is not allowed."}, status_code=403)
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    response.headers.setdefault("Cache-Control", "no-store")
+    return response
 
 
 @app.on_event("startup")
@@ -83,6 +106,21 @@ def startup() -> None:
 
 @app.get("/health")
 async def health() -> dict:
+    production_warnings = settings.validate_production_secrets()
+    public: dict = {
+        "status": "ok" if not production_warnings else "degraded",
+        "version": __version__,
+        "environment": settings.environment,
+        "warnings": production_warnings,
+    }
+    if settings.environment == "production":
+        public.pop("warnings", None)
+    return public
+
+
+@app.get("/api/health/details")
+async def health_details(authorization: str | None = Header(default=None)) -> dict:
+    _require_owner_user_id(authorization)
     production_warnings = settings.validate_production_secrets()
     ai_health = await check_ai_health(settings)
     return {

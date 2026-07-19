@@ -113,6 +113,25 @@ docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.y
 docker compose --profile ai-gpu -f docker-compose.yml -f docker-compose.ai-gpu.yml ps
 ```
 
+## Stage 11 Self-Security
+
+```powershell
+$env:PYTHONPATH='apps/api'
+python -m pytest apps/api/tests/test_stage11_self_security.py apps/api/tests/test_api_auth.py apps/api/tests/test_security.py -q
+python -m pytest apps/api/tests -q
+pnpm web:typecheck
+pnpm --dir apps/web lint
+pnpm web:build
+pnpm --dir apps/web audit --audit-level high
+docker compose config --quiet
+docker compose build nope-api
+docker compose run --rm --no-deps --entrypoint python nope-api -m pip check
+docker compose run --rm --no-deps -e TMPDIR=/app/.nope-workspaces --entrypoint pip-audit nope-api -r /app/apps/api/requirements.txt --progress-spinner off
+docker compose run --rm --no-deps -e TRIVY_CACHE_DIR=/app/.nope-workspaces/trivy-cache --entrypoint trivy nope-api fs --cache-dir /app/.nope-workspaces/trivy-cache --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --exit-code 1 --skip-dirs /app/.nope-workspaces --skip-dirs /app/apps/api/tests/fixtures --skip-dirs /app/benchmarks /app
+```
+
+`pip-audit` currently reports the documented Semgrep/OpenTelemetry protobuf scanner-chain residual in `docs/SECURITY_MODEL.md`; production-code Trivy scanning excludes intentionally vulnerable security fixtures.
+
 ## Optional GPU
 
 GPU/Qwen checks are optional for the core suite and should stay separate from the required backend tests:

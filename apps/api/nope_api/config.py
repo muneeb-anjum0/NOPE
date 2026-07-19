@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     session_secret: str = "development-session-secret-change-me"
     encryption_key: str = "development-encryption-key-change-me"
     require_authenticated_api: bool = True
+    api_max_request_bytes: int = 25 * 1024 * 1024
+    login_failure_window_seconds: int = 300
+    login_failure_limit: int = 5
+    password_pbkdf2_iterations: int = 600_000
+    cors_allowed_origins: str = ""
 
     max_archive_bytes: int = 50 * 1024 * 1024
     max_extracted_bytes: int = 200 * 1024 * 1024
@@ -107,6 +112,14 @@ class Settings(BaseSettings):
     ai_rag_max_tokens: int = 6000
     ai_rag_graph_depth: int = 2
     ai_rag_chunk_chars: int = 1600
+
+    @property
+    def allowed_web_origins(self) -> list[str]:
+        configured = [origin.strip().rstrip("/") for origin in self.cors_allowed_origins.split(",") if origin.strip()]
+        defaults = [self.web_url.rstrip("/")]
+        if self.environment != "production":
+            defaults.extend(["http://localhost:3000", "http://127.0.0.1:3000"])
+        return sorted(set(configured or defaults))
 
     @property
     def qwen_runtime_url(self) -> str:

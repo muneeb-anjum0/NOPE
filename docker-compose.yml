@@ -17,6 +17,16 @@ services:
       interval: 20s
       timeout: 5s
       retries: 5
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 0.75
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
   nope-api:
     build:
@@ -68,6 +78,12 @@ services:
       interval: 20s
       timeout: 5s
       retries: 5
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=512m
+    pids_limit: 256
+    mem_limit: 1536m
+    cpus: 2.0
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -117,6 +133,12 @@ services:
         condition: service_healthy
       nope-runner:
         condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=1024m
+    pids_limit: 512
+    mem_limit: 3072m
+    cpus: 3.0
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -144,6 +166,12 @@ services:
       interval: 20s
       timeout: 5s
       retries: 5
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=512m
+    pids_limit: 256
+    mem_limit: 1024m
+    cpus: 1.0
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -165,6 +193,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    pids_limit: 256
+    mem_limit: 1024m
+    cpus: 1.0
 
   nope-redis:
     image: redis:7-alpine
@@ -176,6 +207,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.5
 
   nope-minio:
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z
@@ -194,6 +228,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    pids_limit: 256
+    mem_limit: 1024m
+    cpus: 1.0
 
   nope-ai:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
@@ -242,6 +279,9 @@ services:
       timeout: 10s
       retries: 10
       start_period: 60s
+    pids_limit: 512
+    mem_limit: 8192m
+    cpus: 4.0
 
 volumes:
   nope-postgres:
