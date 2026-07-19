@@ -21,6 +21,20 @@ docker build -f docker/api.Dockerfile -t nope-api-benchmark .
 docker run --rm -v "${PWD}/.nope-benchmark-results:/app/.nope-benchmark-results" nope-api-benchmark python -m nope_api.benchmarks --mode scanner-only --output .nope-benchmark-results/scanner-only.json --markdown-output .nope-benchmark-results/scanner-only.md
 ```
 
+Latest scanner-only benchmark summary:
+
+| Metric | Result |
+| --- | ---: |
+| Status | Passed |
+| Expected findings | 41 |
+| True positives | 41 |
+| False positives | 0 |
+| False negatives | 0 |
+| Precision / recall / F1 | 1.000 / 1.000 / 1.000 |
+| Failed scanners | 0 |
+
+The full small summary is in [`examples/nope-benchmark/scanner-only-summary.md`](examples/nope-benchmark/scanner-only-summary.md).
+
 ## Current State
 
 | Area | Status | Honest limit |
