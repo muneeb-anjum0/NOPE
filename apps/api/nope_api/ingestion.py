@@ -37,7 +37,10 @@ def _safe_member_path(filename: str, settings: Settings) -> Path:
 
 
 async def extract_zip(upload: UploadFile, scan_id: str, settings: Settings) -> Path:
-    content = await upload.read()
+    return extract_zip_bytes(await upload.read(), scan_id, settings)
+
+
+def extract_zip_bytes(content: bytes, scan_id: str, settings: Settings) -> Path:
     if len(content) > settings.max_archive_bytes:
         raise HTTPException(status_code=413, detail="Archive exceeds configured maximum size.")
 

@@ -188,9 +188,11 @@ export type GitHubStatus = {
   provider: "github" | string;
   status: string;
   credential_state: Record<string, boolean>;
+  connection_id?: string | null;
   callback_url?: string | null;
   selected_repository?: string | null;
   selected_branch?: string | null;
+  token_expires_at?: string | null;
   message: string;
   repositories: Array<Record<string, unknown>>;
 };

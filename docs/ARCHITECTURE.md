@@ -80,6 +80,12 @@ Suppressions require a reason, actor, timestamp, scope, and optional expiry. Exp
 
 The API validates scan requests, persists a queued `Scan`, extracts repository uploads into the shared workspace volume when needed, and enqueues Redis jobs. The worker consumes Redis jobs, runs the same scan engine, checkpoints stage progress back to Postgres, honors cancellation flags between stages, records retry/failure events, and keeps a Redis heartbeat for `/api/worker/health`. The worker runs non-root and does not mount the Docker socket.
 
+## GitHub flow
+
+The GitHub integration uses the existing `github_connections`, `github_installations`, and `github_repository_references` tables. App/OAuth contract values and access tokens are stored only as encrypted envelopes in Postgres JSONB. `/api/github/connect` creates a one-time OAuth state value for CSRF protection, `/api/github/callback` validates that state, and `/api/github/repositories` is authoritative for activation: if the configured token cannot list repositories, the connection remains blocked or revoked rather than inventing access.
+
+Repository scans from GitHub use least-privilege API calls: NOPE reads repository metadata, determines the requested or default branch, captures the commit SHA, downloads the GitHub archive endpoint, extracts it through the hardened ZIP ingestion path, enforces size, file-count, submodule, and LFS policies, creates a repository source/snapshot, and then queues the normal scan pipeline. Credentials are never written into git remotes, scan snapshots, logs, or reports. Real github.com private access is verified only when the operator supplies real credentials; local tests use a dependency-injected fake GitHub HTTP service.
+
 ## Sandbox flow
 
 Repositories can opt into sandbox execution with `.nope/sandbox.json`. The worker delegates those requests to the internal `nope-runner` service, the only Compose service with Docker socket access. The runner accepts only token-authenticated requests for workspaces under `NOPE_TEMP_ROOT`, then launches disposable Docker containers for allowlisted Node, Python, static, or ZAP commands with non-root users, dropped capabilities, `no-new-privileges`, read-only repository mounts, no sandbox Docker socket, no host home, no NOPE service secrets, bounded CPU/memory/PID/tmpfs/log limits, network disabled for normal workflows, and timeout cleanup.

@@ -2,7 +2,7 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -22,8 +22,8 @@ from nope_api.config import get_settings
 from nope_api.db import migration_status, run_migrations
 from nope_api.drift import BaselineSnapshot, baseline_snapshot, compare_scans
 from nope_api.findings import finding_detail, parse_finding_query, query_findings, raw_artifact
-from nope_api.github import BlockedGitHubAdapter
-from nope_api.ingestion import extract_zip
+from nope_api.github import SecureGitHubAdapter, enforce_extracted_repository_policy
+from nope_api.ingestion import extract_zip, extract_zip_bytes
 from nope_api.lifecycle import LifecycleTransitionRequest
 from nope_api.models import AuthorizationScope, FindingStatus, GitHubSettings, Project, ProjectSettings, Scan, ScanMode, ScanRequest, SystemSettings
 from nope_api.queue import clear_scan_cancel, enqueue_scan_job, queue_status, request_scan_cancel, scan_events
@@ -44,11 +44,21 @@ from nope_api.settings_contracts import (
 from nope_api.storage import store
 
 settings = get_settings()
-github_adapter = BlockedGitHubAdapter(store)
+github_adapter = SecureGitHubAdapter(store, settings)
 
 
 class AIActionRequest(BaseModel):
     action: str
+
+
+class GitHubRepositoryScanRequest(BaseModel):
+    full_name: str
+    branch: str | None = None
+    project_id: str | None = None
+    mode: ScanMode = ScanMode.repository
+    target_url: str | None = None
+    authorization: AuthorizationScope | None = None
+    force_scaffold: bool = False
 
 app = FastAPI(
     title="NOPE API",
@@ -400,7 +410,7 @@ def put_github_settings(payload: GitHubSettings, authorization: str | None = Hea
     store.save_github_contract(owner_user_id, value, status)
     store.save_application_setting(owner_user_id, GITHUB_SETTINGS_KEY, value)
     store.record_audit_log("github.contract.updated", owner_user_id, data={"status": status})
-    return github_status_from_payload(value)
+    return github_adapter.status(owner_user_id)
 
 
 @app.get("/api/github/repositories")
@@ -412,9 +422,100 @@ def list_github_repositories(authorization: str | None = Header(default=None)):
 
 
 @app.get("/api/github/callback")
-def github_callback(authorization: str | None = Header(default=None)):
-    _require_owner_user_id(authorization)
-    raise HTTPException(status_code=409, detail=github_adapter.callback_blocked_detail())
+def github_callback(
+    authorization: str | None = Header(default=None),
+    state: str = Query(default=""),
+    code: str | None = None,
+):
+    owner_user_id = _require_owner_user_id(authorization)
+    if not owner_user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated.")
+    return github_adapter.validate_callback(owner_user_id, state, code)
+
+
+@app.post("/api/github/connect")
+def create_github_connect_state(authorization: str | None = Header(default=None)):
+    owner_user_id = _require_owner_user_id(authorization)
+    if not owner_user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated.")
+    return github_adapter.create_state(owner_user_id)
+
+
+@app.delete("/api/github/connection")
+def disconnect_github(authorization: str | None = Header(default=None)):
+    owner_user_id = _require_owner_user_id(authorization)
+    if not owner_user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated.")
+    return github_adapter.disconnect(owner_user_id)
+
+
+@app.post("/api/github/scans/repository", response_model=Scan)
+async def start_github_repository_scan(request: GitHubRepositoryScanRequest, authorization: str | None = Header(default=None)) -> Scan:
+    owner_user_id = _require_owner_user_id(authorization)
+    if request.project_id and not store.user_owns_project(request.project_id, owner_user_id):
+        raise HTTPException(status_code=404, detail="Project folder not found.")
+    if request.mode not in {ScanMode.repository, ScanMode.full}:
+        raise HTTPException(status_code=400, detail="GitHub repository scans support repository or full mode only.")
+    if request.mode == ScanMode.full:
+        if not request.target_url:
+            raise HTTPException(status_code=400, detail="target_url is required for a full GitHub scan.")
+        if not request.authorization:
+            raise HTTPException(status_code=400, detail="authorization scope is required for a full GitHub scan.")
+        validate_url_scope(request.target_url, request.authorization, settings)
+    archive = github_adapter.fetch_repository_archive(owner_user_id, request.full_name, request.branch)
+    scan = Scan(
+        project_id=request.project_id,
+        mode=request.mode,
+        target_url=request.target_url,
+        repository_name=archive.full_name,
+        status="preparing",
+        branch=archive.branch,
+        commit_sha=archive.commit_sha,
+    )
+    store.save_scan(scan, owner_user_id)
+    store.record_scan_event(scan.id, "scan_created", owner_user_id=owner_user_id, new_state="preparing", progress=0, message="GitHub repository scan created.", idempotency_key="scan_created")
+    store.record_scan_event(scan.id, "scan_preparing", owner_user_id=owner_user_id, previous_state="created", new_state="preparing", progress=3, message="GitHub archive is being prepared.", idempotency_key="scan_preparing")
+    try:
+        root = extract_zip_bytes(archive.content, scan.id, settings)
+        enforce_extracted_repository_policy(root, settings)
+        _validate_project_upload(scan, owner_user_id, root, request.force_scaffold)
+    except HTTPException:
+        store.delete_scan(scan.id, owner_user_id)
+        shutil.rmtree(settings.temp_root / scan.id, ignore_errors=True)
+        raise
+    source = None
+    if scan.project_id:
+        source = store.create_repository_source(scan.project_id, "github", archive.full_name, archive.repository.get("html_url"))
+        store.create_repository_snapshot(
+            scan.project_id,
+            repository_source_id=source["id"],
+            branch=archive.branch,
+            commit_sha=archive.commit_sha,
+            upload_name=archive.full_name,
+        )
+    scan.repository_workspace_path = str(root)
+    scan.status = "queued"
+    scan.stages.append({"name": "Queued for worker", "status": "queued", "message": "GitHub repository downloaded and ready."})
+    store.save_scan(scan, owner_user_id)
+    store.record_scan_event(scan.id, "stage_queued", owner_user_id=owner_user_id, stage_id="stage:queued", new_state="queued", progress=0, message="GitHub repository downloaded and ready.", idempotency_key="stage:queued")
+    store.record_scan_event(scan.id, "scan_queued", owner_user_id=owner_user_id, previous_state="preparing", new_state="queued", progress=0, message="GitHub repository scan queued for worker.", idempotency_key="scan_queued")
+    store.record_audit_log(
+        "github.repository.scan_queued",
+        owner_user_id,
+        project_id=scan.project_id,
+        scan_id=scan.id,
+        data={"repository": archive.full_name, "branch": archive.branch, "commit_sha": archive.commit_sha, "source_id": source["id"] if source else None},
+    )
+    await enqueue_scan_job(
+        settings,
+        {
+            "scan_id": scan.id,
+            "owner_user_id": owner_user_id,
+            "mode": scan.mode.value,
+            "repository_workspace_path": scan.repository_workspace_path,
+        },
+    )
+    return scan
 
 
 @app.get("/api/scans/{scan_id}", response_model=Scan)

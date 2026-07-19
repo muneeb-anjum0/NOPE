@@ -8,6 +8,9 @@ type Props = {
   saveSystem: (formData: FormData) => Promise<void>;
   saveProject: (formData: FormData) => Promise<void>;
   saveGitHub: (formData: FormData) => Promise<void>;
+  verifyGitHub: () => Promise<void>;
+  createGitHubState: () => Promise<void>;
+  disconnectGitHub: () => Promise<void>;
 };
 
 function displayStatus(status?: string | null) {
@@ -16,7 +19,7 @@ function displayStatus(status?: string | null) {
   return status.replaceAll("_", " ");
 }
 
-export function SettingsForms({ system, project, projectSettings, github, saveSystem, saveProject, saveGitHub }: Props) {
+export function SettingsForms({ system, project, projectSettings, github, saveSystem, saveProject, saveGitHub, verifyGitHub, createGitHubState, disconnectGitHub }: Props) {
   return (
     <div className="settings-form-list">
       <details className="collapse-panel settings-accordion compact-settings" name="editable-settings">
@@ -166,6 +169,10 @@ export function SettingsForms({ system, project, projectSettings, github, saveSy
             <input className="input-shell" name="webhook_secret" type="password" placeholder={github?.credential_state?.webhook_secret ? "configured; enter to rotate" : "e.g. webhook-secret"} />
           </label>
           <label className="settings-edit-row">
+            <span><strong>Access token</strong></span>
+            <input className="input-shell" name="access_token" type="password" placeholder={github?.credential_state?.access_token ? "configured; enter to rotate" : "fine-grained read-only token"} />
+          </label>
+          <label className="settings-edit-row">
             <span><strong>Callback</strong></span>
             <input className="input-shell" name="callback_url" defaultValue={github?.callback_url ?? ""} placeholder="e.g. http://localhost:8000/api/github/callback" />
           </label>
@@ -180,7 +187,21 @@ export function SettingsForms({ system, project, projectSettings, github, saveSy
           <div className="settings-edit-actions">
             <span className="severity-pill severity-info">{displayStatus(github?.status ?? "blocked_missing_credentials")}</span>
             <button className="button primary" type="submit">Save</button>
+            <button className="button ghost" type="submit" formAction={verifyGitHub}>Verify</button>
+            <button className="button ghost" type="submit" formAction={createGitHubState}>State</button>
+            <button className="button danger" type="submit" formAction={disconnectGitHub}>Disconnect</button>
           </div>
+          {github?.repositories?.length ? (
+            <div className="settings-signal-list">
+              {github.repositories.slice(0, 6).map((repo) => (
+                <div className="settings-signal-row" key={String(repo.full_name)}>
+                  <strong>{String(repo.full_name)}</strong>
+                  <span>{String(repo.default_branch ?? "main")}</span>
+                  <em>{repo.private ? "private" : "public"}</em>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </form>
       </details>
     </div>

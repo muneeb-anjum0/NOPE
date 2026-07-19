@@ -380,6 +380,8 @@ class GitHubSettings(BaseModel):
     client_secret: str | None = None
     private_key: str | None = None
     webhook_secret: str | None = None
+    access_token: str | None = None
+    token_expires_at: datetime | None = None
     callback_url: str | None = None
     selected_repository: str | None = None
     selected_branch: str | None = None
@@ -396,8 +398,10 @@ class GitHubStatus(BaseModel):
     provider: str = "github"
     status: str = "blocked_missing_credentials"
     credential_state: dict[str, bool] = Field(default_factory=dict)
+    connection_id: str | None = None
     callback_url: str | None = None
     selected_repository: str | None = None
     selected_branch: str | None = None
+    token_expires_at: datetime | None = None
     message: str = "GitHub private repository access is blocked until credentials are supplied and verified."
     repositories: list[dict[str, Any]] = Field(default_factory=list)

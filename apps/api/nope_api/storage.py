@@ -1239,6 +1239,75 @@ class PostgresStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def upsert_github_repository_reference(self, connection_id: str, repository: dict[str, Any]) -> dict[str, Any]:
+        self.migrate()
+        installation_id = f"ghi_{connection_id}"
+        with connect(self.settings) as conn:
+            owner_row = conn.execute(
+                "select owner_user_id from github_connections where id = %s",
+                (connection_id,),
+            ).fetchone()
+            if not owner_row:
+                raise ValueError("GitHub connection not found.")
+            conn.execute(
+                """
+                insert into github_installations (id, connection_id, installation_id, account_login, permissions, data)
+                values (%s, %s, %s, %s, %s, %s)
+                on conflict (id) do update set
+                  permissions = excluded.permissions,
+                  data = excluded.data
+                """,
+                (
+                    installation_id,
+                    connection_id,
+                    str(repository.get("data", {}).get("installation_id") or "token"),
+                    str(repository["full_name"]).split("/")[0],
+                    Jsonb(repository.get("data", {}).get("permissions") or {"contents": "read"}),
+                    Jsonb({"source": "verified_token"}),
+                ),
+            )
+            row = conn.execute(
+                """
+                insert into github_repository_references (id, installation_id, full_name, default_branch, private, data)
+                values (%s, %s, %s, %s, %s, %s)
+                on conflict (id) do update set
+                  installation_id = excluded.installation_id,
+                  full_name = excluded.full_name,
+                  default_branch = excluded.default_branch,
+                  private = excluded.private,
+                  data = excluded.data
+                returning id, installation_id, full_name, default_branch, private, created_at, data
+                """,
+                (
+                    repository.get("id") or new_id("ghr"),
+                    installation_id,
+                    repository["full_name"],
+                    repository.get("default_branch"),
+                    repository.get("private", False),
+                    Jsonb(repository.get("data") or {}),
+                ),
+            ).fetchone()
+        return dict(row)
+
+    def delete_github_repository_references(self, owner_user_id: str) -> None:
+        self.migrate()
+        with connect(self.settings) as conn:
+            rows = conn.execute(
+                "select id from github_connections where owner_user_id = %s and provider = 'github'",
+                (owner_user_id,),
+            ).fetchall()
+            connection_ids = [row["id"] for row in rows]
+            if connection_ids:
+                conn.execute(
+                    """
+                    delete from github_repository_references
+                    where installation_id in (
+                      select id from github_installations where connection_id = any(%s)
+                    )
+                    """,
+                    (connection_ids,),
+                )
+
     def save_model_configuration(
         self,
         owner_user_id: str | None,

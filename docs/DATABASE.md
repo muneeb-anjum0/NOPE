@@ -33,7 +33,7 @@ The initial migration creates tables for:
 - Settings: `model_configurations`, `scanner_configurations`, `application_settings`; Phase 11 stores owner-scoped system/project settings in `application_settings` and encrypted sensitive envelopes inside JSONB values.
 - History/drift foundation: `security_baselines`, `drift_events`
 - Artifacts/logging: `uploaded_artifacts`, `job_artifacts`, `audit_logs`
-- GitHub contracts: `github_connections`, `github_installations`, `github_repository_references`; Phase 11 stores encrypted local GitHub contract credentials in `github_connections.data` and keeps real private access blocked until credentials are verified.
+- GitHub contracts: `github_connections`, `github_installations`, `github_repository_references`; Stage 9 stores encrypted GitHub App/OAuth/token credentials in `github_connections.data`, persists verified repository references, preserves callback/verification/revocation metadata, and keeps external private access blocked until real credentials are verified.
 
 The `scans` table stores both normalized fields and a JSON snapshot of the current API scan model. This keeps the dashboard/API stable while later phases deepen the normalized schema.
 

@@ -36,10 +36,13 @@ Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `
 - `PUT /api/settings/system` - validate and save owner-scoped system settings.
 - `GET /api/projects/{project_id}/settings` - owner-scoped project scan settings with sensitive test identity values redacted.
 - `PUT /api/projects/{project_id}/settings` - validate and save project settings; test identity secrets are encrypted and never returned.
-- `GET /api/github/status` - local GitHub credential/contract state, blocked honestly when credentials are absent or unverified.
-- `PUT /api/github/settings` - save GitHub App/OAuth contract settings; OAuth/private-key/webhook secrets are encrypted and never returned.
-- `GET /api/github/repositories` - returns no repositories while private GitHub access is blocked; never fakes private access.
-- `GET /api/github/callback` - callback route contract that returns blocked state until real credentials are supplied and verified.
+- `GET /api/github/status` - owner-scoped GitHub credential/connection state, blocked honestly when credentials are absent, incomplete, expired, revoked, or unverified.
+- `PUT /api/github/settings` - save GitHub App/OAuth/token contract settings; client secret, private key, webhook secret, and access token are encrypted and never returned.
+- `POST /api/github/connect` - create and persist a one-time OAuth state value for CSRF protection and return an authorization URL when client/callback settings exist.
+- `GET /api/github/callback` - validate the stored OAuth state and record callback receipt; token exchange remains externally blocked unless credentials are supplied and verified.
+- `GET /api/github/repositories` - verify stored token credentials, list owner-scoped repositories, persist repository references, and never fake repositories when access is blocked.
+- `DELETE /api/github/connection` - revoke the local connection, remove repository references, and preserve an audit trail.
+- `POST /api/github/scans/repository` - create a repository or full scan from a least-privilege GitHub archive download after branch/default-branch and commit SHA discovery.
 - `GET /api/scans/{scan_id}/report.{format}` - protected report download as `json`, `md`, `sarif`, or `pdf`; PDF generation persists report status and MinIO artifact metadata when object storage is reachable.
 - `GET /api/scans/{scan_id}/reports/{format}/status` - protected report generation status, byte size, SHA-256, and artifact metadata.
 - `GET /api/scanners/capabilities` - authenticated scanner health, version, coverage category, and applicability marker metadata.
@@ -65,3 +68,5 @@ Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `
 - Qwen receives bounded RAG context only; whole repositories and raw secrets are not persisted or sent as action context.
 - Project, scan, report, settings, GitHub contract, and AI explanation routes are scoped to the authenticated local user.
 - Sensitive settings are encrypted at rest and are not returned after save.
+- GitHub downloads use API archive endpoints rather than embedding credentials into git remotes; tokens are never written into scan reports or remotes.
+- GitHub repository policies block oversized repositories, oversized archives, excessive extracted files, submodules, and Git LFS pointer archives by default.

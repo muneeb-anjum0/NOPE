@@ -64,6 +64,16 @@ class Settings(BaseSettings):
     url_scan_max_redirects: int = 0
     url_scan_allowed_ports: str = "80,443"
 
+    github_api_base_url: str = "https://api.github.com"
+    github_oauth_authorize_url: str = "https://github.com/login/oauth/authorize"
+    github_oauth_token_url: str = "https://github.com/login/oauth/access_token"
+    github_timeout_seconds: int = 20
+    github_max_repository_kb: int = 51200
+    github_max_archive_bytes: int = 50 * 1024 * 1024
+    github_max_file_count: int = 8000
+    github_lfs_policy: str = "block"
+    github_submodule_policy: str = "block"
+
     ai_provider: str = "none"
     ai_runtime_url: str = "http://localhost:11434"
     ai_model_name: str = "qwen3-8b-q4-k-m"

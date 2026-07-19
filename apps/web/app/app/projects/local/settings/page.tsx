@@ -86,11 +86,30 @@ export default async function SettingsPage() {
         client_secret: String(formData.get("client_secret") ?? "") || null,
         private_key: String(formData.get("private_key") ?? "") || null,
         webhook_secret: String(formData.get("webhook_secret") ?? "") || null,
+        access_token: String(formData.get("access_token") ?? "") || null,
         callback_url: String(formData.get("callback_url") ?? "") || null,
         selected_repository: String(formData.get("selected_repository") ?? "") || null,
         selected_branch: String(formData.get("selected_branch") ?? "") || null,
       }),
     });
+    revalidatePath("/app/projects/local/settings");
+  }
+
+  async function verifyGitHub() {
+    "use server";
+    await api("/api/github/repositories");
+    revalidatePath("/app/projects/local/settings");
+  }
+
+  async function createGitHubState() {
+    "use server";
+    await api("/api/github/connect", { method: "POST" });
+    revalidatePath("/app/projects/local/settings");
+  }
+
+  async function disconnectGitHub() {
+    "use server";
+    await api("/api/github/connection", { method: "DELETE" });
     revalidatePath("/app/projects/local/settings");
   }
 
@@ -135,6 +154,7 @@ export default async function SettingsPage() {
         ["Credential state", displayStatus(github?.status ?? "blocked_missing_credentials"), "Blocked"],
         ["Callback", github?.callback_url ?? "not configured", "Route"],
         ["Repository", github?.selected_repository ?? "not selected", "Contract"],
+        ["Repositories", `${github?.repositories?.length ?? 0} verified references`, github?.status === "connected" ? "Connected" : "Blocked"],
       ],
     },
     {
@@ -217,6 +237,9 @@ export default async function SettingsPage() {
               saveSystem={saveSystem}
               saveProject={saveProject}
               saveGitHub={saveGitHub}
+              verifyGitHub={verifyGitHub}
+              createGitHubState={createGitHubState}
+              disconnectGitHub={disconnectGitHub}
             />
           </section>
         </div>

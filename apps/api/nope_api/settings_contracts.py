@@ -110,12 +110,15 @@ def prepare_project_settings_payload(
 
 def prepare_github_payload(settings: Settings, incoming: GitHubSettings, existing: dict[str, Any] | None) -> dict[str, Any]:
     payload = existing.copy() if existing else {}
-    public_values = incoming.model_dump(mode="json", exclude={"client_secret", "private_key", "webhook_secret"})
+    public_values = incoming.model_dump(mode="json", exclude={"client_secret", "private_key", "webhook_secret", "access_token"})
     payload.update({key: value for key, value in public_values.items() if value is not None})
-    for key in ("client_secret", "private_key", "webhook_secret"):
+    for key in ("client_secret", "private_key", "webhook_secret", "access_token"):
         value = getattr(incoming, key)
         if value:
             payload[key] = encrypt_secret(settings, value)
+            if key == "access_token":
+                payload.pop("revoked_at", None)
+                payload.pop("verified_at", None)
     return payload
 
 
@@ -127,12 +130,23 @@ def github_status_from_payload(payload: dict[str, Any] | None) -> GitHubStatus:
         "client_secret": _is_encrypted(data.get("client_secret")),
         "private_key": _is_encrypted(data.get("private_key")),
         "webhook_secret": _is_encrypted(data.get("webhook_secret")),
+        "access_token": _is_encrypted(data.get("access_token")),
     }
     has_contract = any(credential_state.values())
     has_required = all(credential_state[item] for item in ("app_id", "client_id", "client_secret", "private_key"))
+    has_token = credential_state["access_token"]
     status = "blocked_missing_credentials"
     message = "GitHub private repository access is blocked until credentials are supplied."
-    if has_required:
+    if data.get("revoked_at"):
+        status = "blocked_token_revoked"
+        message = "GitHub credentials were revoked or disconnected. Reconnect before listing repositories."
+    elif has_token and data.get("verified_at"):
+        status = "connected"
+        message = "GitHub access is verified and scoped through the configured token."
+    elif has_token:
+        status = "blocked_external_credentials_not_verified"
+        message = "GitHub token is stored, but repository access has not been verified yet."
+    elif has_required:
         status = "blocked_external_credentials_not_verified"
         message = "GitHub credentials are stored, but real private access remains blocked until OAuth/App verification is completed."
     elif has_contract:
@@ -141,9 +155,11 @@ def github_status_from_payload(payload: dict[str, Any] | None) -> GitHubStatus:
     return GitHubStatus(
         status=status,
         credential_state=credential_state,
+        connection_id=data.get("connection_id"),
         callback_url=data.get("callback_url"),
         selected_repository=data.get("selected_repository"),
         selected_branch=data.get("selected_branch"),
+        token_expires_at=data.get("token_expires_at"),
         message=message,
         repositories=[],
     )
