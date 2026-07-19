@@ -9,6 +9,7 @@ from nope_api.config import Settings
 from nope_api.finding_validation import validate_findings, validation_counts
 from nope_api.models import CoverageRecord, CoverageStatus, Scan, ScanMode, ScannerRun, now_utc
 from nope_api.rules_engine import dedupe_findings, run_rules
+from nope_api.rules_v2 import run_rules_v2
 from nope_api.sandbox import run_sandbox_assessment
 from nope_api.scanners import scanner_plugins
 from nope_api.scoring import calculate_score, coverage_percent, verdict
@@ -122,6 +123,74 @@ def _promote_validated_findings(scan: Scan, findings: list, root: Path | None) -
     return promoted
 
 
+def _merge_rules_v2_payload(existing: dict, incoming: dict) -> dict:
+    if not existing:
+        return incoming
+    if not incoming:
+        return existing
+
+    candidates = existing.get("candidates", []) + incoming.get("candidates", [])
+    decisions = existing.get("decisions", []) + incoming.get("decisions", [])
+    by_result = {
+        "promoted": 0,
+        "withheld": 0,
+        "rejected": 0,
+        "needs_manual_review": 0,
+        "not_applicable": 0,
+    }
+    by_family: dict[str, dict[str, int]] = {}
+    for decision in decisions:
+        result = decision.get("result", "not_applicable")
+        by_result[result] = by_result.get(result, 0) + 1
+        candidate = next((item for item in candidates if item.get("candidate_id") == decision.get("candidate_id")), {})
+        family = candidate.get("family") or "unknown"
+        by_family.setdefault(family, {})
+        by_family[family][result] = by_family[family].get(result, 0) + 1
+
+    metrics = {**existing.get("metrics", {}), **incoming.get("metrics", {})}
+    metrics["merged_passes"] = metrics.get("merged_passes", 1) + 1
+    return {
+        **existing,
+        "version": incoming.get("version") or existing.get("version"),
+        "catalog": incoming.get("catalog") or existing.get("catalog", {}),
+        "coverage": {
+            "candidate_count": len(candidates),
+            **by_result,
+            "by_family": by_family,
+        },
+        "candidates": candidates,
+        "decisions": decisions,
+        "promoted_finding_ids": sorted(
+            set(existing.get("promoted_finding_ids", []) + incoming.get("promoted_finding_ids", []))
+        ),
+        "metrics": metrics,
+        "failures": existing.get("failures", []) + incoming.get("failures", []),
+    }
+
+
+def _run_rules_v2_stage(scan: Scan, findings: list, root: Path | None) -> list:
+    promoted, payload = run_rules_v2(scan, root, findings)
+    scan.rules_v2 = _merge_rules_v2_payload(scan.rules_v2, payload)
+    scan.stages.append(
+        {
+            "name": "Running NOPE Rules v2",
+            "status": "completed" if not payload.get("failures") else "partial",
+            "message": (
+                f"{payload['coverage']['candidate_count']} candidates, "
+                f"{payload['coverage']['promoted']} promoted, "
+                f"{payload['coverage']['withheld']} withheld."
+            ),
+            "data": {
+                "version": payload["version"],
+                "coverage": payload["coverage"],
+                "metrics": payload["metrics"],
+                "failures": payload["failures"],
+            },
+        }
+    )
+    return findings + promoted
+
+
 async def run_repository_scan(
     scan: Scan,
     root: Path,
@@ -194,6 +263,7 @@ async def run_repository_scan(
         scan.status = "partial"
     await _checkpoint(scan, progress_callback, cancellation_checker)
 
+    findings = _run_rules_v2_stage(scan, findings, root)
     scan.findings = _promote_validated_findings(scan, findings, root)
     scan.coverage = merge_coverage(default_coverage(), sandbox_coverage, scan.scanner_runs)
     await _checkpoint(scan, progress_callback, cancellation_checker)
@@ -232,6 +302,7 @@ async def run_url_only_scan(
     await _checkpoint(scan, progress_callback, cancellation_checker)
     findings, runs, coverage_updates = await _run_url_scan(scan.target_url or "", settings)
     scan.stages[-1]["status"] = "completed" if runs and runs[0].status == "passed" else "failed"
+    findings = _run_rules_v2_stage(scan, findings, None)
     scan.findings = _promote_validated_findings(scan, findings, None)
     scan.scanner_runs = runs
     scan.coverage = merge_coverage(default_coverage(), coverage_updates, runs)
@@ -267,6 +338,7 @@ async def run_full_scan(
         scan.stages[-1]["message"] = (
             url_runs[0].message if url_runs else "URL checks did not produce a scanner run."
         )
+        url_findings = _run_rules_v2_stage(scan, url_findings, None)
         promoted_url_findings = _promote_validated_findings(scan, url_findings, None)
         scan.findings = dedupe_findings(scan.findings + promoted_url_findings)
         scan.scanner_runs.extend(url_runs)

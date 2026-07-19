@@ -142,6 +142,81 @@ export type Scan = {
     edges?: Array<{ source: string; target: string; relationship: string }>;
   };
   ai_review: { status: string; provider: string; model?: string | null; message: string };
+  rules_v2?: RulesV2Summary | null;
+};
+
+export type RulesV2Evidence = {
+  kind?: string;
+  file?: string | null;
+  line?: number | null;
+  end_line?: number | null;
+  route?: string | null;
+  symbol?: string | null;
+  source?: string;
+  message?: string;
+  snippet?: string | null;
+  strength?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type RulesV2Candidate = {
+  candidate_id: string;
+  rule_id: string;
+  rule_version?: string;
+  file?: string | null;
+  line?: number | null;
+  end_line?: number | null;
+  route?: string | null;
+  source_type?: string;
+  family?: string;
+  preliminary_severity?: string;
+  preliminary_confidence?: string;
+  evidence?: RulesV2Evidence[];
+  missing_evidence?: string[];
+  contradictory_evidence?: string[];
+  safe_pattern_evidence?: string[];
+  graph_references?: string[];
+  scanner_references?: string[];
+};
+
+export type RulesV2Decision = {
+  candidate_id: string;
+  rule_id: string;
+  rule_version?: string;
+  result: "promoted" | "withheld" | "rejected" | "needs_manual_review" | "not_applicable" | string;
+  confidence?: string;
+  evidence_strength?: string;
+  reason?: string;
+  machine_reason?: string;
+  missing_evidence?: string[];
+  contradictory_evidence?: string[];
+  correlation_path?: string[];
+  suggested_manual_verification?: string | null;
+};
+
+export type RulesV2Summary = {
+  scan_id?: string;
+  version?: string | null;
+  catalog?: Record<string, unknown>;
+  coverage?: {
+    candidate_count?: number;
+    promoted?: number;
+    withheld?: number;
+    rejected?: number;
+    needs_manual_review?: number;
+    not_applicable?: number;
+    by_family?: Record<string, Record<string, number>>;
+  };
+  metrics?: Record<string, unknown>;
+  failures?: string[];
+};
+
+export type RulesV2CandidateResult = {
+  scan_id: string;
+  page: number;
+  page_size: number;
+  total: number;
+  items: Array<{ candidate: RulesV2Candidate; decision: RulesV2Decision }>;
 };
 
 export type Project = {

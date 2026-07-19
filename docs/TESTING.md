@@ -20,6 +20,7 @@ python -m pytest apps/api/tests/test_stage3_security_hardening.py apps/api/tests
 python -m pytest apps/api/tests/test_stage6_findings_lifecycle.py apps/api/tests/test_stage7_qwen_rag.py -q
 python -m pytest apps/api/tests/test_stage9_github_integration.py apps/api/tests/test_persistence.py -q
 python -m pytest apps/api/tests/test_stage11_self_security.py apps/api/tests/test_api_auth.py apps/api/tests/test_security.py -q
+python -m pytest apps/api/tests/test_stage13_rules_v2.py -q
 ```
 
 Host Ruff is optional. The Docker image contains the scanner/runtime dependencies used by the product; do not treat missing host Ruff as a product failure.

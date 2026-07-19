@@ -39,10 +39,13 @@ Repository scans perform:
 - External scanner applicability checks
 - Scanner execution and parser normalization
 - Optional sandbox workflows
+- Rules v2 candidate generation, evidence correlation, and promotion-gate decisions
 - Focused RAG retrieval
 - Optional Qwen review
 
 Scanner failures are persisted as failed scanner runs and reduce coverage honestly.
+
+Rules v2 runs before final finding validation. It can promote strong candidates into findings, withhold incomplete candidates, reject candidates with safe-pattern evidence, and keep manual-review candidates visible through the API, reports, and dashboard.
 
 ## 6. Dynamic and Sandbox Analysis
 

@@ -280,6 +280,7 @@ class Scan(BaseModel):
     coverage: list[CoverageRecord] = Field(default_factory=list)
     ai_review: AIReview = Field(default_factory=AIReview)
     report_formats: list[str] = Field(default_factory=lambda: ["json", "md", "sarif", "pdf"])
+    rules_v2: dict[str, Any] = Field(default_factory=dict)
 
 
 class ScanEvent(BaseModel):

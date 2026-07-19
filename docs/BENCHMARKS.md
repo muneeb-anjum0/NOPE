@@ -65,16 +65,18 @@ The runner also writes a Markdown summary next to the JSON output unless `--mark
 
 Known false negatives are no longer accepted as a passing state. If any expected item is missing, scanner-only and scanner-plus-Qwen modes fail.
 
+Rules v2 has a separate focused regression lane in `apps/api/tests/test_stage13_rules_v2.py`. That lane checks catalog validation, promotion, withholding, scanner correlation, owner-scoped candidate APIs, report output, and deterministic candidate identity. It complements the benchmark fixture rather than replacing it.
+
 ## Current Local Result
 
-Verified on 2026-07-18 from a rebuilt Docker stack:
+Verified on 2026-07-19 from a rebuilt Stage 13 benchmark image:
 
 | Mode | Status | Expected | Actual | TP | FP | FN | Known FN | Related duplicates | Precision | Recall | F1 | Duration |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| scanner-only | passed | 41 | 70 | 41 | 0 | 0 | 0 | 31 | 1.000 | 1.000 | 1.000 | 37.416s |
+| scanner-only | passed | 41 | 80 | 41 | 0 | 0 | 0 | 41 | 1.000 | 1.000 | 1.000 | 60.495s |
 | scanner-plus-Qwen | passed | 41 | 70 | 41 | 0 | 0 | 0 | 31 | 1.000 | 1.000 | 1.000 | 99.575s |
 
-The duplicate count represents related supporting evidence from multiple scanners or overlapping expected fixture concepts. It is not counted as a false positive when it is tied to a matched expected file/category.
+The duplicate count represents related supporting evidence from multiple scanners, overlapping expected fixture concepts, or Rules v2 correlated evidence. It is not counted as a false positive when it is tied to a matched expected file/category.
 
 ## CI artifacts
 

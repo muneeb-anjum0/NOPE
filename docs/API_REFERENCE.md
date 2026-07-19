@@ -31,6 +31,10 @@ Except for sanitized `GET /health` and `POST /api/auth/login`, endpoints require
 - `GET /api/scans/{scan_id}/drift` - list persisted drift events for the scan.
 - `GET /api/scans/{scan_id}/coverage` - coverage records.
 - `GET /api/scans/{scan_id}/attack-map` - attack-surface graph.
+- `GET /api/rules-v2/rules` - authenticated Rules v2 catalog inventory with rule metadata, families, versions, and validation summary.
+- `GET /api/scans/{scan_id}/rules-v2` - owner-scoped Rules v2 summary for a scan, including catalog, coverage, metrics, and failures.
+- `GET /api/scans/{scan_id}/rules-v2/candidates` - owner-scoped candidate review list with filters for `result`, `family`, `rule`, `severity`, `confidence`, `page`, and `page_size`.
+- `GET /api/scans/{scan_id}/rules-v2/candidates/{candidate_id}` - owner-scoped candidate detail with promotion-gate decision.
 - `GET /api/queue/status` - queue depth, processing depth, worker heartbeat, and Redis health.
 - `GET /api/worker/health` - worker-oriented health summary derived from Redis heartbeat state.
 - `GET /api/sandbox/health` - sandbox enablement, Docker CLI availability, default network posture, limits, and isolation flags.
@@ -75,6 +79,7 @@ Except for sanitized `GET /health` and `POST /api/auth/login`, endpoints require
 - Retention cleanup is owner-scoped and removes expired scan-linked reports, artifacts, events, and drift rows through database-owned cascading state.
 - Finding AI actions are owner-scoped, durable, restart-recoverable, and cached for 24 hours using finding fingerprint, action, model, quantization, prompt version, RAG version, evidence hash, and settings hash.
 - Qwen receives bounded RAG context only; whole repositories and raw secrets are not persisted or sent as action context.
+- Rules v2 candidates are owner-scoped and can be reviewed even when they are withheld from confirmed findings.
 - Project, scan, report, settings, GitHub contract, and AI explanation routes are scoped to the authenticated local user.
 - Sensitive settings are encrypted at rest and are not returned after save.
 - GitHub downloads use API archive endpoints rather than embedding credentials into git remotes; tokens are never written into scan reports or remotes.

@@ -8,6 +8,7 @@ const majorRoutes = [
   ["/app/projects/local/scans", "Project folders"],
   ["/app/projects/local/scans/project_stage8", "Upload ZIP"],
   ["/app/projects/local/findings?scan=scan_stage8_completed&finding=fnd_stage8_idor&detail=open", "Finding detail"],
+  ["/app/projects/local/rules?scan=scan_stage8_completed", "Promote evidence"],
   ["/app/projects/local/attack-map?scan=scan_stage8_completed", "Attack Map"],
   ["/app/projects/local/coverage?scan=scan_stage8_completed", "Coverage"],
   ["/app/projects/local/assets?scan=scan_stage8_completed", "Asset manifest"],

@@ -20,6 +20,8 @@ These tools run during repository scans when applicable to the uploaded project.
 
 Semgrep runs with the local NOPE ruleset at `security-packs/semgrep/nope.yml` so scans remain local-first and do not depend on Semgrep registry auto-configuration or metrics.
 
+Rules v2 can correlate scanner evidence without erasing the original scanner source. A Gitleaks hit, for example, can stay a Gitleaks finding while also becoming evidence for a `NOPE-CORR-SECRET-001` candidate.
+
 ## Parser Coverage
 
 Parser support exists for:

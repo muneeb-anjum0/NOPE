@@ -37,11 +37,14 @@ The initial migration creates tables for:
 
 The `scans` table stores both normalized fields and a JSON snapshot of the current API scan model. This keeps the dashboard/API stable while later phases deepen the normalized schema.
 
+Rules v2 candidates and promotion decisions currently live inside that scan JSON snapshot under `rules_v2`. That includes catalog summary, candidate rows, decisions, family coverage, metrics, failures, and promoted finding IDs. Promoted candidates also become normal `findings` rows with Rules v2 metadata preserved.
+
 ## Completion Notes
 
 - Protected API routes require a valid local bearer token by default through `NOPE_REQUIRE_AUTHENTICATED_API=true`.
 - Dashboard-originated calls forward the HttpOnly local session token and are scoped to the authenticated user.
 - Scan execution is Redis-backed, but Postgres is authoritative for history: API requests persist queued scans, workers checkpoint scan snapshots, and every important scan/stage/scanner/retry/cancellation/worker/report/Qwen transition is also stored in `scan_events` with a deterministic per-scan sequence number.
+- Rules v2 candidate review state is persisted through scan snapshots and protected by the same owner-scoped scan access controls.
 - The event stream supports idempotent insertion through `(scan_id, idempotency_key)`, ordered replay through `(scan_id, sequence)`, and incremental pagination by `after_sequence`.
 - Generated report payloads are stored in Postgres. PDF bodies are base64-backed in Postgres and, when MinIO is reachable, also stored as binary report artifacts with object metadata recorded in `reports.data`.
 - Raw scanner stdout/stderr artifacts and PDF report artifacts are stored in MinIO and linked through `uploaded_artifacts`, `job_artifacts`, scanner runs, and report metadata.

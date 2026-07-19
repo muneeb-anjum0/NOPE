@@ -107,6 +107,26 @@ def _dynamic_summary(scan: Scan) -> dict[str, Any]:
     }
 
 
+def _rules_v2_summary(scan: Scan) -> dict[str, Any]:
+    payload = scan.rules_v2 or {}
+    coverage = payload.get("coverage") or {}
+    decisions = payload.get("decisions") or []
+    withheld = [item for item in decisions if item.get("result") == "withheld"]
+    needs_review = [item for item in decisions if item.get("result") == "needs_manual_review"]
+    rejected = [item for item in decisions if item.get("result") == "rejected"]
+    return {
+        "version": payload.get("version"),
+        "catalog": payload.get("catalog") or {},
+        "coverage": coverage,
+        "metrics": payload.get("metrics") or {},
+        "failures": payload.get("failures") or [],
+        "withheld_candidates": len(withheld),
+        "needs_manual_review": len(needs_review),
+        "rejected_candidates": len(rejected),
+        "withheld_sample": withheld[:10],
+    }
+
+
 def _privacy_warnings(scan: Scan) -> list[str]:
     warnings: list[str] = []
     if any("tracker" in finding.title.lower() or "privacy" in finding.category.lower() for finding in scan.findings):
@@ -161,6 +181,7 @@ def report_json(scan: Scan, context: ReportContext | None = None) -> dict:
             "failed_scanners": len(_failed_scanners(scan)),
         },
         "dynamic_testing": _dynamic_summary(scan),
+        "rules_v2": _rules_v2_summary(scan),
         "finding_lifecycle": _lifecycle_summary(scan),
         "baseline_comparison": baseline,
         "limitations": _limitations(scan),
@@ -211,6 +232,21 @@ def report_markdown(scan: Scan, context: ReportContext | None = None) -> str:
         lines.append(f"- {run['scanner']} {run['version']}: {run['status']} - {run['message']}{artifact}")
     for record in dynamic["coverage"]:
         lines.append(f"- Coverage {record['domain']}: {record['status']} - {record['notes']}")
+    rules_v2 = _rules_v2_summary(scan)
+    lines.extend(["", "## Rules v2"])
+    if rules_v2["version"]:
+        coverage = rules_v2["coverage"]
+        lines.append(f"- Version: {rules_v2['version']}")
+        lines.append(f"- Registered rules: {rules_v2['catalog'].get('rule_count', 0)}")
+        lines.append(f"- Candidates: {coverage.get('candidate_count', 0)}")
+        lines.append(f"- Promoted: {coverage.get('promoted', 0)}")
+        lines.append(f"- Withheld: {coverage.get('withheld', 0)}")
+        lines.append(f"- Needs manual review: {coverage.get('needs_manual_review', 0)}")
+        lines.append(f"- Rejected: {coverage.get('rejected', 0)}")
+        for item in rules_v2["withheld_sample"]:
+            lines.append(f"- Withheld {item.get('rule_id')}: {_redact(item.get('reason'))}")
+    else:
+        lines.append("- Rules v2 did not run for this scan.")
     lines.extend(["", "## Findings"])
     if not scan.findings:
         lines.append("No findings were produced in the tested scope.")
@@ -278,6 +314,8 @@ def report_sarif(scan: Scan, context: ReportContext | None = None) -> dict:
                     "recurrence_count": finding.recurrence_count,
                     "scanner_sources": finding.scanner_sources,
                     "schema_version": finding.schema_version,
+                    "rules_v2": finding.source_metadata.get("rules_v2", False),
+                    "rule_version": finding.source_metadata.get("rule_version"),
                 },
             }
         )
@@ -288,7 +326,7 @@ def report_sarif(scan: Scan, context: ReportContext | None = None) -> dict:
             {
                 "tool": {"driver": {"name": "NOPE", "rules": list(rules.values())}},
                 "results": results,
-                "properties": {"scan_id": scan.id, "verdict": scan.verdict},
+                "properties": {"scan_id": scan.id, "verdict": scan.verdict, "rules_v2": _rules_v2_summary(scan)},
             }
         ],
     }
@@ -365,6 +403,24 @@ def report_pdf(scan: Scan, context: ReportContext | None = None) -> bytes:
         para("No dynamic scanner run was recorded.")
     heading("Scanner Status", 2)
     _table(story, [["Scanner", "Version", "Status", "Message"], *_scanner_rows(scan)], header=True)
+    heading("Rules v2", 2)
+    rules_v2 = _rules_v2_summary(scan)
+    if rules_v2["version"]:
+        coverage = rules_v2["coverage"]
+        _table(
+            story,
+            [
+                ["Version", str(rules_v2["version"])],
+                ["Registered rules", str(rules_v2["catalog"].get("rule_count", 0))],
+                ["Candidates", str(coverage.get("candidate_count", 0))],
+                ["Promoted", str(coverage.get("promoted", 0))],
+                ["Withheld", str(coverage.get("withheld", 0))],
+                ["Needs review", str(coverage.get("needs_manual_review", 0))],
+                ["Rejected", str(coverage.get("rejected", 0))],
+            ],
+        )
+    else:
+        para("Rules v2 did not run for this scan.")
 
     heading("Critical Findings", 2)
     _finding_section(story, scan, "critical", styles)
@@ -495,6 +551,7 @@ def _methodology() -> list[str]:
     return [
         "Deterministic scanners and custom rules provide the primary evidence.",
         "Scanner output is normalized into canonical NOPE findings with severity, confidence, location, and remediation.",
+        "Rules v2 uses broad candidate detection, evidence correlation, and a promotion gate; withheld candidates are not reported as confirmed vulnerabilities.",
         "Qwen may assist with explanation or reasoning, but deterministic evidence remains authoritative.",
         "Secret-like values are redacted before report rendering.",
         "Reproducibility metadata records scan identity, commit, coverage, scanner versions, and generation time.",

@@ -27,13 +27,14 @@ Latest scanner-only benchmark summary:
 | --- | ---: |
 | Status | Passed |
 | Expected findings | 41 |
+| Actual findings | 80 |
 | True positives | 41 |
 | False positives | 0 |
 | False negatives | 0 |
 | Precision / recall / F1 | 1.000  |
 | Failed scanners | 0 |
 
-The full small summary is in [`examples/nope-benchmark/scanner-only-summary.md`](examples/nope-benchmark/scanner-only-summary.md).
+The latest Stage 13 scanner-only run produced 41 related duplicate/supporting findings because Rules v2 adds correlated evidence without changing the expected true-positive set. The checked-in small summary is in [`examples/nope-benchmark/scanner-only-summary.md`](examples/nope-benchmark/scanner-only-summary.md).
 
 ## Current State
 
@@ -63,6 +64,20 @@ The full small summary is in [`examples/nope-benchmark/scanner-only-summary.md`]
 - Optional dynamic coverage through supported sandbox/ZAP workflows
 
 Scanner output is treated as **evidence**, not automatically as truth. Raw hits become dashboard findings only after NOPE records enough context to promote them.
+
+## Rules v2
+
+Rules v2 is the newer detection layer. It adds a larger versioned catalog and, more importantly, a candidate workflow:
+
+```text
+raw signal -> candidate -> context/correlation -> promotion gate -> finding or withheld/rejected/manual review
+```
+
+Current Rules v2 families include upgraded first-party NOPE rules, Next.js, Prisma, Supabase/RLS, auth-provider checks, cross-evidence correlation, AI cost abuse, webhook/OAuth, rate-limit, privacy, upload/storage, and deployment/CI checks.
+
+The important bit is honesty. A weak match is not shoved into Findings just because it looks scary. It can be withheld with a reason, rejected because safe-pattern evidence exists, or left for manual review. The Rules v2 page and APIs show those decisions, so the reviewer can see what NOPE considered and why.
+
+More detail: [`Rules v2`](docs/RULES_V2.md), [`authoring guide`](docs/RULE_AUTHORING_GUIDE.md), [`correlation`](docs/CORRELATION_ENGINE.md), [`promotion gate`](docs/PROMOTION_GATE.md), [`withheld candidates`](docs/WITHHELD_CANDIDATES.md), and [`rule benchmarks`](docs/RULE_BENCHMARKS.md).
 
 ## Security Rules
 

@@ -7,6 +7,8 @@ import type {
   ModelSettings,
   Project,
   ProjectSettings,
+  RulesV2CandidateResult,
+  RulesV2Summary,
   Scan,
   ScanComparison,
   SecurityBaseline,
@@ -82,6 +84,92 @@ export async function getFindingDetail(scanId: string, findingId: string): Promi
   if (isE2EFixtureMode()) return e2eFindingDetail(scanId, findingId);
   try {
     return await api<FindingDetail>(`/api/scans/${scanId}/findings/${findingId}`);
+  } catch {
+    return null;
+  }
+}
+
+export async function getRulesV2Summary(scanId: string): Promise<RulesV2Summary | null> {
+  if (isE2EFixtureMode()) {
+    const scan = e2eScans.find((item) => item.id === scanId);
+    return {
+      scan_id: scanId,
+      version: "rules-v2.fixture",
+      catalog: { rule_count: 101 },
+      coverage: {
+        candidate_count: 9,
+        promoted: scan?.findings?.length ?? 0,
+        withheld: 3,
+        rejected: 2,
+        needs_manual_review: 1,
+        not_applicable: 0,
+        by_family: { correlation: { promoted: 2, withheld: 1 }, nextjs: { rejected: 1 }, prisma: { withheld: 2 } },
+      },
+      metrics: { total_ms: 31, repository_files_considered: 79 },
+      failures: [],
+    };
+  }
+  try {
+    return await api<RulesV2Summary>(`/api/scans/${scanId}/rules-v2`);
+  } catch {
+    return null;
+  }
+}
+
+export async function getRulesV2Candidates(scanId: string, searchParams?: URLSearchParams): Promise<RulesV2CandidateResult | null> {
+  if (isE2EFixtureMode()) {
+    return {
+      scan_id: scanId,
+      page: 1,
+      page_size: 25,
+      total: 3,
+      items: [
+        {
+          candidate: {
+            candidate_id: "rv2_fixture_promoted",
+            rule_id: "NOPE-CORR-IDOR-001",
+            family: "correlation",
+            preliminary_severity: "high",
+            preliminary_confidence: "high",
+            file: "Raqm/apps/web/src/routes/app/invoices/[id]/+server.ts",
+            line: 42,
+            source_type: "attack_surface",
+            evidence: [{ source: "Rules v2", message: "Route parameter reaches a database lookup with no owner predicate.", strength: "strong_correlated" }],
+          },
+          decision: { candidate_id: "rv2_fixture_promoted", rule_id: "NOPE-CORR-IDOR-001", result: "promoted", confidence: "high", evidence_strength: "strong_correlated", reason: "Required evidence was present and no safe pattern contradicted it." },
+        },
+        {
+          candidate: {
+            candidate_id: "rv2_fixture_withheld",
+            rule_id: "NOPE-PRISMA-001",
+            family: "prisma",
+            preliminary_severity: "high",
+            preliminary_confidence: "medium",
+            file: "Raqm/apps/web/src/routes/app/profile/+server.ts",
+            line: 17,
+            missing_evidence: ["owner/tenant predicate"],
+          },
+          decision: { candidate_id: "rv2_fixture_withheld", rule_id: "NOPE-PRISMA-001", result: "withheld", confidence: "medium", evidence_strength: "incomplete", reason: "Suspicious, but missing evidence keeps it out of confirmed findings." },
+        },
+        {
+          candidate: {
+            candidate_id: "rv2_fixture_rejected",
+            rule_id: "NOPE-NEXT-AUTHZ-004",
+            family: "nextjs",
+            preliminary_severity: "high",
+            preliminary_confidence: "low",
+            file: "Raqm/apps/web/src/routes/app/settings/+server.ts",
+            line: 61,
+            safe_pattern_evidence: ["owner predicate present"],
+          },
+          decision: { candidate_id: "rv2_fixture_rejected", rule_id: "NOPE-NEXT-AUTHZ-004", result: "rejected", confidence: "low", evidence_strength: "contradictory", reason: "A safe-pattern contradiction prevented promotion." },
+        },
+      ],
+    };
+  }
+  try {
+    const query = searchParams?.toString();
+    return await api<RulesV2CandidateResult>(`/api/scans/${scanId}/rules-v2/candidates${query ? `?${query}` : ""}`);
   } catch {
     return null;
   }

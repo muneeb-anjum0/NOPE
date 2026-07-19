@@ -77,6 +77,15 @@ NOPE treats every uploaded repository and every scanned target as potentially ho
 - The service runs without privileged mode and with dropped capabilities where practical.
 - Model file paths are configured by deployment settings, not arbitrary user input.
 
+## Rules v2 candidate boundaries
+
+- Rules v2 treats scanner output and repository text as evidence, not truth.
+- Weak candidates can be withheld or sent to manual review instead of becoming findings.
+- Safe-pattern and contradictory evidence can reject candidates.
+- Candidate APIs are owner-scoped through the scan owner check.
+- Candidate snippets are redacted with the same secret redaction path used elsewhere in scan evidence.
+- The current implementation is bounded by file count, file size, and candidate count limits so hostile repositories cannot force unlimited candidate generation.
+
 ## Failure safety
 
 - Scanner failure marks scanner coverage as Failed.

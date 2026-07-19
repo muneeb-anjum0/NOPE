@@ -28,6 +28,7 @@ from nope_api.lifecycle import LifecycleTransitionRequest
 from nope_api.models import AuthorizationScope, FindingStatus, GitHubSettings, Project, ProjectSettings, Scan, ScanMode, ScanRequest, SystemSettings
 from nope_api.queue import clear_scan_cancel, enqueue_scan_job, queue_status, request_scan_cancel, scan_events
 from nope_api.reports import ReportContext, render_report
+from nope_api.rules_v2 import list_rule_inventory
 from nope_api.sandbox import sandbox_health
 from nope_api.scanners import scanner_capabilities, scanner_health
 from nope_api.security import validate_url_scope
@@ -796,6 +797,77 @@ async def get_scan_events(
 def get_attack_map(scan_id: str, authorization: str | None = Header(default=None)):
     scan = _load_scan(scan_id, authorization)
     return {"attack_surface": scan.attack_surface, "code_graph": scan.code_graph}
+
+
+@app.get("/api/rules-v2/rules")
+def get_rules_v2_inventory(authorization: str | None = Header(default=None)):
+    _require_owner_user_id(authorization)
+    return list_rule_inventory()
+
+
+@app.get("/api/scans/{scan_id}/rules-v2")
+def get_scan_rules_v2(scan_id: str, authorization: str | None = Header(default=None)):
+    scan = _load_scan(scan_id, authorization)
+    payload = scan.rules_v2 or {}
+    return {
+        "scan_id": scan.id,
+        "version": payload.get("version"),
+        "catalog": payload.get("catalog", {}),
+        "coverage": payload.get("coverage", {}),
+        "metrics": payload.get("metrics", {}),
+        "failures": payload.get("failures", []),
+    }
+
+
+@app.get("/api/scans/{scan_id}/rules-v2/candidates")
+def list_scan_rules_v2_candidates(
+    scan_id: str,
+    authorization: str | None = Header(default=None),
+    result: str | None = Query(default=None),
+    family: str | None = Query(default=None),
+    rule: str | None = Query(default=None),
+    severity: str | None = Query(default=None),
+    confidence: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+):
+    scan = _load_scan(scan_id, authorization)
+    payload = scan.rules_v2 or {}
+    candidates = payload.get("candidates", [])
+    decisions = {item.get("candidate_id"): item for item in payload.get("decisions", [])}
+    rows = []
+    for candidate in candidates:
+        decision = decisions.get(candidate.get("candidate_id"), {})
+        if result and decision.get("result") != result:
+            continue
+        if family and candidate.get("family") != family:
+            continue
+        if rule and candidate.get("rule_id") != rule:
+            continue
+        if severity and candidate.get("preliminary_severity") != severity:
+            continue
+        if confidence and candidate.get("preliminary_confidence") != confidence:
+            continue
+        rows.append({"candidate": candidate, "decision": decision})
+    start = (page - 1) * page_size
+    return {
+        "scan_id": scan.id,
+        "page": page,
+        "page_size": page_size,
+        "total": len(rows),
+        "items": rows[start : start + page_size],
+    }
+
+
+@app.get("/api/scans/{scan_id}/rules-v2/candidates/{candidate_id}")
+def get_scan_rules_v2_candidate(scan_id: str, candidate_id: str, authorization: str | None = Header(default=None)):
+    scan = _load_scan(scan_id, authorization)
+    payload = scan.rules_v2 or {}
+    decisions = {item.get("candidate_id"): item for item in payload.get("decisions", [])}
+    for candidate in payload.get("candidates", []):
+        if candidate.get("candidate_id") == candidate_id:
+            return {"scan_id": scan.id, "candidate": candidate, "decision": decisions.get(candidate_id)}
+    raise HTTPException(status_code=404, detail="Rules v2 candidate not found.")
 
 
 @app.get("/api/scans/{scan_id}/report.{fmt}")
