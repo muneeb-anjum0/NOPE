@@ -88,6 +88,73 @@ def test_rules_v2_withholds_weak_authorization_candidate_until_owner_context_exi
     )
 
 
+def test_rules_v2_rejects_idor_when_repository_helper_binds_owner_context(tmp_path: Path):
+    repo = tmp_path / "repo"
+    route = repo / "app" / "api" / "invoices" / "[id]"
+    lib = repo / "lib"
+    route.mkdir(parents=True)
+    lib.mkdir(parents=True)
+    (lib / "authz.ts").write_text(
+        """
+        import { auth } from "@clerk/nextjs/server";
+        export async function assertInvoiceOwner(invoiceId) {
+          const { userId } = auth();
+          return prisma.invoice.findFirst({ where: { id: invoiceId, ownerId: userId } });
+        }
+        """,
+        encoding="utf-8",
+    )
+    (route / "route.ts").write_text(
+        """
+        import { assertInvoiceOwner } from "@/lib/authz";
+        export async function GET(req, { params }) {
+          const invoice = await assertInvoiceOwner(params.id);
+          return prisma.invoice.findUnique({ where: { id: params.id } });
+        }
+        """,
+        encoding="utf-8",
+    )
+    scan = Scan(id=f"scan_stage13_safe_helper_{uuid4().hex[:8]}", mode=ScanMode.repository, repository_name="repo.zip")
+
+    promoted, payload = run_rules_v2(scan, repo, [])
+    prisma_decisions = [decision for decision in payload["decisions"] if decision["rule_id"] == "NOPE-PRISMA-001"]
+
+    assert promoted == []
+    assert prisma_decisions
+    assert all(decision["result"] == "rejected" for decision in prisma_decisions)
+    candidate = next(candidate for candidate in payload["candidates"] if candidate["rule_id"] == "NOPE-PRISMA-001")
+    assert "authorization helper" in " ".join(candidate["safe_pattern_evidence"]).lower()
+
+
+def test_rules_v2_supabase_table_policy_index_prevents_weak_rls_candidate(tmp_path: Path):
+    repo = tmp_path / "repo"
+    route = repo / "app" / "api" / "profiles"
+    migrations = repo / "supabase" / "migrations"
+    route.mkdir(parents=True)
+    migrations.mkdir(parents=True)
+    (migrations / "001_profiles.sql").write_text(
+        """
+        alter table profiles enable row level security;
+        create policy "own profile" on profiles for select using (auth.uid() = user_id);
+        """,
+        encoding="utf-8",
+    )
+    (route / "route.ts").write_text(
+        """
+        export async function GET() {
+          return supabase.from("profiles").select("*");
+        }
+        """,
+        encoding="utf-8",
+    )
+    scan = Scan(id=f"scan_stage13_rls_index_{uuid4().hex[:8]}", mode=ScanMode.repository, repository_name="repo.zip")
+
+    promoted, payload = run_rules_v2(scan, repo, [])
+
+    assert promoted == []
+    assert not any(candidate["rule_id"] == "NOPE-SUPABASE-RLS-008" for candidate in payload["candidates"])
+
+
 def test_rules_v2_external_scanner_evidence_correlates_without_losing_original_finding(tmp_path: Path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -179,6 +246,80 @@ def test_rules_v2_api_is_authorized_paginated_and_filterable():
     assert detail.status_code == 200
     assert detail.json()["candidate"]["rule_id"] == "NOPE-PRISMA-001"
     assert forbidden.status_code == 404
+
+
+def test_rules_v2_candidates_are_normalized_and_snapshot_compatible():
+    suffix = uuid4().hex[:8]
+    store = PostgresStore()
+    with TestClient(app) as client:
+        owner = _login(client, "stage13-rules-normalized")
+        project = store.create_project(f"Rules v2 normalized {suffix}", "rules-v2.zip", None, owner["user"]["id"])
+        scan = Scan(
+            id=f"scan_stage13_normalized_{suffix}",
+            project_id=project.id,
+            mode=ScanMode.repository,
+            status="completed",
+            repository_name="rules-v2.zip",
+            rules_v2={
+                "version": "rules-v2.test",
+                "catalog": {"rule_count": 101},
+                "coverage": {"candidate_count": 1, "promoted": 0, "withheld": 1, "rejected": 0, "needs_manual_review": 0, "not_applicable": 0},
+                "metrics": {"total_ms": 4},
+                "failures": [],
+                "candidates": [
+                    {
+                        "candidate_id": f"rv2_candidate_normalized_{suffix}",
+                        "rule_id": "NOPE-PRISMA-001",
+                        "rule_version": "2.0.0",
+                        "family": "prisma",
+                        "source_type": "repository",
+                        "preliminary_severity": "high",
+                        "preliminary_confidence": "medium",
+                        "file": "app/api/route.ts",
+                        "line": 7,
+                        "evidence": [
+                            {
+                                "kind": "source_to_sink",
+                                "source": "Rules v2",
+                                "file": "app/api/route.ts",
+                                "line": 7,
+                                "strength": "strong_correlated",
+                                "message": "User ID reaches database lookup.",
+                            }
+                        ],
+                        "graph_references": ["route:GET:/api/invoices/[id]"],
+                    }
+                ],
+                "decisions": [
+                    {
+                        "candidate_id": f"rv2_candidate_normalized_{suffix}",
+                        "rule_id": "NOPE-PRISMA-001",
+                        "rule_version": "2.0.0",
+                        "result": "withheld",
+                        "confidence": "medium",
+                        "evidence_strength": "incomplete",
+                        "reason": "Missing owner scope.",
+                        "machine_reason": "missing_required_evidence",
+                    }
+                ],
+            },
+        )
+        store.save_scan(scan, owner["user"]["id"])
+
+        candidates = client.get(
+            f"/api/scans/{scan.id}/rules-v2/candidates?result=withheld&page_size=1",
+            headers=_auth(owner["token"]),
+        )
+        detail = client.get(
+            f"/api/scans/{scan.id}/rules-v2/candidates/rv2_candidate_normalized_{suffix}",
+            headers=_auth(owner["token"]),
+        )
+
+    assert candidates.status_code == 200
+    assert candidates.json()["total"] == 1
+    assert candidates.json()["items"][0]["candidate"]["evidence"][0]["kind"] == "source_to_sink"
+    assert detail.status_code == 200
+    assert detail.json()["decision"]["machine_reason"] == "missing_required_evidence"
 
 
 def test_rules_v2_candidate_ids_are_deterministic_for_same_evidence(tmp_path: Path):

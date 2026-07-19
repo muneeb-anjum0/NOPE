@@ -67,4 +67,11 @@ export async function freezeForVisuals(page: Page) {
 export async function visibleAppReady(page: Page) {
   await expect(page.locator("main")).toBeVisible();
   await expect(page.getByRole("link", { name: "NOPE home" })).toBeVisible();
+  await page
+    .waitForFunction(
+      () => document.getAnimations().every((animation) => animation.playState !== "running"),
+      undefined,
+      { timeout: 5_000 },
+    )
+    .catch(() => undefined);
 }

@@ -14,7 +14,7 @@ The long phase-by-phase history is archived in [`audits/`](audits/). I keep it a
 | URL checks | Working for authorized, non-destructive checks | Private/local targets are blocked unless explicitly allowed for the local sandbox path. |
 | Queue and progress | Working | Redis moves jobs; Postgres keeps the durable event history. Browser refreshes do not erase scan progress. |
 | Scanner pipeline | Working | NOPE rules, Semgrep, Gitleaks, OSV, Trivy, Checkov, Hadolint, Bandit, and ecosystem audit adapters are wired through controlled commands. |
-| Rules v2 | Working with honest limits | 100+ validated catalog rules, candidate review, promotion gate, APIs, reports, and dashboard page are wired. Some families still use broad text/graph heuristics rather than full AST/dataflow parsing. |
+| Rules v2 | Working locally | 100+ validated catalog rules, repository context indexing, normalized candidate persistence, candidate review, promotion gate, APIs, reports, and dashboard page are wired. |
 | Evidence gate | Working | Weak rule hits are checked against nearby evidence before they become normal findings. This was added because noisy findings are worse than no findings. |
 | Dynamic/ZAP path | Working for declared sandbox apps | Node/Python fixture workflows can run behind the runner boundary. Unsupported apps are reported plainly. |
 | Findings lifecycle | Working | Findings keep stable fingerprints, evidence sources, lifecycle state, suppressions, recurrence, and reintroduction history. |

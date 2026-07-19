@@ -10,7 +10,7 @@ Pre-stage state:
 - Scanner plugins: NOPE rules, Semgrep, Gitleaks, OSV-Scanner, Trivy, npm audit, pnpm audit, yarn audit, pip-audit, .NET package audit, cargo audit, govulncheck, composer audit, bundler-audit, Checkov, Hadolint, Bandit, OWASP ZAP baseline, and the built-in URL scanner
 - Current rule path: `rules_engine.py` loads regex-style JSON rules and emits normal `Finding` objects.
 - Current promotion path: `finding_validation.py` context-checks deduped findings into promoted, needs-context, or rejected decisions stored in scan stage data.
-- Current persistence path: scan JSON snapshots plus normalized finding/evidence/scanner tables. There is no first-class candidate table before Stage 13.
+- Current persistence path after Stage 13.5: scan JSON snapshots remain export/backward-compatibility artifacts, while Rules v2 candidates, evidence, correlations, promotion history, and candidate suppression state live in normalized tables.
 
 ## Current Rule Architecture
 
@@ -72,7 +72,7 @@ In the scan model:
 - Add `rules_v2` summary data containing registered rules, candidates, promotion decisions, coverage, failures, and execution metrics.
 - Preserve normal `Finding` objects for promoted findings.
 
-Database migrations should eventually add normalized candidate and decision tables. For the first Stage 13 integration pass, scan JSON snapshot persistence is used so the feature survives restart without breaking current migrations or existing scan history.
+Stage 13.5 added normalized candidate, evidence, correlation, promotion-history, and suppression-state tables. The scan JSON snapshot remains so old exports and dashboard contracts do not break.
 
 ## Required Graph Changes
 
@@ -89,9 +89,9 @@ The current lightweight graph supports route/file/database/auth-risk nodes. Rule
 
 Minimum Stage 13 integration persistence:
 
-- scan snapshot stores Rules v2 candidates, decisions, coverage, failures, and metrics
-- reports read scan snapshot Rules v2 data
-- APIs expose candidate and rule inventory from scan snapshot
+- scan snapshot stores Rules v2 candidates, decisions, coverage, failures, and metrics as a compatibility/export artifact
+- reports read scan Rules v2 summary data and promoted findings
+- APIs expose candidate and rule inventory from normalized tables first, with scan-snapshot fallback for older scans
 
 Future normalized persistence:
 
@@ -135,7 +135,7 @@ Full per-rule fixture coverage for every future rule is required before claiming
 
 ## Migration Strategy
 
-Use scan JSON snapshot compatibility first, because Stage 1-12 scan history already depends on JSON snapshots. Add normalized candidate tables only when the API/UI contract stabilizes.
+Keep scan JSON snapshot compatibility because Stage 1-12 scan history depends on it. Normalized candidate tables are now the primary candidate-review datastore.
 
 ## Compatibility Strategy
 

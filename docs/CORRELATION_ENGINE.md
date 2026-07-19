@@ -8,6 +8,7 @@ The Rules v2 correlation engine connects signals that are weak alone but meaning
 - existing findings from first-party and external scanners
 - attack-surface routes, files, database access, authorization hints, and rate-limit hints
 - scanner source metadata
+- reusable repository context: source blocks, imports, framework hints, authorization helpers, owner/tenant guards, and Supabase owner-bound RLS policy tables
 
 ## Outputs
 
@@ -22,5 +23,5 @@ The Rules v2 correlation engine connects signals that are weak alone but meaning
 - `webhook route -> mutation -> no signature evidence` becomes a webhook candidate.
 - `auth route -> AI call -> no budget/rate/token controls` becomes an AI cost-abuse candidate.
 
-The current implementation uses bounded lexical, route, scanner, and lightweight graph context. It is intentionally explainable; every candidate keeps the evidence and reason that caused it.
+The current implementation is bounded and explainable. It does not try to be a full language server, but it does build a reusable context index before candidate generation so route handlers can be checked against helper functions, imported authorization wrappers, matching RLS policy files, source-block metadata, graph hints, and scanner evidence. Every candidate keeps the evidence and reason that caused it.
 

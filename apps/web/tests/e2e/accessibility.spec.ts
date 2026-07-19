@@ -20,7 +20,8 @@ test.describe("Stage 8 accessibility", () => {
   for (const [route, expectedText] of majorRoutes) {
     test(`axe has no serious violations on ${route}`, async ({ page }) => {
       if (route.startsWith("/app")) await login(page);
-      await page.goto(route);
+      await page.goto(route, { waitUntil: "domcontentloaded" });
+      if (route.startsWith("/app")) await visibleAppReady(page);
       await expect(page.getByText(expectedText).first()).toBeVisible();
       await expectNoSeriousAxeViolations(page);
     });

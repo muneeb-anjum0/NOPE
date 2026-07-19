@@ -9,6 +9,8 @@ Rules v2 is NOPE's newer detection layer. It does not replace scanner output. It
 - Correlation across repository text, attack-surface graph hints, and external scanner findings.
 - Promotion-gate decisions: promoted, withheld, needs manual review, rejected, or not applicable.
 - Report and API visibility into candidates that did not become findings.
+- Normalized database persistence for candidates, evidence, correlations, promotion history, and candidate suppression state, with scan-snapshot fallback for old scans.
+- A reusable repository context index for source blocks, imports, framework hints, auth/owner helpers, and Supabase RLS policy tables.
 
 ## Rule Families
 
@@ -25,7 +27,7 @@ Rules v2 is NOPE's newer detection layer. It does not replace scanner output. It
 - `upload-storage`: archive, file type, storage key, public bucket, and executable upload paths.
 - `deployment-ci`: Docker, CI secrets, privileged containers, headers, TLS, and build/script exposure.
 
-## Current Limit
+## Current Boundary
 
-Rules v2 is useful today, but it is not a complete AST/dataflow analyzer. Some families use broad text and graph evidence. The promotion gate is deliberately conservative: weak candidates should show up as withheld or review items instead of polluting the normal Findings table.
+Rules v2 is production-grade for NOPE's local scanner scope, but it is still bounded static analysis. It is not a full compiler or language server for every framework. The promotion gate stays conservative: weak candidates should show up as withheld or review items instead of polluting the normal Findings table.
 

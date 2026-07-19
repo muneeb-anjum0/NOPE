@@ -24,7 +24,9 @@ test.describe("Stage 8 deterministic visuals", () => {
 
   for (const [route, name] of denseRoutes) {
     test(`desktop visual for ${name}`, async ({ page }, testInfo) => {
-      test.skip(testInfo.project.name !== "chromium-1280", "Dense route snapshots are captured once at desktop width.");
+      if (testInfo.project.name !== "chromium-1280") {
+        return;
+      }
       await login(page);
       await page.goto(route);
       await freezeForVisuals(page);

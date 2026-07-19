@@ -2,7 +2,7 @@
 
 Withheld candidates are suspicious signals that did not earn a normal finding.
 
-They are not ignored. They are saved in the scan snapshot, exposed through the Rules v2 APIs, visible in the Rules v2 dashboard page, and summarized in reports.
+They are not ignored. They are saved in normalized Rules v2 tables, mirrored in the scan snapshot for exports/backward compatibility, exposed through the Rules v2 APIs, visible in the Rules v2 dashboard page, and summarized in reports.
 
 ## Common Reasons
 

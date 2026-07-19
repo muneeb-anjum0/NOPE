@@ -163,6 +163,26 @@ class RepositoryFile:
     line_offsets: list[int] = field(default_factory=list)
 
 
+@dataclass
+class SourceBlock:
+    name: str
+    kind: str
+    start_line: int
+    end_line: int
+    text: str
+
+
+@dataclass
+class RepositoryRuleContext:
+    safe_auth_helpers: set[str] = field(default_factory=set)
+    auth_helpers: set[str] = field(default_factory=set)
+    owner_helpers: set[str] = field(default_factory=set)
+    rls_tables_with_owner_policy: set[str] = field(default_factory=set)
+    framework_by_file: dict[str, str] = field(default_factory=dict)
+    source_blocks: dict[str, list[SourceBlock]] = field(default_factory=dict)
+    import_symbols: dict[str, set[str]] = field(default_factory=dict)
+
+
 def _rule(
     rule_id: str,
     title: str,
@@ -440,6 +460,155 @@ DOCKER_RISK_RE = re.compile(r"\b(USER\s+root|privileged:\s*true|/var/run/docker\
 DOCKER_SAFE_RE = re.compile(r"\b(USER\s+(?!root)\w+|no-new-privileges|cap_drop|read_only|HEALTHCHECK|memory|cpus)\b", re.I)
 RLS_POLICY_RE = re.compile(r"\b(create\s+policy|alter\s+table.*enable\s+row\s+level\s+security|with\s+check|auth\.uid\(\)|security\s+definer|storage\.objects)\b", re.I | re.S)
 PUBLIC_POLICY_RE = re.compile(r"\b(using\s*\(\s*true\s*\)|to\s+authenticated|public\s*[:=]\s*true|allow\s+read\s*:\s*if\s+true)\b", re.I)
+FUNCTION_RE = re.compile(
+    r"(?:(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)|(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>|def\s+([A-Za-z_]\w*)\s*\()",
+    re.I,
+)
+IMPORT_RE = re.compile(r"\bimport\s+(?:\{([^}]+)\}|([A-Za-z_$][\w$]*))|from\s+[\w.]+\s+import\s+([A-Za-z_][\w_,\s]*)", re.I)
+ROUTE_HANDLER_RE = re.compile(r"\b(GET|POST|PUT|PATCH|DELETE|handler|loader|action)\b")
+
+
+def _framework_for_file(rel: str, text: str) -> str | None:
+    lower = rel.lower()
+    if "app/api/" in lower or "pages/api/" in lower or "route." in lower or lower.endswith((".tsx", ".jsx")):
+        return "nextjs"
+    if "+server." in lower or "src/routes/" in lower:
+        return "sveltekit"
+    if "express" in text.lower() or re.search(r"\brouter\.(get|post|put|patch|delete)\b", text, re.I):
+        return "express"
+    if "fastapi" in text.lower() or re.search(r"@\w+\.(get|post|put|patch|delete)\(", text):
+        return "fastapi"
+    if "flask" in text.lower() or "@app.route" in text:
+        return "flask"
+    if "django" in text.lower() or "permission_classes" in text:
+        return "django"
+    if "supabase" in text.lower():
+        return "supabase"
+    if "prisma" in text.lower():
+        return "prisma"
+    return None
+
+
+def _line_for_index(lines: list[str], index: int) -> int:
+    return max(1, min(len(lines), index + 1))
+
+
+def _js_block_end(lines: list[str], start: int) -> int:
+    depth = 0
+    seen_open = False
+    for idx in range(start, min(len(lines), start + 220)):
+        line = lines[idx]
+        depth += line.count("{")
+        if "{" in line:
+            seen_open = True
+        depth -= line.count("}")
+        if seen_open and depth <= 0:
+            return idx
+    return min(len(lines) - 1, start + 80)
+
+
+def _python_block_end(lines: list[str], start: int) -> int:
+    indent = len(lines[start]) - len(lines[start].lstrip(" "))
+    for idx in range(start + 1, min(len(lines), start + 220)):
+        stripped = lines[idx].strip()
+        if not stripped:
+            continue
+        next_indent = len(lines[idx]) - len(lines[idx].lstrip(" "))
+        if next_indent <= indent and not lines[idx].lstrip().startswith(("#", "@")):
+            return idx - 1
+    return min(len(lines) - 1, start + 80)
+
+
+def _source_blocks(repo_file: RepositoryFile) -> list[SourceBlock]:
+    lines = repo_file.text.splitlines()
+    blocks: list[SourceBlock] = []
+    for idx, line in enumerate(lines):
+        match = FUNCTION_RE.search(line)
+        if not match:
+            continue
+        name = next(group for group in match.groups() if group)
+        is_python = line.lstrip().startswith("def ")
+        end = _python_block_end(lines, idx) if is_python else _js_block_end(lines, idx)
+        blocks.append(
+            SourceBlock(
+                name=name,
+                kind="python_function" if is_python else "js_function",
+                start_line=_line_for_index(lines, idx),
+                end_line=_line_for_index(lines, end),
+                text="\n".join(lines[idx : end + 1]),
+            )
+        )
+    return blocks
+
+
+def _import_symbols(text: str) -> set[str]:
+    symbols: set[str] = set()
+    for match in IMPORT_RE.finditer(text):
+        raw = next((group for group in match.groups() if group), "")
+        for part in raw.split(","):
+            name = part.strip().split(" as ")[-1].strip()
+            if re.fullmatch(r"[A-Za-z_$][\w$]*", name):
+                symbols.add(name)
+    return symbols
+
+
+def _safe_owner_policy_tables(text: str) -> set[str]:
+    tables: set[str] = set()
+    if not RLS_POLICY_RE.search(text) or not OWNER_RE.search(text):
+        return tables
+    for match in re.finditer(r"\bon\s+([A-Za-z_][\w.]*)", text, re.I):
+        tables.add(match.group(1).split(".")[-1].lower())
+    return tables
+
+
+def _build_repository_context(files: list[RepositoryFile]) -> RepositoryRuleContext:
+    context = RepositoryRuleContext()
+    for repo_file in files:
+        blocks = _source_blocks(repo_file)
+        context.source_blocks[repo_file.rel] = blocks
+        imports = _import_symbols(repo_file.text)
+        context.import_symbols[repo_file.rel] = imports
+        framework = _framework_for_file(repo_file.rel, repo_file.text)
+        if framework:
+            context.framework_by_file[repo_file.rel] = framework
+        context.rls_tables_with_owner_policy.update(_safe_owner_policy_tables(repo_file.text))
+        for block in blocks:
+            auth = bool(AUTH_RE.search(block.text))
+            owner = bool(OWNER_RE.search(block.text))
+            name_suggests_guard = bool(re.search(r"(authorize|authorise|owner|tenant|membership|permission|require)", block.name, re.I))
+            if auth:
+                context.auth_helpers.add(block.name)
+            if owner:
+                context.owner_helpers.add(block.name)
+            if (auth and owner) or (name_suggests_guard and (auth or owner)):
+                context.safe_auth_helpers.add(block.name)
+    return context
+
+
+def _contextual_safe_auth(text: str, context: RepositoryRuleContext) -> tuple[bool, list[str]]:
+    local = _has_safe_auth(text)
+    imported_symbols = set().union(*context.import_symbols.values()) if context.import_symbols else set()
+    helper_hits = sorted(
+        helper for helper in context.safe_auth_helpers if re.search(rf"\b{re.escape(helper)}\s*\(", text)
+    )
+    imported_hits = sorted(helper for helper in helper_hits if helper in imported_symbols)
+    evidence = []
+    if local:
+        evidence.append("Auth and owner/tenant signal in same source block.")
+    if helper_hits:
+        evidence.append(f"Repository authorization helper used: {', '.join(helper_hits[:5])}.")
+    if imported_hits:
+        evidence.append(f"Imported authorization wrapper used: {', '.join(imported_hits[:5])}.")
+    return bool(local or helper_hits), evidence
+
+
+def _block_for_line(context: RepositoryRuleContext, file: str, line: int | None) -> SourceBlock | None:
+    if line is None:
+        return None
+    for block in context.source_blocks.get(file, []):
+        if block.start_line <= line <= block.end_line:
+            return block
+    return None
 
 
 def _candidate(
@@ -500,7 +669,7 @@ def _has_safe_auth(text: str) -> bool:
     return bool(AUTH_RE.search(text) and OWNER_RE.search(text))
 
 
-def _file_candidates(scan: Scan, files: list[RepositoryFile]) -> list[RuleCandidate]:
+def _file_candidates(scan: Scan, files: list[RepositoryFile], context: RepositoryRuleContext) -> list[RuleCandidate]:
     candidates: list[RuleCandidate] = []
     for repo_file in files:
         text = repo_file.text
@@ -512,7 +681,8 @@ def _file_candidates(scan: Scan, files: list[RepositoryFile]) -> list[RuleCandid
         has_db_read = bool(DB_READ_RE.search(text))
         has_db_mutation = bool(DB_MUTATION_RE.search(text))
         has_input_id = bool(INPUT_ID_RE.search(text))
-        safe_auth = _has_safe_auth(text)
+        safe_auth, safe_auth_evidence = _contextual_safe_auth(text, context)
+        framework = context.framework_by_file.get(repo_file.rel)
 
         for match in SECRET_RE.finditer(text):
             line = _line_for_offset(text, match.start())
@@ -521,12 +691,14 @@ def _file_candidates(scan: Scan, files: list[RepositoryFile]) -> list[RuleCandid
             if is_client or "public" in lower_rel or ".map" in lower_rel:
                 candidates.append(_candidate("NOPE-CORR-SECRET-001", scan, source_type="repository", file=repo_file.rel, line=line, confidence=Confidence.high, evidence=[_evidence("secret_flow", "Rules v2", "Secret-like value appears in a client/public path.", file=repo_file.rel, line=line, snippet=_line_text(text, line), strength="strong_correlated")]))
 
-        if is_route and has_db_read and not has_auth:
+        if is_route and has_db_read and not has_auth and not safe_auth:
             line = _line_for_offset(text, DB_READ_RE.search(text).start()) if DB_READ_RE.search(text) else 1
-            candidates.append(_candidate("NOPE-NEXT-AUTHZ-002", scan, source_type="repository", file=repo_file.rel, line=line, framework="nextjs", confidence=Confidence.medium, missing=["authentication/session validation before data access"], evidence=[_evidence("data_access", "Rules v2", "Route handler data access appears before auth/session evidence.", file=repo_file.rel, line=line, snippet=_line_text(text, line), strength="strong_correlated")]))
-        if is_route and has_db_read and has_auth and not has_owner:
+            block = _block_for_line(context, repo_file.rel, line)
+            candidates.append(_candidate("NOPE-NEXT-AUTHZ-002", scan, source_type="repository", file=repo_file.rel, line=line, symbol=block.name if block else None, framework=framework or "nextjs", confidence=Confidence.medium, missing=["authentication/session validation before data access"], evidence=[_evidence("data_access", "Rules v2", "Route handler data access appears before auth/session evidence.", file=repo_file.rel, line=line, snippet=_line_text(text, line), strength="strong_correlated", metadata={"analysis": "framework_route_block", "block": block.name if block else None})]))
+        if is_route and has_db_read and has_auth and not safe_auth:
             line = _line_for_offset(text, DB_READ_RE.search(text).start()) if DB_READ_RE.search(text) else 1
-            candidates.append(_candidate("NOPE-NEXT-AUTHZ-004", scan, source_type="repository", file=repo_file.rel, line=line, framework="nextjs", confidence=Confidence.medium, missing=["owner/tenant predicate"], evidence=[_evidence("auth_without_scope", "Rules v2", "Authentication evidence exists, but owner/tenant scope evidence is missing near data access.", file=repo_file.rel, line=line, snippet=_line_text(text, line), strength="strong_correlated")]))
+            block = _block_for_line(context, repo_file.rel, line)
+            candidates.append(_candidate("NOPE-NEXT-AUTHZ-004", scan, source_type="repository", file=repo_file.rel, line=line, symbol=block.name if block else None, framework=framework or "nextjs", confidence=Confidence.medium, missing=["owner/tenant predicate"], evidence=[_evidence("auth_without_scope", "Rules v2", "Authentication evidence exists, but owner/tenant scope evidence is missing near data access.", file=repo_file.rel, line=line, snippet=_line_text(text, line), strength="strong_correlated", metadata={"analysis": "auth_flow_without_owner_binding", "block": block.name if block else None})]))
         if "server action" in text.lower() and has_db_mutation and not has_auth:
             line = _line_for_offset(text, DB_MUTATION_RE.search(text).start()) if DB_MUTATION_RE.search(text) else 1
             candidates.append(_candidate("NOPE-NEXT-AUTHZ-001", scan, source_type="repository", file=repo_file.rel, line=line, framework="nextjs", confidence=Confidence.medium, missing=["server-side auth check"], evidence=[_evidence("server_action_mutation", "Rules v2", "Server Action mutation lacks nearby auth evidence.", file=repo_file.rel, line=line, snippet=_line_text(text, line), strength="strong_correlated")]))
@@ -535,10 +707,12 @@ def _file_candidates(scan: Scan, files: list[RepositoryFile]) -> list[RuleCandid
             candidates.append(_candidate("NOPE-NEXT-AUTHZ-006", scan, source_type="repository", file=repo_file.rel, line=line, framework="nextjs", confidence=Confidence.high, evidence=[_evidence("client_authority", "Rules v2", "Server-side path references role/user/tenant authority from request or browser-controlled input.", file=repo_file.rel, line=line, snippet=_line_text(text, line), strength="direct_deterministic")]))
         if has_db_read and has_input_id:
             line = _line_for_offset(text, DB_READ_RE.search(text).start()) if DB_READ_RE.search(text) else 1
-            candidates.append(_candidate("NOPE-PRISMA-001" if "prisma" in text.lower() else "NOPE-CORR-IDOR-001", scan, source_type="repository", file=repo_file.rel, line=line, route=None, framework="prisma" if "prisma" in text.lower() else None, confidence=Confidence.high if not safe_auth else Confidence.low, missing=[] if safe_auth else ["owner/tenant predicate"], safe=["Auth and owner/tenant signal in same file."] if safe_auth else [], evidence=[_evidence("source_to_sink", "Rules v2", "User-controlled ID and database lookup are present in bounded context.", file=repo_file.rel, line=line, snippet=_line_text(text, line), strength="strong_correlated")]))
+            block = _block_for_line(context, repo_file.rel, line)
+            candidates.append(_candidate("NOPE-PRISMA-001" if "prisma" in text.lower() else "NOPE-CORR-IDOR-001", scan, source_type="repository", file=repo_file.rel, line=line, route=None, symbol=block.name if block else None, framework="prisma" if "prisma" in text.lower() else framework, confidence=Confidence.high if not safe_auth else Confidence.low, missing=[] if safe_auth else ["owner/tenant predicate"], safe=safe_auth_evidence if safe_auth else [], evidence=[_evidence("source_to_sink", "Rules v2", "User-controlled ID and database lookup are present in a framework-aware source block.", file=repo_file.rel, line=line, snippet=_line_text(text, line), strength="strong_correlated", metadata={"analysis": "source_to_sink_block", "block": block.name if block else None, "safe_helper_count": len(safe_auth_evidence)})]))
         if has_db_mutation and has_input_id:
             line = _line_for_offset(text, DB_MUTATION_RE.search(text).start()) if DB_MUTATION_RE.search(text) else 1
-            candidates.append(_candidate("NOPE-PRISMA-002" if "prisma" in text.lower() else "NOPE-CORR-MUTATION-001", scan, source_type="repository", file=repo_file.rel, line=line, framework="prisma" if "prisma" in text.lower() else None, confidence=Confidence.high if not safe_auth else Confidence.low, missing=[] if safe_auth else ["owner/tenant predicate"], safe=["Auth and owner/tenant signal in same file."] if safe_auth else [], evidence=[_evidence("mutation_sink", "Rules v2", "User-controlled ID and mutation sink are present in bounded context.", file=repo_file.rel, line=line, snippet=_line_text(text, line), strength="strong_correlated")]))
+            block = _block_for_line(context, repo_file.rel, line)
+            candidates.append(_candidate("NOPE-PRISMA-002" if "prisma" in text.lower() else "NOPE-CORR-MUTATION-001", scan, source_type="repository", file=repo_file.rel, line=line, symbol=block.name if block else None, framework="prisma" if "prisma" in text.lower() else framework, confidence=Confidence.high if not safe_auth else Confidence.low, missing=[] if safe_auth else ["owner/tenant predicate"], safe=safe_auth_evidence if safe_auth else [], evidence=[_evidence("mutation_sink", "Rules v2", "User-controlled ID and mutation sink are present in a framework-aware source block.", file=repo_file.rel, line=line, snippet=_line_text(text, line), strength="strong_correlated", metadata={"analysis": "mutation_source_to_sink_block", "block": block.name if block else None})]))
         if "include:" in text and re.search(r"\b(password|token|secret|sessions?|apiKeys?|reset)\b", text, re.I):
             line = _line_for_offset(text, text.lower().find("include:"))
             candidates.append(_candidate("NOPE-PRISMA-003", scan, source_type="repository", file=repo_file.rel, line=line, framework="prisma", confidence=Confidence.medium, missing=["authorization proof for sensitive relation"], evidence=[_evidence("sensitive_relation", "Rules v2", "Sensitive relation appears in ORM include block.", file=repo_file.rel, line=line, snippet=_line_text(text, line), strength="inferred")]))
@@ -546,9 +720,13 @@ def _file_candidates(scan: Scan, files: list[RepositoryFile]) -> list[RuleCandid
             line = _line_for_offset(text, re.search(r"\b(passwordHash|resetToken|refreshToken|accessToken|secret|apiKey)\b", text).start())
             candidates.append(_candidate("NOPE-PRISMA-004", scan, source_type="repository", file=repo_file.rel, line=line, framework="prisma" if "prisma" in text.lower() else None, confidence=Confidence.medium, missing=["DTO allowlist or redaction proof"], evidence=[_evidence("sensitive_field", "Rules v2", "Sensitive field appears in selected or returned data context.", file=repo_file.rel, line=line, snippet=_line_text(text, line), strength="inferred")]))
 
-        if "supabase" in text.lower() and ".from(" in text and not RLS_POLICY_RE.search(text):
+        supabase_table = None
+        supabase_table_match = re.search(r"\.from\(['\"]([^'\"]+)['\"]\)", text)
+        if supabase_table_match:
+            supabase_table = supabase_table_match.group(1).lower()
+        if "supabase" in text.lower() and ".from(" in text and not RLS_POLICY_RE.search(text) and supabase_table not in context.rls_tables_with_owner_policy:
             line = _line_for_offset(text, text.lower().find(".from("))
-            candidates.append(_candidate("NOPE-SUPABASE-RLS-008", scan, source_type="repository", file=repo_file.rel, line=line, framework="supabase", confidence=Confidence.medium, missing=["matching restrictive RLS policy evidence"], evidence=[_evidence("supabase_table_use", "Rules v2", "Supabase table access was found without local RLS policy evidence in the same bounded context.", file=repo_file.rel, line=line, snippet=_line_text(text, line), strength="inferred")]))
+            candidates.append(_candidate("NOPE-SUPABASE-RLS-008", scan, source_type="repository", file=repo_file.rel, line=line, framework="supabase", confidence=Confidence.medium, missing=["matching restrictive RLS policy evidence"], evidence=[_evidence("supabase_table_use", "Rules v2", "Supabase table access was found without matching owner-bound RLS policy evidence.", file=repo_file.rel, line=line, snippet=_line_text(text, line), strength="inferred", metadata={"analysis": "supabase_table_policy_index", "table": supabase_table})]))
         if PUBLIC_POLICY_RE.search(text):
             line = _line_for_offset(text, PUBLIC_POLICY_RE.search(text).start())
             rule_id = "NOPE-SUPABASE-RLS-002" if "policy" in text.lower() or "auth" in text.lower() else "NOPE-SUPABASE-RLS-006"
@@ -704,12 +882,18 @@ def _dedupe_candidates(candidates: list[RuleCandidate]) -> list[RuleCandidate]:
 def generate_candidates(scan: Scan, root: Path | None, findings: list[Finding]) -> list[RuleCandidate]:
     started = time.perf_counter()
     files = _iter_repository_files(root)
-    candidates = _file_candidates(scan, files)
+    context_started = time.perf_counter()
+    context = _build_repository_context(files)
+    candidates = _file_candidates(scan, files, context)
     candidates.extend(_surface_candidates(scan))
     candidates.extend(_scanner_candidates(scan, findings))
     result = _dedupe_candidates(candidates)
     scan.rules_v2.setdefault("metrics", {})["candidate_generation_ms"] = int((time.perf_counter() - started) * 1000)
+    scan.rules_v2.setdefault("metrics", {})["context_index_ms"] = int((time.perf_counter() - context_started) * 1000)
     scan.rules_v2.setdefault("metrics", {})["repository_files_considered"] = len(files)
+    scan.rules_v2.setdefault("metrics", {})["framework_files_indexed"] = len(context.framework_by_file)
+    scan.rules_v2.setdefault("metrics", {})["safe_auth_helpers_indexed"] = len(context.safe_auth_helpers)
+    scan.rules_v2.setdefault("metrics", {})["rls_owner_policies_indexed"] = len(context.rls_tables_with_owner_policy)
     scan.rules_v2.setdefault("metrics", {})["candidate_truncated"] = len(candidates) > MAX_RULES_V2_CANDIDATES
     return result
 

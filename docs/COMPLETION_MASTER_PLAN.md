@@ -21,7 +21,15 @@ Implemented local scope:
 - Dashboard page for candidate review.
 - Regression tests covering catalog validation, deterministic candidate identity, promotion, withholding, external scanner correlation, API authorization, pagination, and report output.
 
-Known honest limit:
+Stage 13.5 completion pass:
 
-- Rules v2 is not a full AST/dataflow engine yet. It has real evidence correlation and promotion gating, but several catalog rules currently share broad text/graph heuristics instead of deep framework-specific parsers.
-- Candidate records are durable through the scan JSON snapshot. Dedicated normalized database tables can be added in a future schema pass if candidate analytics need cross-scan querying without loading scan data.
+- Added normalized Rules v2 database tables for candidates, immutable evidence rows, correlations, promotion history, and candidate suppression state.
+- Candidate APIs read normalized tables first and fall back to legacy scan snapshots so old scan history remains compatible.
+- Candidate generation now builds one reusable repository context per scan: source blocks, imports, framework hints, authorization helpers, owner/tenant guards, and Supabase owner-bound RLS policy tables.
+- Authorization, IDOR, Prisma, Supabase RLS, AI, upload, webhook, storage, cache, secret, and deployment candidates now carry framework/source-block metadata when available.
+- Safe wrapper and RLS policy fixtures prove that strong safe-pattern evidence rejects weak candidates before they become findings.
+- Stage 13.5 regression coverage includes vulnerable/safe fixtures, normalized persistence, API compatibility, promotion-gate behavior, deterministic candidate identity, and report output.
+
+Remaining honest boundary:
+
+- Rules v2 is production-grade for the local NOPE scope, but it is still a bounded static analysis engine, not a language-server-grade compiler for every framework in existence.

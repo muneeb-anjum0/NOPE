@@ -280,6 +280,7 @@ class PostgresStore:
             )
             self._upsert_repository_snapshot(conn, scan)
             self._replace_scan_children(conn, scan)
+            self._persist_rules_v2(conn, scan)
         return scan
 
     def _prepare_finding_lifecycle(self, conn, scan: Scan) -> None:
@@ -497,6 +498,82 @@ class PostgresStore:
         with connect(self.settings) as conn:
             rows = conn.execute(query, params).fetchall()
         return [Scan(**row["data"]) for row in rows]
+
+    def get_rules_v2_summary(self, scan: Scan) -> dict[str, Any]:
+        payload = scan.rules_v2 or {}
+        return {
+            "scan_id": scan.id,
+            "version": payload.get("version"),
+            "catalog": payload.get("catalog", {}),
+            "coverage": payload.get("coverage", {}),
+            "metrics": payload.get("metrics", {}),
+            "failures": payload.get("failures", []),
+        }
+
+    def list_rules_v2_candidates(
+        self,
+        scan: Scan,
+        *,
+        result: str | None = None,
+        family: str | None = None,
+        rule: str | None = None,
+        severity: str | None = None,
+        confidence: str | None = None,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> dict[str, Any]:
+        self.migrate()
+        with connect(self.settings) as conn:
+            rows = self._query_rules_v2_candidate_rows(
+                conn,
+                scan.id,
+                result=result,
+                family=family,
+                rule=rule,
+                severity=severity,
+                confidence=confidence,
+                page=page,
+                page_size=page_size,
+            )
+        if rows["total"] == 0 and not rows["items"]:
+            return self._snapshot_rules_v2_candidates(
+                scan,
+                result=result,
+                family=family,
+                rule=rule,
+                severity=severity,
+                confidence=confidence,
+                page=page,
+                page_size=page_size,
+            )
+        return {"scan_id": scan.id, **rows}
+
+    def get_rules_v2_candidate(self, scan: Scan, candidate_id: str) -> dict[str, Any] | None:
+        self.migrate()
+        with connect(self.settings) as conn:
+            row = conn.execute(
+                """
+                select c.data as candidate, h.data as decision
+                from rules_v2_candidates c
+                left join lateral (
+                  select data
+                  from rules_v2_promotion_history
+                  where candidate_id = c.id
+                  order by created_at desc
+                  limit 1
+                ) h on true
+                where c.scan_id = %s and c.id = %s
+                """,
+                (scan.id, candidate_id),
+            ).fetchone()
+        if row:
+            return {"scan_id": scan.id, "candidate": row["candidate"], "decision": row["decision"]}
+        payload = scan.rules_v2 or {}
+        decisions = {item.get("candidate_id"): item for item in payload.get("decisions", [])}
+        for candidate in payload.get("candidates", []):
+            if candidate.get("candidate_id") == candidate_id:
+                return {"scan_id": scan.id, "candidate": candidate, "decision": decisions.get(candidate_id)}
+        return None
 
     def list_finding_lifecycle_events(
         self,
@@ -2052,10 +2129,279 @@ class PostgresStore:
                     media_type or REPORT_MEDIA_TYPES.get(fmt, "application/octet-stream"),
                     text_body,
                     body_sha256,
-                    len(encoded),
+                len(encoded),
                     Jsonb(metadata),
                 ),
             )
+
+    def _persist_rules_v2(self, conn, scan: Scan) -> None:
+        payload = scan.rules_v2 or {}
+        candidates = payload.get("candidates") or []
+        decisions = {item.get("candidate_id"): item for item in payload.get("decisions") or []}
+        if not candidates:
+            return
+        for candidate in candidates:
+            candidate_id = str(candidate.get("candidate_id") or "")
+            if not candidate_id:
+                continue
+            conn.execute(
+                """
+                insert into rules_v2_candidates (
+                  id, scan_id, project_id, rule_id, rule_version, family, source_type,
+                  repository, file, line, end_line, symbol, route, preliminary_severity,
+                  preliminary_confidence, framework, affected_resources, missing_evidence,
+                  contradictory_evidence, safe_pattern_evidence, scanner_references,
+                  related_findings, confidence_factors, data, last_seen_at
+                )
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                on conflict (id) do update set
+                  project_id = excluded.project_id,
+                  rule_version = excluded.rule_version,
+                  family = excluded.family,
+                  source_type = excluded.source_type,
+                  repository = excluded.repository,
+                  file = excluded.file,
+                  line = excluded.line,
+                  end_line = excluded.end_line,
+                  symbol = excluded.symbol,
+                  route = excluded.route,
+                  preliminary_severity = excluded.preliminary_severity,
+                  preliminary_confidence = excluded.preliminary_confidence,
+                  framework = excluded.framework,
+                  affected_resources = excluded.affected_resources,
+                  missing_evidence = excluded.missing_evidence,
+                  contradictory_evidence = excluded.contradictory_evidence,
+                  safe_pattern_evidence = excluded.safe_pattern_evidence,
+                  scanner_references = excluded.scanner_references,
+                  related_findings = excluded.related_findings,
+                  confidence_factors = excluded.confidence_factors,
+                  data = excluded.data,
+                  last_seen_at = now()
+                """,
+                (
+                    candidate_id,
+                    scan.id,
+                    candidate.get("project_id") or scan.project_id,
+                    candidate.get("rule_id"),
+                    candidate.get("rule_version") or "2.0.0",
+                    candidate.get("family") or "unknown",
+                    candidate.get("source_type") or "repository",
+                    candidate.get("repository") or scan.repository_name,
+                    candidate.get("file"),
+                    candidate.get("line"),
+                    candidate.get("end_line"),
+                    candidate.get("symbol"),
+                    candidate.get("route"),
+                    candidate.get("preliminary_severity") or "medium",
+                    candidate.get("preliminary_confidence") or "uncertain",
+                    candidate.get("framework"),
+                    Jsonb(candidate.get("affected_resources") or []),
+                    Jsonb(candidate.get("missing_evidence") or []),
+                    Jsonb(candidate.get("contradictory_evidence") or []),
+                    Jsonb(candidate.get("safe_pattern_evidence") or []),
+                    Jsonb(candidate.get("scanner_references") or []),
+                    Jsonb(candidate.get("related_findings") or []),
+                    Jsonb(candidate.get("confidence_factors") or {}),
+                    Jsonb(candidate),
+                ),
+            )
+            for index, evidence in enumerate(candidate.get("evidence") or []):
+                evidence_id = "rv2ev_" + sha256(
+                    f"{candidate_id}:{index}:{evidence.get('kind')}:{evidence.get('source')}:{evidence.get('file')}:{evidence.get('line')}:{evidence.get('message')}".encode(
+                        "utf-8", errors="ignore"
+                    )
+                ).hexdigest()[:24]
+                conn.execute(
+                    """
+                    insert into rules_v2_candidate_evidence (
+                      id, candidate_id, scan_id, kind, source, file, line, end_line,
+                      route, symbol, strength, message, snippet, metadata, data
+                    )
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    on conflict (id) do nothing
+                    """,
+                    (
+                        evidence_id,
+                        candidate_id,
+                        scan.id,
+                        evidence.get("kind") or "evidence",
+                        evidence.get("source") or "Rules v2",
+                        evidence.get("file"),
+                        evidence.get("line"),
+                        evidence.get("end_line"),
+                        evidence.get("route"),
+                        evidence.get("symbol"),
+                        evidence.get("strength") or "inferred",
+                        evidence.get("message") or "",
+                        evidence.get("snippet"),
+                        Jsonb(evidence.get("metadata") or {}),
+                        Jsonb(evidence),
+                    ),
+                )
+            for correlation_type, values in (
+                ("graph", candidate.get("graph_references") or []),
+                ("scanner", candidate.get("scanner_references") or []),
+                ("related_candidate", candidate.get("related_candidates") or []),
+                ("related_finding", candidate.get("related_findings") or []),
+            ):
+                for reference in values:
+                    ref_text = str(reference)
+                    correlation_id = "rv2co_" + sha256(f"{candidate_id}:{correlation_type}:{ref_text}".encode("utf-8", errors="ignore")).hexdigest()[:24]
+                    conn.execute(
+                        """
+                        insert into rules_v2_candidate_correlations (
+                          id, candidate_id, scan_id, correlation_type, reference, data
+                        )
+                        values (%s, %s, %s, %s, %s, %s)
+                        on conflict (id) do nothing
+                        """,
+                        (
+                            correlation_id,
+                            candidate_id,
+                            scan.id,
+                            correlation_type,
+                            ref_text,
+                            Jsonb({"candidate_id": candidate_id, "type": correlation_type, "reference": ref_text}),
+                        ),
+                    )
+            decision = decisions.get(candidate_id)
+            if decision:
+                history_seed = f"{candidate_id}:{decision.get('result')}:{decision.get('machine_reason')}:{decision.get('reason')}"
+                history_id = "rv2ph_" + sha256(history_seed.encode("utf-8", errors="ignore")).hexdigest()[:24]
+                conn.execute(
+                    """
+                    insert into rules_v2_promotion_history (
+                      id, candidate_id, scan_id, rule_id, rule_version, result, confidence,
+                      evidence_strength, reason, machine_reason, missing_evidence,
+                      contradictory_evidence, correlation_path, data
+                    )
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    on conflict (id) do nothing
+                    """,
+                    (
+                        history_id,
+                        candidate_id,
+                        scan.id,
+                        decision.get("rule_id") or candidate.get("rule_id"),
+                        decision.get("rule_version") or candidate.get("rule_version") or "2.0.0",
+                        decision.get("result") or "needs_manual_review",
+                        decision.get("confidence") or candidate.get("preliminary_confidence") or "uncertain",
+                        decision.get("evidence_strength") or "inferred",
+                        decision.get("reason") or "",
+                        decision.get("machine_reason"),
+                        Jsonb(decision.get("missing_evidence") or []),
+                        Jsonb(decision.get("contradictory_evidence") or []),
+                        Jsonb(decision.get("correlation_path") or []),
+                        Jsonb(decision),
+                    ),
+                )
+
+    def _query_rules_v2_candidate_rows(
+        self,
+        conn,
+        scan_id: str,
+        *,
+        result: str | None,
+        family: str | None,
+        rule: str | None,
+        severity: str | None,
+        confidence: str | None,
+        page: int,
+        page_size: int,
+    ) -> dict[str, Any]:
+        clauses = ["c.scan_id = %s"]
+        params: list[Any] = [scan_id]
+        if result:
+            clauses.append("coalesce(h.result, '') = %s")
+            params.append(result)
+        if family:
+            clauses.append("c.family = %s")
+            params.append(family)
+        if rule:
+            clauses.append("c.rule_id = %s")
+            params.append(rule)
+        if severity:
+            clauses.append("c.preliminary_severity = %s")
+            params.append(severity)
+        if confidence:
+            clauses.append("c.preliminary_confidence = %s")
+            params.append(confidence)
+        where = " and ".join(clauses)
+        total = conn.execute(
+            f"""
+            select count(*) as count
+            from rules_v2_candidates c
+            left join lateral (
+              select result
+              from rules_v2_promotion_history
+              where candidate_id = c.id
+              order by created_at desc
+              limit 1
+            ) h on true
+            where {where}
+            """,
+            tuple(params),
+        ).fetchone()["count"]
+        rows = conn.execute(
+            f"""
+            select c.data as candidate, h.data as decision
+            from rules_v2_candidates c
+            left join lateral (
+              select data, result
+              from rules_v2_promotion_history
+              where candidate_id = c.id
+              order by created_at desc
+              limit 1
+            ) h on true
+            where {where}
+            order by c.rule_id asc, c.file nulls last, c.line nulls last, c.id asc
+            limit %s offset %s
+            """,
+            tuple(params + [page_size, (page - 1) * page_size]),
+        ).fetchall()
+        return {
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "items": [{"candidate": row["candidate"], "decision": row["decision"] or {}} for row in rows],
+        }
+
+    def _snapshot_rules_v2_candidates(
+        self,
+        scan: Scan,
+        *,
+        result: str | None,
+        family: str | None,
+        rule: str | None,
+        severity: str | None,
+        confidence: str | None,
+        page: int,
+        page_size: int,
+    ) -> dict[str, Any]:
+        payload = scan.rules_v2 or {}
+        decisions = {item.get("candidate_id"): item for item in payload.get("decisions", [])}
+        rows = []
+        for candidate in payload.get("candidates", []):
+            decision = decisions.get(candidate.get("candidate_id"), {})
+            if result and decision.get("result") != result:
+                continue
+            if family and candidate.get("family") != family:
+                continue
+            if rule and candidate.get("rule_id") != rule:
+                continue
+            if severity and candidate.get("preliminary_severity") != severity:
+                continue
+            if confidence and candidate.get("preliminary_confidence") != confidence:
+                continue
+            rows.append({"candidate": candidate, "decision": decision})
+        start = (page - 1) * page_size
+        return {
+            "scan_id": scan.id,
+            "page": page,
+            "page_size": page_size,
+            "total": len(rows),
+            "items": rows[start : start + page_size],
+        }
 
     def _upsert_repository_snapshot(self, conn, scan: Scan) -> None:
         if not scan.project_id or not (scan.repository_name or scan.branch or scan.commit_sha):
