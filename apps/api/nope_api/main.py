@@ -646,6 +646,25 @@ def get_raw_artifact(scan_id: str, artifact_id: str, authorization: str | None =
     return artifact
 
 
+@app.get("/api/artifacts/{artifact_id}")
+def get_uploaded_artifact_metadata(artifact_id: str, authorization: str | None = Header(default=None)):
+    artifact = store.get_uploaded_artifact_metadata(artifact_id, _require_owner_user_id(authorization))
+    if not artifact:
+        raise HTTPException(status_code=404, detail="Artifact not found.")
+    data = dict(artifact.get("data") or {})
+    return {
+        "id": artifact["id"],
+        "scan_id": artifact.get("scan_id"),
+        "project_id": artifact.get("project_id"),
+        "artifact_type": artifact["artifact_type"],
+        "filename": artifact.get("filename"),
+        "size_bytes": artifact.get("size_bytes"),
+        "sha256": artifact.get("sha256"),
+        "created_at": artifact.get("created_at"),
+        "status": data.get("status", "available"),
+    }
+
+
 @app.get("/api/scans/{scan_id}/coverage")
 def get_coverage(scan_id: str, authorization: str | None = Header(default=None)):
     return _load_scan(scan_id, authorization).coverage
@@ -745,8 +764,11 @@ def get_attack_map(scan_id: str, authorization: str | None = Header(default=None
 def get_report(scan_id: str, fmt: str, authorization: str | None = Header(default=None)):
     owner_user_id = _require_owner_user_id(authorization)
     scan = _load_scan(scan_id, authorization)
+    media_type: str
+    body: str | bytes
     try:
         if fmt == "pdf":
+            store.save_report_status(scan, fmt, "running", owner_user_id=owner_user_id)
             store.record_scan_event(
                 scan.id,
                 "report_started",
@@ -778,6 +800,7 @@ def get_report(scan_id: str, fmt: str, authorization: str | None = Header(defaul
             if stored_report:
                 media_type, body = stored_report
             else:
+                store.save_report_status(scan, fmt, "running", owner_user_id=owner_user_id)
                 store.record_scan_event(
                     scan.id,
                     "report_started",
@@ -801,7 +824,23 @@ def get_report(scan_id: str, fmt: str, authorization: str | None = Header(defaul
                     idempotency_key=f"report:{fmt}:download:completed",
                 )
     except ValueError as exc:
+        store.save_report_status(scan, fmt, "failed", owner_user_id=owner_user_id, error=str(exc))
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        store.save_report_status(scan, fmt, "failed", owner_user_id=owner_user_id, error=str(exc))
+        store.record_scan_event(
+            scan.id,
+            "report_failed",
+            owner_user_id=owner_user_id,
+            new_state="failed",
+            progress=100 if scan.status in {"completed", "partial", "failed", "cancelled"} else None,
+            message=f"{fmt.upper()} report generation failed.",
+            metadata={"format": fmt, "source": "download"},
+            error_code="report_generation_failed",
+            error_details=str(exc),
+            idempotency_key=f"report:{fmt}:download:failed",
+        )
+        raise HTTPException(status_code=500, detail="Report generation failed.") from exc
     filename = f"nope-{scan.id}.{fmt}"
     return Response(
         content=body,
@@ -818,6 +857,35 @@ def get_report_status(scan_id: str, fmt: str, authorization: str | None = Header
     if not status:
         return {"scan_id": scan_id, "format": fmt, "status": "not_generated"}
     return status
+
+
+@app.post("/api/scans/{scan_id}/reports/{fmt}/retry")
+def retry_report(scan_id: str, fmt: str, authorization: str | None = Header(default=None)):
+    owner_user_id = _require_owner_user_id(authorization)
+    scan = _load_scan(scan_id, authorization)
+    try:
+        store.save_report_status(scan, fmt, "running", owner_user_id=owner_user_id)
+        context = ReportContext(
+            drift_events=store.list_drift_events(scan_id, owner_user_id),
+            baselines=store.list_security_baselines(owner_user_id, scan.project_id),
+        )
+        media_type, body = render_report(scan, fmt, context)
+        return store.save_report(scan, fmt, media_type, body, owner_user_id=owner_user_id)
+    except ValueError as exc:
+        store.save_report_status(scan, fmt, "failed", owner_user_id=owner_user_id, error=str(exc))
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        store.save_report_status(scan, fmt, "failed", owner_user_id=owner_user_id, error=str(exc))
+        raise HTTPException(status_code=500, detail="Report generation failed.") from exc
+
+
+@app.post("/api/retention/cleanup")
+def cleanup_retention(payload: dict | None = None, authorization: str | None = Header(default=None)):
+    owner_user_id = _require_owner_user_id(authorization)
+    configured = store.get_application_setting(owner_user_id, "retention")
+    default_days = int(((configured or {}).get("value") or {}).get("days") or 30)
+    days = int((payload or {}).get("retention_days") or default_days)
+    return store.cleanup_retention(owner_user_id, days)
 
 
 @app.post("/api/scans/url", response_model=Scan)

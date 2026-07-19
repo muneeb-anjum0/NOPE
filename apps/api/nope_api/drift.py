@@ -26,6 +26,10 @@ DriftType = Literal[
     "new_tracker",
     "new_public_asset",
     "scanner_coverage_regression",
+    "scanner_version_change",
+    "rule_version_change",
+    "model_version_change",
+    "rag_version_change",
 ]
 
 
@@ -141,6 +145,7 @@ def compare_scans(current: Scan, reference: Scan | BaselineSnapshot, *, baseline
     scanner_difference = _scanner_drift(current, reference)
     stack_difference = _stack_drift(current, reference)
     drift_events.extend(severity_changes + confidence_changes + coverage_difference + scanner_difference + stack_difference)
+    drift_events.extend(_version_drift(current, reference))
     drift_events.extend(_domain_drift(current, reference))
 
     return ScanComparison(
@@ -266,6 +271,72 @@ def _scanner_drift(current: Scan, reference: Scan | BaselineSnapshot) -> list[Dr
                     after={"scanner": scanner, "status": new},
                 )
             )
+    return items
+
+
+def _version_drift(current: Scan, reference: Scan | BaselineSnapshot) -> list[DriftItem]:
+    if isinstance(reference, Scan):
+        before_scanners = {run.scanner: run.version for run in reference.scanner_runs}
+        before_rules = {"NOPE rules": "local"}
+        before_model = reference.ai_review.model
+        before_rag = "phase-6-v1"
+    else:
+        before_scanners = reference.scanner_versions
+        before_rules = reference.rule_versions
+        before_model = reference.model_version
+        before_rag = reference.rag_version
+    after_scanners = {run.scanner: run.version for run in current.scanner_runs}
+    after_rules = {"NOPE rules": "local"}
+    after_model = current.ai_review.model
+    after_rag = "phase-6-v1"
+
+    items: list[DriftItem] = []
+    for scanner in sorted(set(before_scanners) | set(after_scanners)):
+        old = before_scanners.get(scanner)
+        new = after_scanners.get(scanner)
+        if old != new:
+            items.append(
+                DriftItem(
+                    type="scanner_version_change",
+                    message=f"Scanner version changed for {scanner}: {old or 'absent'} -> {new or 'absent'}.",
+                    severity="info",
+                    before={"scanner": scanner, "version": old},
+                    after={"scanner": scanner, "version": new},
+                )
+            )
+    for rule_source in sorted(set(before_rules) | set(after_rules)):
+        old = before_rules.get(rule_source)
+        new = after_rules.get(rule_source)
+        if old != new:
+            items.append(
+                DriftItem(
+                    type="rule_version_change",
+                    message=f"Rule version changed for {rule_source}: {old or 'absent'} -> {new or 'absent'}.",
+                    severity="info",
+                    before={"rule_source": rule_source, "version": old},
+                    after={"rule_source": rule_source, "version": new},
+                )
+            )
+    if before_model != after_model:
+        items.append(
+            DriftItem(
+                type="model_version_change",
+                message=f"Model version changed: {before_model or 'none'} -> {after_model or 'none'}.",
+                severity="info",
+                before={"model_version": before_model},
+                after={"model_version": after_model},
+            )
+        )
+    if before_rag != after_rag:
+        items.append(
+            DriftItem(
+                type="rag_version_change",
+                message=f"RAG version changed: {before_rag or 'none'} -> {after_rag or 'none'}.",
+                severity="info",
+                before={"rag_version": before_rag},
+                after={"rag_version": after_rag},
+            )
+        )
     return items
 
 

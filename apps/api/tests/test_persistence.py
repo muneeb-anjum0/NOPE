@@ -1,8 +1,9 @@
+from datetime import timedelta
 from uuid import uuid4
 
 from nope_api.config import Settings
 from nope_api.db import connect, run_migrations
-from nope_api.models import Confidence, Finding, Scan, ScannerRun, ScanMode, Severity
+from nope_api.models import AIReview, Confidence, Finding, Scan, ScannerRun, ScanMode, Severity, now_utc
 from nope_api.storage import PostgresStore
 
 
@@ -175,3 +176,125 @@ def test_phase1_contract_entities_are_persisted_through_store():
     assert baseline["data"]["commit"] == scan.commit_sha
     assert drift["event_type"] == "coverage_recorded"
     assert audit["action"] == "phase1.persistence.verified"
+
+
+def test_stage10_restart_persists_scan_report_baseline_drift_and_ai_cache():
+    suffix = uuid4().hex[:8]
+    owner = f"user_stage10_restart_{suffix}"
+    store = PostgresStore()
+    with connect(store.settings) as conn:
+        conn.execute(
+            "insert into local_users (id, email, password_hash) values (%s, %s, %s)",
+            (owner, f"{owner}@example.com", "pbkdf2_sha256$00$00"),
+        )
+    project = store.create_project(f"Stage 10 Restart {suffix}", "repo.zip", None, owner)
+    scan = Scan(
+        id=f"scan_stage10_restart_{suffix}",
+        project_id=project.id,
+        mode=ScanMode.repository,
+        status="completed",
+        repository_name="repo.zip",
+        ai_review=AIReview(status="Complete", provider="llama.cpp", model="qwen3-8b-q4-k-m", message="cached"),
+        findings=[
+            Finding(
+                fingerprint=f"stage10_restart_fp_{suffix}",
+                title="Restart durable finding",
+                description="Finding survives process restart.",
+                severity=Severity.medium,
+                confidence=Confidence.high,
+                category="Authorization",
+                remediation="Persist it.",
+                scanner_sources=["NOPE rules"],
+            )
+        ],
+    )
+    store.save_scan(scan, owner)
+    store.record_scan_event(scan.id, "worker_heartbeat", owner_user_id=owner, message="worker alive", idempotency_key="stage10:heartbeat")
+    baseline = store.create_security_baseline(project.id, scan.id, "Stage 10 baseline", {"scan_id": scan.id, "findings": {scan.findings[0].fingerprint: {"severity": "medium"}}})
+    drift = store.create_drift_event(baseline["id"], scan.id, "model_version_change", "Model changed.", "info", {"model_version": "qwen3"})
+    store.save_ai_action_cache(
+        cache_key=f"stage10_cache_{suffix}",
+        owner_user_id=owner,
+        finding_fingerprint=scan.findings[0].fingerprint,
+        action="explain",
+        provider="llama.cpp",
+        model="qwen3-8b-q4-k-m",
+        quantization="Q4_K_M",
+        prompt_version="stage10-test",
+        rag_version="phase-6-v1",
+        evidence_hash="evidence",
+        settings_hash="settings",
+        result={"summary": "durable"},
+        context_metadata={"files": ["app/api/route.ts"]},
+        ttl_seconds=86400,
+    )
+
+    reloaded = PostgresStore()
+
+    assert reloaded.get_scan(scan.id, owner).findings[0].fingerprint == scan.findings[0].fingerprint
+    assert reloaded.count_scan_events(scan.id, owner) >= 1
+    assert reloaded.get_report_status(scan.id, "json", owner)["status"] == "completed"
+    assert reloaded.get_security_baseline(baseline["id"], owner)["data"]["scan_id"] == scan.id
+    assert reloaded.list_drift_events(scan.id, owner)[0]["id"] == drift["id"]
+    assert reloaded.get_ai_action_cache(f"stage10_cache_{suffix}", owner)["result"]["summary"] == "durable"
+
+
+def test_stage10_report_failure_state_is_retryable():
+    suffix = uuid4().hex[:8]
+    owner = f"user_stage10_report_{suffix}"
+    store = PostgresStore()
+    with connect(store.settings) as conn:
+        conn.execute(
+            "insert into local_users (id, email, password_hash) values (%s, %s, %s)",
+            (owner, f"{owner}@example.com", "pbkdf2_sha256$00$00"),
+        )
+    scan = Scan(id=f"scan_stage10_report_{suffix}", mode=ScanMode.repository, status="completed")
+    store.save_scan(scan, owner)
+
+    failed = store.save_report_status(scan, "md", "failed", owner_user_id=owner, error="token=secret-value failure")
+    failed_status = PostgresStore().get_report_status(scan.id, "md", owner)
+    failed_body = PostgresStore().get_report(scan.id, "md", owner)
+    retried = store.save_report(scan, "md", "text/markdown", "# retry succeeded", owner_user_id=owner)
+
+    assert failed["data"]["status"] == "failed"
+    assert failed_status["status"] == "failed"
+    assert failed_status["error"] == "token=***REDACTED*** failure"
+    assert failed_body is None
+    assert retried["data"]["status"] == "completed"
+    assert PostgresStore().get_report_status(scan.id, "md", owner)["byte_size"] == len("# retry succeeded")
+
+
+def test_stage10_retention_cleanup_removes_old_owned_scan_state_only():
+    suffix = uuid4().hex[:8]
+    owner = f"user_stage10_retention_{suffix}"
+    other = f"user_stage10_retention_other_{suffix}"
+    store = PostgresStore()
+    with connect(store.settings) as conn:
+        for user in (owner, other):
+            conn.execute(
+                "insert into local_users (id, email, password_hash) values (%s, %s, %s)",
+                (user, f"{user}@example.com", "pbkdf2_sha256$00$00"),
+            )
+    old_scan = Scan(id=f"scan_stage10_old_{suffix}", mode=ScanMode.repository, status="completed", started_at=now_utc() - timedelta(days=45))
+    current_scan = Scan(id=f"scan_stage10_current_{suffix}", mode=ScanMode.repository, status="completed")
+    other_scan = Scan(id=f"scan_stage10_other_{suffix}", mode=ScanMode.repository, status="completed", started_at=now_utc() - timedelta(days=45))
+    store.save_scan(old_scan, owner)
+    store.save_scan(current_scan, owner)
+    store.save_scan(other_scan, other)
+    with connect(store.settings) as conn:
+        conn.execute(
+            """
+            insert into uploaded_artifacts (id, owner_user_id, scan_id, artifact_type, filename, storage_url)
+            values (%s, %s, %s, %s, %s, %s)
+            """,
+            (f"art_stage10_old_{suffix}", owner, old_scan.id, "report_json", "old.json", "minio://old"),
+        )
+
+    result = store.cleanup_retention(owner, 30)
+
+    assert result["scans"] == 1
+    assert result["reports"] >= 1
+    assert result["artifacts"] == 1
+    assert PostgresStore().get_scan(old_scan.id, owner) is None
+    assert PostgresStore().get_scan(current_scan.id, owner) is not None
+    assert PostgresStore().get_scan(other_scan.id, other) is not None

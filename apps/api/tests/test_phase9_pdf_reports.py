@@ -143,6 +143,10 @@ def test_pdf_report_download_is_authorized_and_status_persists(monkeypatch):
 
         response = client.get(f"/api/scans/{saved_scan.id}/report.pdf", headers={"authorization": f"Bearer {owner_token}"})
         status = client.get(f"/api/scans/{saved_scan.id}/reports/pdf/status", headers={"authorization": f"Bearer {owner_token}"})
+        retry = client.post(f"/api/scans/{saved_scan.id}/reports/md/retry", headers={"authorization": f"Bearer {owner_token}"})
+        retry_status = client.get(f"/api/scans/{saved_scan.id}/reports/md/status", headers={"authorization": f"Bearer {owner_token}"})
+        artifact = client.get(f"/api/artifacts/art_phase9_{suffix}", headers={"authorization": f"Bearer {owner_token}"})
+        unauthorized_artifact = client.get(f"/api/artifacts/art_phase9_{suffix}", headers={"authorization": f"Bearer {other_token}"})
         unauthorized = client.get(f"/api/scans/{saved_scan.id}/report.pdf", headers={"authorization": f"Bearer {other_token}"})
 
     assert response.status_code == 200
@@ -153,4 +157,10 @@ def test_pdf_report_download_is_authorized_and_status_persists(monkeypatch):
     assert status.json()["status"] == "completed"
     assert status.json()["storage_url"].startswith("minio://")
     assert status.json()["byte_size"] == len(response.content)
+    assert retry.status_code == 200
+    assert retry.json()["data"]["status"] == "completed"
+    assert retry_status.json()["status"] == "completed"
+    assert artifact.status_code == 200
+    assert artifact.json()["artifact_type"] == "report_pdf"
+    assert unauthorized_artifact.status_code == 404
     assert unauthorized.status_code == 404

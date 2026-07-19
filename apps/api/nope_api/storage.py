@@ -1535,6 +1535,8 @@ class PostgresStore:
         if not row or not row["body"]:
             return None
         data = dict(row["data"] or {})
+        if data.get("status", "completed") != "completed":
+            return None
         body: str | bytes = str(row["body"])
         if data.get("encoding") == "base64":
             body = base64.b64decode(body.encode("ascii"))
@@ -1551,22 +1553,81 @@ class PostgresStore:
         }
 
     def get_report_status(self, scan_id: str, fmt: str, owner_user_id: str | None = None) -> dict[str, Any] | None:
-        payload = self.get_report_payload(scan_id, fmt, owner_user_id)
-        if not payload:
+        self.migrate()
+        query = """
+            select reports.id, reports.scan_id, reports.format, reports.media_type,
+                   reports.body_sha256, reports.byte_size, reports.generated_at, reports.data
+            from reports
+            join scans on scans.id = reports.scan_id
+            where reports.scan_id = %s and reports.format = %s
+        """
+        params: tuple[Any, ...] = (scan_id, fmt)
+        if owner_user_id:
+            query += " and scans.owner_user_id = %s"
+            params = (scan_id, fmt, owner_user_id)
+        with connect(self.settings) as conn:
+            row = conn.execute(query, params).fetchone()
+        if not row:
             return None
-        data = payload["data"]
+        data = dict(row["data"] or {})
         return {
-            "id": payload["id"],
-            "scan_id": payload["scan_id"],
-            "format": payload["format"],
-            "media_type": payload["media_type"],
+            "id": row["id"],
+            "scan_id": row["scan_id"],
+            "format": row["format"],
+            "media_type": row["media_type"],
             "status": data.get("status", "completed"),
             "storage_url": data.get("storage_url"),
             "artifact_id": data.get("artifact_id"),
-            "body_sha256": payload["body_sha256"],
-            "byte_size": payload["byte_size"],
-            "generated_at": payload["generated_at"],
+            "body_sha256": row["body_sha256"],
+            "byte_size": row["byte_size"],
+            "generated_at": row["generated_at"],
+            "attempt": data.get("attempt", 1),
+            "error": data.get("error"),
         }
+
+    def save_report_status(
+        self,
+        scan: Scan,
+        fmt: str,
+        status: str,
+        *,
+        owner_user_id: str | None = None,
+        error: str | None = None,
+    ) -> dict[str, Any]:
+        self.migrate()
+        existing = self.get_report_status(scan.id, fmt, owner_user_id)
+        attempt = int((existing or {}).get("attempt") or 0) + 1 if status == "running" else int((existing or {}).get("attempt") or 1)
+        metadata: dict[str, Any] = {
+            "scan_id": scan.id,
+            "format": fmt,
+            "status": status,
+            "attempt": attempt,
+            "error": _redact_event_text(error, 1024) if error else None,
+        }
+        with connect(self.settings) as conn:
+            row = conn.execute(
+                """
+                insert into reports (
+                  id, scan_id, format, media_type, body, body_sha256, byte_size, generated_at, data
+                )
+                values (%s, %s, %s, %s, '', null, 0, now(), %s)
+                on conflict (scan_id, format) do update set
+                  media_type = excluded.media_type,
+                  generated_at = excluded.generated_at,
+                  data = reports.data || excluded.data
+                returning id, scan_id, format, media_type, body_sha256, byte_size, generated_at, data
+                """,
+                (
+                    f"rpt_{scan.id}_{fmt}",
+                    scan.id,
+                    fmt,
+                    REPORT_MEDIA_TYPES.get(fmt, "application/octet-stream"),
+                    Jsonb(metadata),
+                ),
+            ).fetchone()
+        result = dict(row)
+        result["data"] = dict(result["data"] or {})
+        return result
 
     def save_report(
         self,
@@ -1639,13 +1700,15 @@ class PostgresStore:
                 conn.execute(
                     """
                     insert into uploaded_artifacts (
-                      id, scan_id, artifact_type, filename, storage_url, size_bytes, sha256, data
+                      id, owner_user_id, project_id, scan_id, artifact_type, filename, storage_url, size_bytes, sha256, data
                     )
-                    values (%s, %s, %s, %s, %s, %s, %s, %s)
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     on conflict (id) do nothing
                     """,
                     (
                         metadata["artifact_id"],
+                        owner_user_id,
+                        scan.project_id,
                         scan.id,
                         "report_pdf",
                         f"{scan.id}-report.{fmt}",
@@ -1672,6 +1735,57 @@ class PostgresStore:
         result = dict(row)
         result["data"] = dict(result["data"] or {})
         return result
+
+    def get_uploaded_artifact_metadata(self, artifact_id: str, owner_user_id: str | None = None) -> dict[str, Any] | None:
+        self.migrate()
+        query = """
+            select uploaded_artifacts.*
+            from uploaded_artifacts
+            left join scans on scans.id = uploaded_artifacts.scan_id
+            where uploaded_artifacts.id = %s
+        """
+        params: tuple[Any, ...] = (artifact_id,)
+        if owner_user_id:
+            query += " and (uploaded_artifacts.owner_user_id = %s or scans.owner_user_id = %s)"
+            params = (artifact_id, owner_user_id, owner_user_id)
+        with connect(self.settings) as conn:
+            row = conn.execute(query, params).fetchone()
+        return dict(row) if row else None
+
+    def cleanup_retention(self, owner_user_id: str, retention_days: int) -> dict[str, int]:
+        self.migrate()
+        days = max(1, min(int(retention_days), 3650))
+        with connect(self.settings) as conn:
+            scan_rows = conn.execute(
+                """
+                select id from scans
+                where owner_user_id = %s
+                  and coalesce(completed_at, started_at) < now() - (%s * interval '1 day')
+                """,
+                (owner_user_id, days),
+            ).fetchall()
+            scan_ids = [row["id"] for row in scan_rows]
+            if not scan_ids:
+                return {"scans": 0, "reports": 0, "artifacts": 0, "events": 0, "drift_events": 0}
+            report_count = conn.execute("select count(*) as count from reports where scan_id = any(%s)", (scan_ids,)).fetchone()["count"]
+            artifact_count = conn.execute("select count(*) as count from uploaded_artifacts where scan_id = any(%s)", (scan_ids,)).fetchone()["count"]
+            event_count = conn.execute("select count(*) as count from scan_events where scan_id = any(%s)", (scan_ids,)).fetchone()["count"]
+            drift_count = conn.execute("select count(*) as count from drift_events where scan_id = any(%s)", (scan_ids,)).fetchone()["count"]
+            conn.execute("delete from uploaded_artifacts where scan_id = any(%s)", (scan_ids,))
+            conn.execute("delete from scans where id = any(%s) and owner_user_id = %s", (scan_ids, owner_user_id))
+            self.record_audit_log(
+                "retention.cleanup",
+                owner_user_id=owner_user_id,
+                actor=owner_user_id,
+                data={"retention_days": days, "scan_ids": scan_ids, "reports": report_count, "artifacts": artifact_count},
+            )
+        return {
+            "scans": len(scan_ids),
+            "reports": int(report_count),
+            "artifacts": int(artifact_count),
+            "events": int(event_count),
+            "drift_events": int(drift_count),
+        }
 
     def backfill_report_bodies(self) -> int:
         self.migrate()

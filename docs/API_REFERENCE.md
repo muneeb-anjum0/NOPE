@@ -21,6 +21,7 @@ Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `
 - `GET /api/scans/{scan_id}/findings/{finding_id}` - protected finding detail with evidence, source snippet, code flow, fix/test guidance, and history.
 - `POST /api/scans/{scan_id}/findings/{finding_id}/suppress` - suppress a finding with reason, scope, and optional expiry.
 - `GET /api/scans/{scan_id}/artifacts/{artifact_id}` - protected raw scanner artifact payload for artifacts owned by the scan.
+- `GET /api/artifacts/{artifact_id}` - protected persisted artifact metadata for artifacts owned by the authenticated user or one of their scans.
 - `POST /api/scans/{scan_id}/baseline` - create a security baseline snapshot from a completed scan.
 - `GET /api/baselines` - list owner-scoped baselines, optionally filtered by `project_id`.
 - `GET /api/baselines/{baseline_id}` - get one owner-scoped baseline.
@@ -43,8 +44,10 @@ Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `
 - `GET /api/github/repositories` - verify stored token credentials, list owner-scoped repositories, persist repository references, and never fake repositories when access is blocked.
 - `DELETE /api/github/connection` - revoke the local connection, remove repository references, and preserve an audit trail.
 - `POST /api/github/scans/repository` - create a repository or full scan from a least-privilege GitHub archive download after branch/default-branch and commit SHA discovery.
-- `GET /api/scans/{scan_id}/report.{format}` - protected report download as `json`, `md`, `sarif`, or `pdf`; PDF generation persists report status and MinIO artifact metadata when object storage is reachable.
-- `GET /api/scans/{scan_id}/reports/{format}/status` - protected report generation status, byte size, SHA-256, and artifact metadata.
+- `GET /api/scans/{scan_id}/report.{format}` - protected report download as `json`, `md`, `sarif`, or `pdf`; generation persists completed status, byte size, SHA-256, and artifact metadata when object storage is reachable.
+- `GET /api/scans/{scan_id}/reports/{format}/status` - protected report generation status, including `not_generated`, `running`, `completed`, or `failed`, retry attempt, byte size, SHA-256, redacted error, and artifact metadata.
+- `POST /api/scans/{scan_id}/reports/{format}/retry` - protected retryable report generation using persisted scan, baseline, and drift data.
+- `POST /api/retention/cleanup` - owner-scoped cleanup for scan/report/artifact/event state older than the configured or supplied retention window.
 - `GET /api/scanners/capabilities` - authenticated scanner health, version, coverage category, and applicability marker metadata.
 - `GET /api/settings/model` - current AI model configuration.
 - `POST /api/settings/model/test` - test AI runtime reachability.
@@ -64,6 +67,8 @@ Except for `GET /health` and `POST /api/auth/login`, endpoints require a valid `
 - Repository dynamic scans use `.nope/sandbox.json` only, support allowlisted Node/Python starts, and run ZAP against a private internal Docker-network target rather than arbitrary external hosts.
 - ZAP version, baseline configuration, raw JSON alerts, parsed alerts, artifacts, and unauthenticated/partial/skipped/failed coverage states are persisted through normal scanner-run, stage, coverage, and report payloads.
 - AI failures do not fail deterministic scans.
+- Report failures are durable, redacted, and retryable; failed or running report rows are never served as completed downloads.
+- Retention cleanup is owner-scoped and removes expired scan-linked reports, artifacts, events, and drift rows through database-owned cascading state.
 - Finding AI actions are owner-scoped, durable, restart-recoverable, and cached for 24 hours using finding fingerprint, action, model, quantization, prompt version, RAG version, evidence hash, and settings hash.
 - Qwen receives bounded RAG context only; whole repositories and raw secrets are not persisted or sent as action context.
 - Project, scan, report, settings, GitHub contract, and AI explanation routes are scoped to the authenticated local user.

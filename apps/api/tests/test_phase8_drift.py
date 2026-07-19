@@ -87,6 +87,25 @@ def test_baseline_comparison_works_from_snapshot():
     assert any(event.type == "weaker_cors" for event in comparison.drift_events)
 
 
+def test_scan_comparison_detects_scanner_model_and_rag_version_changes():
+    old = baseline_snapshot(scan("scan_old_versions", [finding("same_versions", "Same")]))
+    old.scanner_versions["Semgrep"] = "0.9.0"
+    old.rule_versions["NOPE rules"] = "2026.01"
+    old.model_version = "qwen-old"
+    old.rag_version = "phase-5-v1"
+    current = scan("scan_new_versions", [finding("same_versions", "Same")])
+    current.scanner_runs[0].version = "1.1.0"
+    current.ai_review.model = "qwen3-8b-q4-k-m"
+
+    comparison = compare_scans(current, old, baseline_id="base_versions")
+    event_types = {event.type for event in comparison.drift_events}
+
+    assert "scanner_version_change" in event_types
+    assert "rule_version_change" in event_types
+    assert "model_version_change" in event_types
+    assert "rag_version_change" in event_types
+
+
 def test_baseline_and_drift_api_are_owner_scoped():
     suffix = uuid4().hex[:8]
     store = PostgresStore()

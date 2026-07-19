@@ -80,8 +80,9 @@ Report formats:
 - PDF
 
 Report bodies are persisted in Postgres. PDF artifacts are also stored in MinIO when object storage is reachable.
+Report generation status is durable as `running`, `completed`, or `failed`; failed rows keep redacted error and attempt metadata and can be retried without serving stale bodies as completed downloads.
 
-Baselines snapshot scan, repository, target, scanner, rule, model, coverage, finding, route, dependency, and stack metadata. Drift compares latest vs previous, latest vs baseline, or arbitrary scan vs scan, and persists drift events.
+Baselines snapshot scan, repository, target, scanner, rule, model, RAG, coverage, finding, route, dependency, and stack metadata. Drift compares latest vs previous, latest vs baseline, or arbitrary scan vs scan, and persists drift events for new, fixed, recurring, reintroduced, severity-changed, confidence-changed, route, dependency, CVE, secret, RLS, CORS, header, tracker, public asset, scanner-coverage, scanner-version, rule-version, model-version, and RAG-version changes. Incremental-scan data remains conservative and advisory; persisted full-scan evidence remains authoritative.
 
 ## 12. UI
 
