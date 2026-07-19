@@ -21,7 +21,7 @@ Stage 12 pre-stage commit: `6267b3c6b05c0671d2d311876b3b25f3e4885dd1`
 | GitHub | Locally complete; external activation blocked | Encrypted credential storage, OAuth/App-compatible state/callback validation, repository listing/snapshot contracts, policy checks, disconnect/revocation, audit, and fake-server protocol tests. | Real private repo access requires operator GitHub credentials and installation. |
 | Frontend | Complete for local product scope | Playwright covers core flows, mobile widths, accessibility checks, keyboard behavior, visual snapshots, and fixture-mode deterministic states. | Fixture mode is used for deterministic browser CI. |
 | NOPE self-security | Locally complete with residuals | Stage 11 auth/session/rate-limit/CSRF-origin/CORS/request-limit/container/dependency/security tests and docs. | Documented protobuf scanner-chain advisory and local Docker runner residual risk. |
-| Documentation | Stage 12 active | README and canonical docs describe behavior, commands, blocks, out-of-scope items, and residual risks. | Final percentages depend on clean-room verification results. |
+| Documentation | Complete with final-audit residuals | README and canonical docs describe behavior, commands, blocks, out-of-scope items, residual risks, and final clean-room evidence. | Future docs must keep external GitHub activation and production-SaaS readiness separate from local-product completion. |
 
 ## Scanner Matrix
 
