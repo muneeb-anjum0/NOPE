@@ -64,6 +64,194 @@ The full small summary is in [`examples/nope-benchmark/scanner-only-summary.md`]
 
 Scanner output is treated as **evidence**, not automatically as truth. Raw hits become dashboard findings only after NOPE records enough context to promote them.
 
+## Security Rules
+
+The local NOPE rule pack currently checks these first-party rules before external scanner output is merged:
+
+| Rule | Category | What it looks for |
+| --- | --- | --- |
+| `NOPE-SEC-001` | Secrets | Potential hardcoded secret |
+| `NOPE-AUTHZ-001` | Authorization | Database lookup by ID may lack owner scope |
+| `NOPE-AUTHZ-002` | Authorization | Client-provided role or tenant trusted |
+| `NOPE-CORS-001` | CORS | Overly broad CORS configuration |
+| `NOPE-SUPABASE-001` | Supabase | Supabase service role key may be exposed |
+| `NOPE-AI-001` | AI abuse | AI call may lack cost or abuse controls |
+| `NOPE-SQLI-001` | Injection | SQL query uses request input |
+| `NOPE-NOSQL-001` | Injection | NoSQL query trusts request body |
+| `NOPE-XSS-001` | Injection | Untrusted HTML rendered into page |
+| `NOPE-XSS-002` | Injection | Request data reflected into HTML |
+| `NOPE-SSRF-001` | Injection | Server fetches caller-controlled URL |
+| `NOPE-PATH-001` | Injection | File path uses request input |
+| `NOPE-UPLOAD-001` | Injection | Upload writes caller-controlled file name |
+| `NOPE-RATE-001` | Rate limiting | Authentication endpoint may lack rate limiting |
+| `NOPE-DEBUG-001` | Staging | Debug endpoint exposes runtime internals |
+| `NOPE-SOURCEMAP-001` | Privacy | Public source map exposes source paths |
+| `NOPE-SUPABASE-002` | Supabase | Supabase RLS policy allows every row |
+| `NOPE-SUPABASE-003` | Supabase | Supabase storage bucket is public |
+| `NOPE-PRIVACY-001` | Privacy | Tracker loads before consent |
+| `NOPE-ENV-001` | Secrets | Environment file exposes credentials |
+| `NOPE-AUTHN-001` | Authentication | Authentication bypass switch detected |
+| `NOPE-AUTHN-002` | Authentication | Weak password reset token |
+| `NOPE-AUTHN-003` | Authentication | Signup endpoint may lack abuse controls |
+| `NOPE-AUTHN-004` | Authentication | OTP endpoint may allow flooding |
+| `NOPE-CSRF-001` | Authentication | State-changing route may lack CSRF protection |
+| `NOPE-ARCHIVE-001` | Injection | Archive extraction may be unsafe |
+| `NOPE-HEADERS-001` | Privacy | Security headers are disabled or missing |
+| `NOPE-COOKIE-001` | Authentication | Session cookie lacks protective attributes |
+| `NOPE-DOCKER-001` | Containers | Dockerfile runs as root |
+| `NOPE-IAC-001` | CI/CD | Infrastructure allows public ingress |
+| `NOPE-STAGING-001` | Staging | Staging or internal surface exposed |
+| `NOPE-SUPABASE-004` | Supabase | Supabase table missing RLS enablement |
+| `NOPE-FIREBASE-001` | Authorization | Firebase rules allow public access |
+| `NOPE-BUILD-001` | CI/CD | Build script executes caller-controlled shell |
+| `NOPE-LOG-001` | Privacy | Credentials may be written to logs |
+
+Those rules are not the whole scan. The pipeline also wires Semgrep, Gitleaks, OSV-Scanner, Trivy, npm audit, pnpm audit, yarn audit, pip-audit, .NET package audit, cargo audit, govulncheck, composer audit, bundler-audit, Checkov, Hadolint, Bandit, the URL scanner, and optional ZAP baseline coverage when a supported sandbox workflow is declared.
+
+## How The Layers Work
+
+The simplest mental model is:
+
+```text
+authorized ZIP / URL / GitHub snapshot
+  -> ingestion, archive hardening, project-folder scope checks
+  -> stack detection and attack-surface mapping
+  -> NOPE rules plus scanner plugins
+  -> evidence gate and finding normalization
+  -> durable findings, coverage, reports, baselines, and drift
+  -> focused RAG context for a selected finding
+  -> optional Qwen action: Explain, Challenge, Fix, Regression Test, Patch Review
+```
+
+The AI is near the end on purpose. It helps read and reason over already-collected evidence; it is not the authority that decides whether the scan succeeded.
+
+```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "#08090a",
+    "primaryColor": "#101211",
+    "primaryTextColor": "#f5f7f5",
+    "primaryBorderColor": "#f02a56",
+    "lineColor": "#f02a56",
+    "secondaryColor": "#141716",
+    "tertiaryColor": "#191c1b",
+    "fontFamily": "Inter, Segoe UI, sans-serif"
+  }
+}}%%
+flowchart LR
+  input["Authorized input<br/>ZIP, URL, GitHub snapshot"]
+  guard["Input guardrails<br/>scope, archive safety, ownership"]
+  map["Repository map<br/>stack, routes, files, graph"]
+  rules["Rules and scanners<br/>NOPE pack plus external tools"]
+  gate["Evidence gate<br/>promote, merge, withhold"]
+  store["Durable state<br/>findings, events, coverage, reports"]
+  rag["Focused RAG<br/>retrieve only relevant context"]
+  qwen["Local Qwen<br/>optional explanation and review"]
+  human["Human reviewer<br/>decides what to fix or accept"]
+
+  input --> guard --> map --> rules --> gate --> store
+  store --> rag --> qwen --> store
+  store --> human
+  qwen --> human
+
+  classDef layer fill:#101211,stroke:#f02a56,stroke-width:1.5px,color:#f5f7f5;
+  classDef guardNode fill:#171012,stroke:#f02a56,stroke-width:2px,color:#f5f7f5;
+  class input,map,rules,store,rag,qwen,human layer;
+  class guard,gate guardNode;
+```
+
+## RAG
+
+NOPE's RAG is implemented, but it is deliberately not vector search. It is a deterministic retrieval layer that builds a small, explainable evidence packet for one selected finding.
+
+The retrieval code currently uses:
+
+- finding metadata: title, category, severity, confidence, scanner sources, affected file, route, symbol, package, CVE, remediation, and evidence rows
+- lexical terms from the finding and evidence
+- direct file and route matches
+- imported files related to the finding file
+- extracted function and class snippets
+- attack-surface route context
+- code-graph edges around the finding, bounded by graph depth
+- stack evidence and scanner-run metadata
+- small built-in security guidance for authorization, Supabase, secrets, and dependencies
+
+Before Qwen sees anything, RAG redacts secret-like values, labels repository text as untrusted, keeps scanner evidence separate from repository evidence, records why each chunk was retrieved, deduplicates chunks, and applies file, chunk, byte, graph-depth, and token limits. The cache key includes the RAG version, prompt version, model, quantization, settings hash, and evidence hash, so cached answers invalidate when the evidence or retrieval contract changes.
+
+```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "#08090a",
+    "primaryColor": "#101211",
+    "primaryTextColor": "#f5f7f5",
+    "primaryBorderColor": "#f02a56",
+    "lineColor": "#f02a56",
+    "secondaryColor": "#141716",
+    "tertiaryColor": "#191c1b",
+    "fontFamily": "Inter, Segoe UI, sans-serif"
+  }
+}}%%
+flowchart TB
+  finding["Selected finding"]
+
+  subgraph sources["Retrieval sources"]
+    direction TB
+    scanner["Scanner evidence"]
+    route["Route and attack-surface context"]
+    graph["Code graph neighbors"]
+    repo["Focused repository files"]
+    symbols["Function and class snippets"]
+    stack["Stack and scanner metadata"]
+    guidance["Built-in security guidance"]
+  end
+
+  score["Score, dedupe, and rank"]
+  limits["Apply limits<br/>chunks, files, bytes, tokens, graph depth"]
+  safety["Safety pass<br/>redaction and trust-boundary labels"]
+  packet["Bounded RAG packet<br/>JSON with provenance and retrieval reasons"]
+  prompt["Mode-specific AI prompt"]
+  qwen["llama.cpp Qwen"]
+  validate["Structured JSON validation<br/>retry, repair, fallback"]
+  cache["24h durable cache"]
+  result["Explain / Challenge / Fix / Test / Patch Review"]
+
+  finding --> scanner
+  finding --> route
+  finding --> graph
+  finding --> repo
+  finding --> symbols
+  finding --> stack
+  finding --> guidance
+
+  scanner --> score
+  route --> score
+  graph --> score
+  repo --> score
+  symbols --> score
+  stack --> score
+  guidance --> score
+  score --> limits --> safety --> packet --> prompt --> qwen --> validate --> cache --> result
+
+  classDef node fill:#101211,stroke:#f02a56,stroke-width:1.5px,color:#f5f7f5;
+  classDef important fill:#171012,stroke:#f02a56,stroke-width:2px,color:#f5f7f5;
+  class finding,packet,prompt,qwen,validate,cache,result important;
+  class scanner,route,graph,repo,symbols,stack,guidance,score,limits,safety node;
+```
+
+Qwen action prompts are mode-specific:
+
+| Action | What Qwen is asked to do |
+| --- | --- |
+| Explain | Explain what the finding means, where it appears, the concrete evidence, and a realistic abuse example. |
+| Challenge | Act like a skeptical reviewer: look for missing evidence, duplicate signals, false-positive angles, and the checks needed to confirm or dismiss it. |
+| Fix | Give remediation guidance, root-cause reasoning, and guarded patch steps without pretending code was changed. |
+| Regression Test | Suggest fixtures, assertions, positive/negative cases, and expected outcomes after a fix. |
+| Patch Review | Describe what a future patch must prove, including bypass checks and acceptance/rejection criteria. |
+
+Every mode uses the same hard boundary: repository text is treated as untrusted data, Qwen must use only supplied evidence, and the response must be structured JSON with `summary`, `evidence`, `reasoning`, `recommendation`, `confidence`, and `risk`.
+
 ## Architecture
 
 ```mermaid
