@@ -342,8 +342,12 @@ class ScannerPlugin:
                     **os.environ,
                     "HOME": os.environ.get("HOME") or "/tmp",
                     "SEMGREP_SEND_METRICS": "off",
+                    "NPM_CONFIG_CACHE": os.environ.get("NPM_CONFIG_CACHE") or "/tmp/nope-npm-cache",
+                    "npm_config_cache": os.environ.get("npm_config_cache") or "/tmp/nope-npm-cache",
                     "NPM_CONFIG_IGNORE_SCRIPTS": "true",
                     "npm_config_ignore_scripts": "true",
+                    "YARN_CACHE_FOLDER": os.environ.get("YARN_CACHE_FOLDER") or "/tmp/nope-yarn-cache",
+                    "PNPM_HOME": os.environ.get("PNPM_HOME") or "/tmp/nope-pnpm-home",
                     "YARN_ENABLE_SCRIPTS": "0",
                 },
             )

@@ -5,6 +5,10 @@ ENV PYTHONUNBUFFERED=1
 ENV HOME=/tmp
 ENV SEMGREP_SEND_METRICS=off
 ENV TRIVY_CACHE_DIR=/tmp/trivy
+ENV NPM_CONFIG_CACHE=/tmp/nope-npm-cache
+ENV npm_config_cache=/tmp/nope-npm-cache
+ENV YARN_CACHE_FOLDER=/tmp/nope-yarn-cache
+ENV PNPM_HOME=/tmp/nope-pnpm-home
 WORKDIR /app
 
 RUN addgroup --system nope && adduser --system --ingroup nope nope
@@ -18,6 +22,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl gnupg nodejs npm tar unzip \
     && npm install -g pnpm@10.26.0 yarn@1.22.22 \
     && npm cache clean --force \
+    && rm -rf /tmp/.npm \
     && rm -rf /var/lib/apt/lists/*
 
 RUN install -m 0755 -d /etc/apt/keyrings \
@@ -41,6 +46,8 @@ RUN curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEA
     && chmod +x /usr/local/bin/hadolint \
     && mkdir -p /tmp/trivy \
     && chmod 0777 /tmp/trivy \
+    && mkdir -p /tmp/nope-npm-cache /tmp/nope-yarn-cache /tmp/nope-pnpm-home \
+    && chmod 0777 /tmp/nope-npm-cache /tmp/nope-yarn-cache /tmp/nope-pnpm-home \
     && mkdir -p /app/.nope-workspaces \
     && chmod 0777 /app/.nope-workspaces
 
