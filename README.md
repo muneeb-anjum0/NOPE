@@ -1,13 +1,10 @@
 # NOPE<span style="color:#f02a56">.</span>
 
-![Local first](https://img.shields.io/badge/local--first-yes-f02a56?style=for-the-badge&labelColor=101211)
-![Rules first](https://img.shields.io/badge/rules--first-evidence-f02a56?style=for-the-badge&labelColor=101211)
-![AI optional](https://img.shields.io/badge/Qwen-optional-f02a56?style=for-the-badge&labelColor=101211)
-![CI](https://img.shields.io/badge/CI-benchmarks%20%2B%20E2E-f02a56?style=for-the-badge&labelColor=101211)
-
 **NOPE is a local-first AppSec review workbench for authorized repository and URL scans.**
 
-It runs deterministic security scanners first, validates candidate findings against evidence, tracks coverage and drift, generates reports, and can use a local Qwen GGUF model through llama.cpp to explain or challenge promoted findings.
+I built it around a simple frustration: fast builders often get scanner output, but not enough evidence to understand what is real, what was missed, and what still needs a human decision.
+
+NOPE runs deterministic scanners first, validates candidate findings against surrounding evidence, tracks coverage and drift, generates reports, and can ask a local Qwen GGUF model through llama.cpp to explain or challenge promoted findings.
 
 NOPE does **not** prove an application is secure, compliant, or safe to ship. It reports evidence-backed findings, coverage gaps, scanner failures, dynamic-scan limitations, and residual risk so a human reviewer can make a better decision.
 
@@ -60,41 +57,69 @@ Scanner output is treated as **evidence**, not automatically as truth. Raw hits 
   }
 }}%%
 flowchart LR
-  user["Authorized operator"]
-  web["Next.js web UI"]
-  api["FastAPI API"]
-  queue[("Redis queue")]
-  db[("Postgres state")]
-  worker["Worker pipeline"]
-  runner["Sandbox runner"]
-  scanners["Deterministic scanners"]
-  gate["Evidence gate"]
-  minio[("MinIO artifacts")]
-  qwen["Local Qwen via llama.cpp"]
-  reports["JSON / MD / SARIF / PDF"]
+  subgraph client["Reviewer workspace"]
+    direction TB
+    user["Authorized operator"]
+    web["Next.js web UI"]
+  end
 
-  user -->|"login, upload ZIP, choose target"| web
-  web -->|"server-side API requests"| api
-  api -->|"auth, projects, scans, settings"| db
-  api -->|"enqueue scan"| queue
-  queue -->|"job payload"| worker
-  worker -->|"static and dependency evidence"| scanners
-  worker -->|"optional allowlisted runtime job"| runner
-  runner -->|"private-network ZAP or app workflow"| worker
+  subgraph control["Control plane"]
+    direction TB
+    api["FastAPI API"]
+    queue[("Redis queue")]
+    db[("Postgres durable state")]
+  end
+
+  subgraph pipeline["Scan pipeline"]
+    direction TB
+    worker["Worker pipeline"]
+    scanners["Deterministic scanners"]
+    gate["Evidence gate"]
+  end
+
+  subgraph dynamic["Optional dynamic boundary"]
+    direction TB
+    runner["Sandbox runner"]
+    zap["Private-network app / ZAP workflow"]
+  end
+
+  subgraph outputs["Evidence, AI, and exports"]
+    direction TB
+    minio[("MinIO artifacts")]
+    qwen["Local Qwen via llama.cpp"]
+    reports["JSON / Markdown / SARIF / PDF"]
+  end
+
+  user -->|"uses"| web
+  web -->|"server-side requests"| api
+  api -->|"persist auth, projects, scans, events"| db
+  api -->|"enqueue scan job"| queue
+  queue -->|"dispatch"| worker
+
+  worker -->|"run static, dependency, secret, config checks"| scanners
   scanners -->|"raw candidates"| gate
-  gate -->|"promoted findings and rejected-candidate audit"| worker
-  worker -->|"events, findings, coverage, drift"| db
-  worker -->|"raw output and report blobs"| minio
-  worker -->|"focused evidence only"| qwen
+  gate -->|"promoted findings"| worker
+  gate -.->|"withheld / rejected candidate audit"| db
+
+  worker -->|"allowed manifest only"| runner
+  runner -->|"isolated runtime evidence"| zap
+  zap -->|"dynamic alerts and coverage"| worker
+
+  worker -->|"findings, coverage, drift, reports state"| db
+  worker -->|"raw outputs and generated files"| minio
+  worker -->|"focused, redacted evidence"| qwen
   qwen -->|"explain, challenge, fix, test review"| db
+
   db -->|"dashboard data"| api
   minio -->|"artifact metadata"| api
-  api -->|"exports"| reports
-  reports --> web
+  api -->|"report export requests"| reports
+  reports -->|"downloads"| web
 
+  classDef lane fill:#0d0f0e,stroke:#f02a56,stroke-width:1.5px,color:#f5f7f5;
   classDef service fill:#101211,stroke:#f02a56,stroke-width:2px,color:#f5f7f5;
   classDef store fill:#141716,stroke:#f02a56,stroke-width:1.5px,color:#f5f7f5;
-  class user,web,api,worker,runner,scanners,gate,qwen,reports service;
+  class client,control,pipeline,dynamic,outputs lane;
+  class user,web,api,worker,scanners,gate,runner,zap,qwen,reports service;
   class queue,db,minio store;
 ```
 
@@ -241,17 +266,3 @@ security-packs/
 - Qwen receives focused, redacted evidence rather than full repositories.
 - Sandbox workflows are opt-in and allowlisted.
 - GitHub private access is blocked until real credentials are supplied and verified.
-
-## GitHub About
-
-Suggested description:
-
-```text
-Local-first AppSec review workbench for authorized repository and URL scans, with deterministic scanners, evidence-gated findings, reports, drift, and optional local Qwen explanations.
-```
-
-Suggested topics:
-
-```text
-ai-security, appsec, code-audit, docker, fastapi, gitleaks, local-ai, nextjs, playwright, postgres, qwen, redis, sast, security-scanner, semgrep, trivy, vulnerability-scanner, zap
-```
