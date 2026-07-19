@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from uuid import uuid4
 
@@ -11,6 +12,13 @@ def test_migrations_apply_to_local_postgres():
     settings = Settings(auth_database_url="postgresql://nope:nope@localhost:5432/nope")
     applied = run_migrations(settings)
     assert isinstance(applied, list)
+
+
+def test_migrations_are_safe_when_api_and_worker_start_together():
+    settings = Settings(auth_database_url="postgresql://nope:nope@localhost:5432/nope")
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(lambda _: run_migrations(settings), range(2)))
+    assert all(isinstance(result, list) for result in results)
 
 
 def test_postgres_store_persists_scan_and_children():

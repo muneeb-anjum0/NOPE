@@ -153,6 +153,8 @@ def run_sandbox_assessment(
     settings: Settings,
     executor: SandboxExecutor | None = None,
 ) -> tuple[list[ScannerRun], list[Finding], list[CoverageRecord], list[dict[str, Any]]]:
+    if not settings.sandbox_enabled:
+        return _sandbox_disabled_result()
     if settings.sandbox_runner_url and executor is None:
         return _run_remote_sandbox_assessment(root, settings)
     return _run_local_sandbox_assessment(root, settings, executor)
@@ -194,13 +196,6 @@ def _run_local_sandbox_assessment(
     executor: SandboxExecutor | None = None,
 ) -> tuple[list[ScannerRun], list[Finding], list[CoverageRecord], list[dict[str, Any]]]:
     started = now_utc()
-    if not settings.sandbox_enabled:
-        return (
-            [ScannerRun(scanner="NOPE sandbox", version="local", status="skipped", coverage_categories=["Dynamic testing"], started_at=started, completed_at=now_utc(), message="Sandbox execution is disabled.")],
-            [],
-            [CoverageRecord(domain="Dynamic testing", status=CoverageStatus.not_tested, scanners=["NOPE sandbox"], notes="Sandbox execution is disabled.")],
-            [],
-        )
 
     manifest, manifest_error = load_manifest(root)
     if not manifest:
@@ -567,6 +562,16 @@ def _dynamic_coverage_notes(manifest: SandboxManifest, zap_result: SandboxComman
     if auth_state == "authenticated":
         return f"ZAP baseline completed with configured authentication state; {alert_count} alert(s) parsed."
     return f"ZAP baseline completed unauthenticated on an internal target; {alert_count} alert(s) parsed. Authenticated endpoints may be partial or skipped."
+
+
+def _sandbox_disabled_result() -> tuple[list[ScannerRun], list[Finding], list[CoverageRecord], list[dict[str, Any]]]:
+    started = now_utc()
+    return (
+        [ScannerRun(scanner="NOPE sandbox", version="local", status="skipped", coverage_categories=["Dynamic testing"], started_at=started, completed_at=now_utc(), message="Sandbox execution is disabled.")],
+        [],
+        [CoverageRecord(domain="Dynamic testing", status=CoverageStatus.not_tested, scanners=["NOPE sandbox"], notes="Sandbox execution is disabled.")],
+        [],
+    )
 
 
 def _extract_marker(text: str, begin: str, end: str) -> str:

@@ -7,6 +7,8 @@ from psycopg.rows import dict_row
 
 from nope_api.config import Settings
 
+MIGRATION_LOCK_ID = 861_202_412
+
 
 def psycopg_url(settings: Settings) -> str:
     if settings.auth_database_url:
@@ -25,14 +27,8 @@ def migrations_dir() -> Path:
 def migration_status(settings: Settings) -> dict[str, list[str]]:
     available = [path.stem for path in sorted(migrations_dir().glob("*.sql"))]
     with connect(settings) as conn:
-        conn.execute(
-            """
-            create table if not exists schema_migrations (
-              version text primary key,
-              applied_at timestamptz not null default now()
-            )
-            """
-        )
+        _lock_migrations(conn)
+        _ensure_migrations_table(conn)
         applied = [
             row["version"]
             for row in conn.execute("select version from schema_migrations order by version").fetchall()
@@ -45,14 +41,8 @@ def migration_status(settings: Settings) -> dict[str, list[str]]:
 def run_migrations(settings: Settings) -> list[str]:
     applied: list[str] = []
     with connect(settings) as conn:
-        conn.execute(
-            """
-            create table if not exists schema_migrations (
-              version text primary key,
-              applied_at timestamptz not null default now()
-            )
-            """
-        )
+        _lock_migrations(conn)
+        _ensure_migrations_table(conn)
         existing = {
             row["version"]
             for row in conn.execute("select version from schema_migrations").fetchall()
@@ -65,3 +55,18 @@ def run_migrations(settings: Settings) -> list[str]:
             conn.execute("insert into schema_migrations (version) values (%s)", (version,))
             applied.append(version)
     return applied
+
+
+def _lock_migrations(conn) -> None:
+    conn.execute("select pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_ID,))
+
+
+def _ensure_migrations_table(conn) -> None:
+    conn.execute(
+        """
+        create table if not exists schema_migrations (
+          version text primary key,
+          applied_at timestamptz not null default now()
+        )
+        """
+    )

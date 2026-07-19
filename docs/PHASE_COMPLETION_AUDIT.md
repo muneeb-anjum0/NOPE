@@ -1,23 +1,22 @@
 # NOPE Phase Completion Audit
 
-Date: 2026-07-18
+Date: 2026-07-19
 
-| Phase | Intended scope | Current implementation | Verified | Missing/broken | Completion | Approval readiness |
-| --- | --- | --- | --- | --- | ---: | --- |
-| 0 Audit/reconciliation | Honest state tracking | New audit created | Current evidence collected | Historical docs still overclaim | 65% | Needs doc cleanup |
-| 1 PostgreSQL | Durable DB persistence | Postgres store/migrations | Migration clean, tests/E2E | More restart-persistence tests | 85% | Approve local |
-| 2 Scanner execution | Real scanners | Docker CLIs run | Versions, E2E, benchmark execution | Benchmark quality fails; missing scanner families | 64% | Do not approve as 100% |
-| 3 Redis queue | Async worker pipeline | Redis/worker live plus Stage 2 durable Postgres event replay | Stage 2 tests for ordered/idempotent events, retry, cancellation, stuck worker, pagination, auth, and restart-style reload | Stage 3 security hardening remains separate | 100% locally achievable for Stage 2 event/progress durability | Approve Stage 2 local gate |
-| 4 Findings normalization | Canonical findings/dedupe | Model/parsers/evidence gate | Tests, E2E normalized findings | Benchmark FP/FN issues | 76% | Needs quality work |
-| 5 Qwen | Local GGUF with GPU under 5 GB | Base Docker Qwen live | 28 layers, 4049 MiB, actions complete | First-run latency high | 78% | Approve local, not speed-complete |
-| 6 RAG | Ground Qwen in evidence | Lexical/graph RAG | Evidence payload and tests | No embeddings by design; ranking can improve | 70% | Approve partial |
-| 7 Findings UX | Usable findings/detail/actions | UI route exists | Build passes, actions work | Browser regression/a11y missing | 78% | Approve partial |
-| 8 History/drift | Baselines and drift | Implemented | Tests/source | Live drift matrix not rerun | 74% | Approve partial |
-| 9 PDF reporting | Export reports | JSON/MD/SARIF/PDF | E2E all 200 | Async/large report tests missing | 84% | Approve local |
-| 10 Sandbox | Safe dynamic testing | Docker sandbox runner | Tests/source, health | Ordinary E2E skipped; Docker socket risk | 60% | Not 100% |
-| 11 Settings/GitHub | Settings + GitHub contracts | Settings and blocked GitHub adapter | Tests/source | Real GitHub activation absent | 62% | Approve settings, not GitHub |
-| 12 Benchmarks | Quality gate | Stage 1 benchmark gate now passes with all 41 required fixture categories, expected metadata, negative controls, failure-mode tests, and metrics output | Scanner-only and scanner-plus-Qwen Docker benchmarks pass with precision/recall/F1 `1.000`, 0 FP, 0 FN, 0 known FN | Scanner-plus-Qwen CI remains external because CI has no local GGUF/GPU mount | 100% locally achievable | Approve Stage 1 local gate |
-| 13 Tests | Broad automated tests | 94 backend tests, frontend lint/type/build | Passed | Host ruff absent; no formal Playwright/axe | 72% | Approve partial |
-| 14 E2E pipeline | Project to report | Real E2E succeeded | Scan completed, reports 200 | Events empty; benchmark still fails | 78% | Approve local MVP |
-| 15 UI/UX | Refined dashboard | Broad UI implemented | Build/lint/typecheck | Formal visual automation not rerun | 82% | Approve partial |
-| 16 Docs/cleanup | Accurate docs/status | New audit files added | Audit created | Historical docs stale | 58% | Needs cleanup |
+This file preserves a high-level phase/program view after Stages 1-11 were approved and Stage 12 began. Detailed evidence lives in `docs/COMPLETION_MASTER_PLAN.md`, `docs/IMPLEMENTATION_WORKLOG.md`, and `docs/FINAL_CLEAN_ROOM_AUDIT.md`.
+
+| Program area | Intended scope | Current status before final Stage 12 verification | Completion classification |
+| --- | --- | --- | --- |
+| Stage 1 Benchmark correctness | Scanner-only and scanner-plus-Qwen quality gates | Approved; 41/41 benchmark expected findings, 0 FP/FN, F1 1.000 in recorded Docker runs | Complete |
+| Stage 2 Durable scan events | Ordered, durable, reconstructable progress | Approved; `scan_events` persists important transitions with idempotent ordering and pagination | Complete |
+| Stage 3 Worker/sandbox hardening | Remove worker Docker socket, narrow runner boundary, hostile ZIP/URL controls | Approved; worker socketless, runner allowlisted, hostile fixtures covered | Complete |
+| Stage 4 Dynamic/ZAP scanning | Supported static, URL, repo dynamic, combined scans with real ZAP | Approved; Node/Python manifest fixtures, private network ZAP, artifacts, parsed findings, honest states | Complete |
+| Stage 5 Ecosystem scanners | First-class audit plugins and parser/failure coverage | Approved; plugin contracts and tests for requested ecosystems | Complete |
+| Stage 6 Finding lifecycle | Canonical schema, dedupe, lifecycle, suppression, recurrence | Approved; schema/provenance/lifecycle tests and reports/history updates | Complete |
+| Stage 7 Qwen/RAG | Async actions, durable cache, retrieval, validation, prompt safety | Approved; all required actions, cache, RAG, prompt-injection, restart/invalidation tests | Complete |
+| Stage 8 Browser/a11y/visual | Playwright, axe, mobile, keyboard, visual regression | Approved; deterministic browser suite and snapshots | Complete |
+| Stage 9 GitHub | Secure local contracts; real activation when credentials exist | Approved as locally complete with external activation blocked | Locally complete; external activation blocked |
+| Stage 10 Persistence/drift/reports | Restart persistence, drift categories, durable reports, cleanup | Approved; persistence/drift/report suites pass | Complete |
+| Stage 11 NOPE self-security | Harden auth, sessions, CSRF/origin, containers, inputs, deps | Approved; tests/scans pass with documented protobuf and runner residuals | Locally complete with documented residuals |
+| Stage 12 Final docs/audit | Remove stale claims, cleanup, clean-room verification, final report | In progress | Pending final verification |
+
+Historical pre-stage percentages from earlier Phase 0/16 audits are not current completion claims. They remain only in Git history and dated worklog entries.

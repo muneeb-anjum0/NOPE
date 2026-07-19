@@ -1,60 +1,32 @@
-# IMPLEMENTATION WORKLOG
+# NOPE Implementation Worklog
 
-## 2026-07-18 Forensic Audit And AI Runtime Fix
+Date: 2026-07-19
+Current program stage: Stage 12, Documentation, Cleanup, and Final Clean-Room Audit
+Stage 12 pre-stage commit: `6267b3c6b05c0671d2d311876b3b25f3e4885dd1`
 
-Commit pushed before audit: `a46bbc5 Enable base Docker AI runtime`.
+This root worklog is a current pointer. Detailed historical phase/stage entries are preserved in `docs/IMPLEMENTATION_WORKLOG.md`.
 
-Changes made before the audit:
+## Current State
 
-- Base `docker-compose.yml` now starts `nope-ai` without requiring the GPU override profile.
-- API and worker default to `NOPE_AI_PROVIDER=llama.cpp` in Docker.
-- Base llama.cpp command now defaults to `--n-gpu-layers 28`.
-- Base model mount defaults to `D:/Desktop/Model`, matching the local GGUF location.
-- Qwen action requests now use no-think routing, prompt caching, and single-pass RAG context reuse.
+Stages 1-11 of the canonical NOPE completion program have been approved by the user as locally complete, with external GitHub activation and production-SaaS concerns separated from local-product completion.
 
-Verification:
+Stage 12 is now responsible for:
 
-- `python -m pytest apps/api/tests -q`: `94 passed, 2 warnings`.
-- `pnpm web:lint`: passed.
-- `pnpm web:typecheck`: passed.
-- `pnpm web:build`: passed.
-- `docker compose up --build -d`: passed.
-- API health: Qwen provider `llama.cpp`, GPU layers `28`, runtime reachable.
-- `nvidia-smi` inside `nope-ai`: about `4049 / 6144 MiB`.
-- AI latency profile after safe optimization: Explain 35.58s, Challenge 45.74s, Fix 37.49s, Test 33.97s uncached; repeated same action 0.0s from cache.
-- E2E scan `scan_356656eeadfa4c6a`: completed, 24 findings, Qwen review complete, JSON/MD/SARIF/PDF reports returned HTTP 200.
+- aligning all canonical docs with actual behavior
+- removing stale completion claims
+- classifying cleanup-keyword hits
+- running the final clean-room verification matrix
+- refreshing Docker from a clean build
+- committing and pushing the final documentation/cleanup
+- producing the final completion report
 
-Known failures after audit:
+## Active Evidence Ledger
 
-- `pnpm api:lint` fails on host because `ruff` is not installed.
-- Scanner-only and scanner-plus-Qwen benchmarks both fail quality gates.
-- E2E scan events endpoint returned zero events.
+Final Stage 12 command evidence is recorded in `docs/FINAL_CLEAN_ROOM_AUDIT.md`.
 
-## 2026-07-18 Stage 1 Benchmark Correctness
+## Important Residuals
 
-Commit target: Stage 1 implementation.
-
-Changes:
-
-- Expanded NOPE deterministic rules for benchmark categories: SQL injection, NoSQL injection, unsafe HTML/XSS, SSRF, path traversal, unsafe upload, missing rate limit, debug exposure, public source maps, unsafe Supabase RLS, public storage, and tracker-before-consent.
-- Fixed authorization validation so client-controlled role/tenant signals are promoted as evidence instead of rejected as safe scope.
-- Added benchmark negative controls for parameterized SQL, scoped authorization, consent-gated tracker loading, and placeholder secrets.
-- Upgraded the expected benchmark manifest to version 2 with severity, confidence, CWE, OWASP, line/range, scanner expectation, Qwen expectation, and dedupe expectation.
-- Benchmark output now includes precision, recall, F1, duplicate/supporting evidence count, and a Markdown summary.
-- Known false negatives no longer pass the benchmark gate.
-- Added `.github/workflows/benchmarks.yml` to run scanner-only in the API scanner image and upload JSON/Markdown benchmark artifacts in CI.
-
-Verification:
-
-- `python -m pytest apps/api/tests -q`: `95 passed, 2 warnings`.
-- `pnpm web:lint`: passed.
-- `pnpm web:typecheck`: passed.
-- `pnpm web:build`: passed.
-- `docker compose up --build -d`: passed; web/API/AI/Postgres/Redis/MinIO healthy, worker running.
-- `docker compose exec -T nope-api python -m nope_api.benchmarks --mode scanner-only --output /tmp/nope-benchmark-scanner-only-final.json`: passed, precision/recall/F1 `1.000`, `0` FP, `0` FN, duration `37.044s`.
-- `docker compose exec -T nope-api python -m nope_api.benchmarks --mode scanner-plus-qwen --output /tmp/nope-benchmark-scanner-plus-qwen-final.json`: passed, precision/recall/F1 `1.000`, `0` FP, `0` FN, duration `76.587s`.
-- `docker compose exec -T nope-ai nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits`: `4053, 6144`.
-
-Remaining next-stage failure:
-
-- Durable scan event/progress history remains Stage 2 and is not claimed complete.
+- Real GitHub private repository activation is externally blocked until credentials/installations are provided.
+- `nope-runner` holds Docker daemon authority in local Compose by design; the general worker is socketless.
+- `pip-audit` reports a documented protobuf scanner-chain residual through Semgrep/OpenTelemetry.
+- Production SaaS readiness remains outside local-product completion.

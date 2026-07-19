@@ -108,6 +108,18 @@ def test_sandbox_absent_manifest_marks_dynamic_testing_not_applicable(tmp_path):
     assert coverage[0].status == CoverageStatus.not_applicable
 
 
+def test_sandbox_disabled_does_not_contact_remote_runner(tmp_path):
+    runs, findings, coverage, artifacts = run_sandbox_assessment(
+        tmp_path,
+        Settings(sandbox_enabled=False, sandbox_runner_url="http://nope-runner:8010"),
+    )
+
+    assert runs[0].status == "skipped"
+    assert findings == []
+    assert artifacts == []
+    assert coverage[0].status == CoverageStatus.not_tested
+
+
 def test_failed_workflow_creates_finding_and_failed_coverage(tmp_path):
     write_manifest(tmp_path, {"workflows": [{"name": "tests", "kind": "python", "command": "python -m pytest"}]})
     runs, findings, coverage, artifacts = run_sandbox_assessment(tmp_path, Settings(), FakeExecutor(["failed"]))

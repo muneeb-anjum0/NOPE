@@ -1,5 +1,7 @@
 # NOPE Implementation Worklog
 
+> Historical ledger: older entries below preserve the state at the time they were written. For current status, use the root `IMPLEMENTATION_WORKLOG.md`, `FEATURE_STATUS.md`, `docs/CURRENT_STATE_AUDIT.md`, `docs/CAPABILITY_MATRIX.md`, and `docs/FINAL_CLEAN_ROOM_AUDIT.md`.
+
 ## 2026-07-15
 
 ### Repository inspection

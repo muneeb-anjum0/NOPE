@@ -437,3 +437,6 @@ docker compose build nope-api nope-worker nope-web
 | [`docs/SCANNERS.md`](docs/SCANNERS.md) | Scanner behavior and evidence handling |
 | [`docs/SANDBOX.md`](docs/SANDBOX.md) | Opt-in dynamic workflow execution |
 | [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Common local Docker and runtime issues |
+| [`docs/GITHUB_INTEGRATION.md`](docs/GITHUB_INTEGRATION.md) | GitHub activation, blocked states, and contracts |
+| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | Local operations, health, logs, migrations, and clean-room warnings |
+| [`docs/FINAL_CLEAN_ROOM_AUDIT.md`](docs/FINAL_CLEAN_ROOM_AUDIT.md) | Final Stage 12 verification ledger |

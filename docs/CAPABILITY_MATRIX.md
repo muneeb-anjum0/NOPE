@@ -1,55 +1,47 @@
 # NOPE Capability Matrix
 
-Date: 2026-07-18
+Date: 2026-07-19
+Stage 12 pre-stage commit: `6267b3c6b05c0671d2d311876b3b25f3e4885dd1`
 
-| Capability | Intended result | Current implementation | Evidence | Status | Completion | Gap severity | Next work |
-| --- | --- | --- | --- | --- | ---: | --- | --- |
-| Docker app startup | Docker Desktop/plain compose starts full app including AI | Base compose now starts CUDA `nope-ai`; API/worker depend on it | `docker compose up --build -d`, health, inspect command | Verified | 90% | Minor | Document Windows model path requirement |
-| ZIP scanning | Upload repo ZIP and scan | Real E2E completed with 24 findings | `scan_356656eeadfa4c6a` | Verified | 85% | Moderate | Better event persistence and larger-repo tests |
-| PostgreSQL | Durable projects/scans/findings/reports/settings | Migrations clean; storage layer active | migration status, E2E | Verified | 85% | Minor | More restart-persistence tests |
-| Redis/worker | Async queue with durable progress/retry/cancel | Worker completes jobs; Stage 2 persists ordered scan/stage/scanner/retry/cancel/worker/report/Qwen events to Postgres and exposes paginated replay; Stage 3 makes the worker non-root and socketless | Stage 2 tests, Stage 3 tests, E2E, pytest | Verified local Stage 3 | 90% | Minor | Production runner hardening can use rootless Docker or a separate host |
-| Scanner orchestration | Broad scanner execution with normalized findings | Main Docker scanners run; Stage 1 benchmark gates pass across all 41 required categories | scanner versions, E2E, final Docker benchmarks | Verified benchmark gate | 86% | Moderate | Event durability and scanner-family expansion in later stages |
-| Evidence gate | Promote stronger findings, reduce weak heuristics | Context validation now handles client-controlled auth, policy/config evidence, same-line rule dedupe, canonical fingerprints, provenance preservation, and benchmark negative controls | code/tests/final benchmark evidence plus Stage 6 lifecycle tests | Improved | 90% | Minor | More semantic source graph validation in later stages |
-| Qwen | Local GPU model for review/actions | Live llama.cpp with 28 layers, under 5 GB | health, action smoke, VRAM | Verified local | 78% | Moderate | Durable cache/async UI; speed limited by hardware |
-| RAG | Evidence-grounded context | Lexical/graph retrieval with redaction | Qwen evidence payload | Partial | 70% | Moderate | Better source provenance/ranking |
-| Findings UX | Filter, paginate, detail, lifecycle history, AI actions | Functional routes/build; lifecycle states and history are API-backed; AI actions work | build, E2E, action smoke, Stage 6 tests | Improved | 84% | Minor | Browser automation and large findings UX |
-| Attack map | Show route/file/data/risk paths | Heuristic graph renders when evidence exists | code/UI/E2E scan has graph | Partial | 70% | Moderate | More parser-backed graph precision |
-| Coverage | Explain tested/untested areas | UI/backend records include static, URL, sandbox, and ZAP dynamic state | route/build/E2E plus Stage 4 dynamic tests | Improved | 80% | Moderate | More actionable coverage taxonomy in later stages |
-| Assets | Folder-scoped inventory | UI summarizes evidence-connected assets | route/build/source | Partial | 72% | Moderate | Full indexed inventory and search |
-| Reports | JSON/MD/SARIF/PDF | All four include lifecycle/provenance metadata and returned 200 in E2E | E2E report outputs, Stage 6 report changes | Verified | 87% | Minor | Async generation/large report tests |
-| Drift/baselines | Same-folder comparisons | Implemented and tested with canonical fingerprints and reintroduction lifecycle state | pytest and UI source | Improved | 82% | Minor | More transparent baseline UX |
-| Sandbox | Safe dynamic testing | Internal `nope-runner` owns Docker access; worker is socketless; sandbox jobs enforce image/command/network/mount/env/resource limits; Stage 4 adds supported Node/Python app starts and private-network ZAP baseline | Stage 3 hostile matrix, Stage 4 dynamic suite, live ZAP smoke | Verified local Stage 4 | 88% | Minor | Broader browser-authenticated dynamic depth in later stages |
-| Settings | Persist AI/scanner/project settings | Implemented; encrypted test secrets | source/tests | Partial | 78% | Moderate | Verify all settings consumed at runtime |
-| GitHub | Private repo/PR workflow | Blocked adapter/contracts only | routes/docs/source | Superficial/blocked | 35% local, 0% activated | Major | OAuth/App credentials and implementation |
-| Documentation | Accurate setup/status | Extensive but overclaims | audit comparison | Partial | 58% | Moderate | Update stale completion claims |
+| Capability | Local-product status | Evidence | External or production limit |
+| --- | --- | --- | --- |
+| Docker startup | Locally complete | `docker compose up --build -d` starts the canonical stack, including `nope-ai` when the documented model mount exists. | Production requires real secrets, TLS, private data-service bindings, and backup policy. |
+| ZIP ingestion | Complete | Hostile archive tests cover traversal, symlink, hardlink/special file, Unicode/case collision, bombs, nesting, size, count, and cleanup. | Operator must scan only authorized code. |
+| URL scanning | Complete for non-destructive checks | Scope, SSRF, DNS recheck, port, redirect, timeout, and response-size tests pass. | Authenticated production crawling is not part of current scope. |
+| Queue and durable progress | Complete | `scan_events` persists ordered, idempotent scan/stage/scanner/retry/cancel/worker/report/Qwen transitions and paginated replay. | Redis is not authoritative for historical state. |
+| Worker sandbox boundary | Locally complete | Worker is socketless/non-root; runner owns token-authenticated allowlisted Docker execution with limits and cleanup. | Runner compromise remains a Docker-host risk in local Compose. |
+| Dynamic/ZAP scanning | Locally complete for supported manifests | Supported Node/Python fixtures build/start in isolated containers; ZAP runs on a private network and stores version/config/raw alerts/findings. | Unsupported stacks and unauthenticated coverage are reported as skipped/partial/failed. |
+| Scanner plugins | Complete for configured local image | Semgrep, Gitleaks, OSV, Trivy, Checkov, Hadolint, Bandit, npm, pnpm, yarn, pip-audit, dotnet, cargo, govulncheck, composer, and bundler plugin contracts exist with parsers/failure states. | Some ecosystem CLIs are unavailable unless installed; NOPE reports that honestly. |
+| Benchmarks | Complete | Stage 1 scanner-only and scanner-plus-Qwen benchmarks met 41/41 expected findings, 0 FP/FN, precision/recall/F1 1.000. | Qwen benchmark requires local model/GPU runtime. |
+| Finding quality | Complete | Canonical schema, provenance, source metadata, stable fingerprints, dedupe, correlation, lifecycle, suppression expiry, recurrence, and reintroduction tests. | Future parser-backed semantic graphing can improve root-cause precision. |
+| Reports | Complete | JSON, Markdown, SARIF, and PDF reports use persisted data, redaction, partial/failed coverage honesty, durable status, retry, and ownership checks. | Large local PDFs can take time on slow hardware. |
+| Drift and baselines | Complete | Latest-vs-previous, latest-vs-baseline, arbitrary comparison, version changes, recurrence, reintroduction, and cleanup tests. | Incremental scan support remains conservative advisory metadata. |
+| Qwen actions | Complete | Durable async jobs, structured JSON validation with retries, cancellation, 24h cache, cache invalidation, and UI state support. | First uncached generation speed is hardware/model-bound. |
+| RAG | Complete without vector search | Lexical, symbol, route, graph, and finding-centered retrieval with provenance, trust boundaries, token/file/chunk/depth limits, and prompt-injection tests. | Embeddings/vector search are intentionally excluded. |
+| GitHub | Locally complete; external activation blocked | Encrypted credential storage, OAuth/App-compatible state/callback validation, repository listing/snapshot contracts, policy checks, disconnect/revocation, audit, and fake-server protocol tests. | Real private repo access requires operator GitHub credentials and installation. |
+| Frontend | Complete for local product scope | Playwright covers core flows, mobile widths, accessibility checks, keyboard behavior, visual snapshots, and fixture-mode deterministic states. | Fixture mode is used for deterministic browser CI. |
+| NOPE self-security | Locally complete with residuals | Stage 11 auth/session/rate-limit/CSRF-origin/CORS/request-limit/container/dependency/security tests and docs. | Documented protobuf scanner-chain advisory and local Docker runner residual risk. |
+| Documentation | Stage 12 active | README and canonical docs describe behavior, commands, blocks, out-of-scope items, and residual risks. | Final percentages depend on clean-room verification results. |
 
-## Stage 1 benchmark evidence
+## Scanner Matrix
 
-Final Docker benchmark run on 2026-07-18:
-
-| Mode | Status | Precision | Recall | F1 | False positives | False negatives | Known false negatives | Duration |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| scanner-only | passed | 1.000 | 1.000 | 1.000 | 0 | 0 | 0 | 37.416s |
-| scanner-plus-Qwen | passed | 1.000 | 1.000 | 1.000 | 0 | 0 | 0 | 99.575s |
-
-## Scanner matrix
-
-| Scanner | Installed in Docker | Version verified | Execution verified | Parser/normalization | Raw artifact | Failure handling | Completion |
-| --- | --- | --- | --- | --- | --- | --- | ---: |
-| Semgrep | Yes | 1.170.0 | Yes | Yes | Captured in scan model | Yes | 80% |
-| Gitleaks | Yes | 8.28.0 | Yes | Yes | Captured | Yes | 78% |
-| OSV-Scanner | Yes | 2.2.3 | Yes | Yes | Captured | Yes | 80% |
-| Trivy | Yes | 0.72.0 | Yes | Yes | Captured | Yes | 80% |
-| Checkov | Yes | 3.3.8 | Yes | Yes | Captured | Yes | 75% |
-| Bandit | Yes | 1.9.4 | Yes | Yes | Captured | Yes | 78% |
-| Hadolint | Yes | 2.14.0 | Yes | Yes | Captured | Yes | 78% |
-| ZAP | Image/config exists | Version captured from runtime output | Private internal-network baseline verified for supported manifests | Alerts parsed into NOPE findings | Raw JSON/config artifact captured | Skipped/partial/failed/readiness/timeout handled | 85% |
-| npm audit | Yes | Docker rebuild required | Controlled command/parser tests | Yes | Captured by scanner-run artifact path | Yes | 100% local |
-| pnpm audit | Yes | Docker rebuild required | Controlled command/parser tests | Yes | Captured by scanner-run artifact path | Yes | 100% local |
-| yarn audit | Yes | Docker rebuild required | Controlled command/parser tests | Yes | Captured by scanner-run artifact path | Yes | 100% local |
-| pip-audit | Yes | Docker rebuild required | Controlled command/parser tests | Yes | Captured by scanner-run artifact path | Yes | 100% local |
-| dotnet package audit | Plugin present; SDK not bundled | Unavailable unless SDK installed | Controlled command/parser tests | Yes | Captured when tool runs | Yes | 100% plugin / external tool |
-| cargo audit | Plugin present; cargo-audit not bundled | Unavailable unless cargo-audit installed | Controlled command/parser tests | Yes | Captured when tool runs | Yes | 100% plugin / external tool |
-| govulncheck | Plugin present; govulncheck not bundled | Unavailable unless installed | Controlled command/parser tests | Yes | Captured when tool runs | Yes | 100% plugin / external tool |
-| composer audit | Plugin present; Composer not bundled | Unavailable unless Composer installed | Controlled command/parser tests | Yes | Captured when tool runs | Yes | 100% plugin / external tool |
-| bundler-audit | Plugin present; bundler-audit not bundled | Unavailable unless installed | Controlled command/parser tests | Yes | Captured when tool runs | Yes | 100% plugin / external tool |
+| Scanner | Applicability | Output | Failure handling | Local status |
+| --- | --- | --- | --- | --- |
+| NOPE rules | Source/security pattern rules | Canonical findings and candidate audit | Candidates can be promoted, rejected, or withheld | Complete |
+| Semgrep | Source patterns | JSON | Failed/unavailable status and raw output | Complete |
+| Gitleaks | Repository secrets | JSON | Redacted raw output and coverage reduction | Complete |
+| OSV-Scanner | Lockfiles/dependencies | JSON | Failed/unavailable status | Complete |
+| Trivy | Dependencies, containers, IaC, secrets | JSON | Failed/unavailable status | Complete |
+| Checkov | IaC/config | JSON | Failed/unavailable status | Complete |
+| Hadolint | Dockerfiles | JSON/checkstyle-style parser path | Failed/unavailable status | Complete |
+| Bandit | Python security | JSON | Failed/unavailable status | Complete |
+| npm audit | `package-lock.json` | JSON | Unavailable when npm cannot run | Complete |
+| pnpm audit | `pnpm-lock.yaml` | JSON | Unavailable when pnpm cannot run | Complete |
+| yarn audit | `yarn.lock` | JSON/NDJSON | Unavailable when yarn cannot run | Complete |
+| pip-audit | Python manifests | JSON | Unavailable when pip-audit cannot run | Complete |
+| dotnet package audit | `.csproj`/solution manifests | JSON | SDK absence reported | Complete plugin; tool external |
+| cargo audit | `Cargo.lock` | JSON | cargo-audit absence reported | Complete plugin; tool external |
+| govulncheck | `go.mod` | NDJSON | govulncheck absence reported | Complete plugin; tool external |
+| composer audit | `composer.lock` | JSON | Composer absence reported | Complete plugin; tool external |
+| bundler-audit | `Gemfile.lock` | JSON | bundler-audit absence reported | Complete plugin; tool external |
+| OWASP ZAP | `.nope/sandbox.json` dynamic target | JSON | skipped/partial/failed states | Complete for supported manifests |
