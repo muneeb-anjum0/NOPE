@@ -59,9 +59,10 @@ Except for sanitized `GET /health` and `POST /api/auth/login`, endpoints require
 - `GET /api/scanners/capabilities` - authenticated scanner health, version, coverage category, and applicability marker metadata.
 - `GET /api/settings/model` - current AI model configuration.
 - `POST /api/settings/model/test` - test AI runtime reachability.
-- `POST /api/scans/{scan_id}/findings/{finding_id}/ai-actions` - queue or serve a cached durable Qwen action. Supported actions are `explain`, `challenge`, `fix`, `regression_test`, and `patch_review`; `test` remains an alias for `regression_test`.
+- `POST /api/scans/{scan_id}/findings/{finding_id}/ai-actions` - queue or serve a cached durable Qwen action. Supported actions are `explain`, `challenge`, `fix`, `regression_test`, `patch_review`, and `investigate`; `test` remains an alias for `regression_test`.
 - `GET /api/ai-actions/{job_id}` - poll a durable AI action job with queued/running/completed/failed/cancelled state, cache flag, latency, context count, and structured result.
 - `DELETE /api/ai-actions/{job_id}` - request cancellation for a queued or running AI action.
+- `GET /api/ai-actions/{job_id}/investigation.{format}` - export a completed investigation action as `json`, `md`, `markdown`, or `pdf`.
 - `POST /api/findings/explain` and `POST /api/findings/{action}` - compatibility endpoints for direct focused AI actions.
 
 ## Guarantees
@@ -81,6 +82,7 @@ Except for sanitized `GET /health` and `POST /api/auth/login`, endpoints require
 - Report failures are durable, redacted, and retryable; failed or running report rows are never served as completed downloads.
 - Retention cleanup is owner-scoped and removes expired scan-linked reports, artifacts, events, and drift rows through database-owned cascading state.
 - Finding AI actions are owner-scoped, durable, restart-recoverable, and cached for 24 hours using finding fingerprint, action, model, quantization, prompt version, RAG version, evidence hash, and settings hash.
+- Investigation actions are stored in the same durable AI job history. Every investigation statement is citation-backed and marked as Verified, Supported, Likely, Possible, or Unknown.
 - Qwen receives bounded hybrid RAG context only; whole repositories and raw secrets are not persisted or sent as action context.
 - Repository intelligence stores redacted chunk metadata in Postgres and vector payloads in Qdrant when available. Retrieval can improve Qwen context and repository search, but it cannot promote, suppress, reject, or modify findings.
 - Rules v2 candidates are owner-scoped and can be reviewed even when they are withheld from confirmed findings.

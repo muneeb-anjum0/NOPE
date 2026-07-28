@@ -4,7 +4,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { Finding } from "@/lib/types";
 
-type AIAction = "explain" | "challenge" | "fix" | "regression_test" | "patch_review";
+type AIAction = "explain" | "challenge" | "fix" | "regression_test" | "patch_review" | "investigate";
+type InvestigationStatement = { status: "Verified" | "Supported" | "Likely" | "Possible" | "Unknown"; text: string; citations: string[] };
+type InvestigationReport = {
+  version: string;
+  mode: string;
+  finding_id: string;
+  finding_fingerprint: string;
+  evidence_references: Array<Record<string, unknown>>;
+  related_finding_records?: Array<Record<string, unknown>>;
+  [key: string]: unknown;
+};
 type AIActionResult = {
   status: string;
   state?: "queued" | "running" | "completed" | "failed" | "cancelled";
@@ -21,6 +31,7 @@ type AIActionResult = {
     recommendation: string;
     confidence: string;
     risk?: string | null;
+    investigation_report?: InvestigationReport | null;
   } | null;
 };
 
@@ -30,6 +41,7 @@ const actionLabels: Array<[AIAction, string]> = [
   ["fix", "Fix"],
   ["regression_test", "Test"],
   ["patch_review", "Patch Review"],
+  ["investigate", "Investigate"],
 ];
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -71,10 +83,107 @@ const actionCopy: Record<AIAction, { title: string; reasoning: string; recommend
     reasoning: "Bypass checks",
     recommendation: "Review checklist",
   },
+  investigate: {
+    title: "Investigation report",
+    evidence: "Evidence references",
+    reasoning: "Investigation notes",
+    recommendation: "Developer path",
+  },
 };
 
 function StableRevealText({ text }: { text: string }) {
   return <span className="answer-reveal-text">{text}</span>;
+}
+
+const investigationSections = [
+  "summary",
+  "root_cause",
+  "evidence",
+  "repository_context",
+  "attack_flow",
+  "trust_boundary",
+  "exploitability",
+  "prerequisites",
+  "potential_impact",
+  "why_rules_promoted_it",
+  "confidence_explanation",
+  "developer_fix",
+  "verification_steps",
+  "false_positive_considerations",
+  "related_findings",
+  "related_files",
+  "relevant_routes",
+  "relevant_database_models",
+  "relevant_policies",
+  "relevant_auth_helpers",
+  "relevant_middleware",
+  "relevant_storage",
+  "framework_notes",
+  "unknowns",
+  "ai_reasoning_notes",
+];
+
+function sectionTitle(value: string) {
+  return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function statementList(value: unknown): InvestigationStatement[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is InvestigationStatement => Boolean(item && typeof item === "object" && "text" in item && "status" in item));
+}
+
+function InvestigationReportView({ report, jobId }: { report: InvestigationReport; jobId?: string }) {
+  return (
+    <div className="investigation-report">
+      <div className="investigation-report-head">
+        <div>
+          <span className="ai-result-label">AI Investigation Engine</span>
+          <strong>{report.mode ?? "Security Engineer"} / {report.version ?? "stage15"}</strong>
+        </div>
+        {jobId ? (
+          <div className="button-row compact-actions">
+            {(["json", "md", "pdf"] as const).map((fmt) => (
+              <a className="button-secondary" key={fmt} href={`/api/ai/investigation-export?job=${encodeURIComponent(jobId)}&format=${fmt}`}>
+                {fmt.toUpperCase()}
+              </a>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <div className="investigation-grid">
+        {investigationSections.map((section) => {
+          const statements = statementList(report[section]);
+          if (statements.length === 0) return null;
+          return (
+            <details className="investigation-section" key={section} open={section === "summary" || section === "attack_flow"}>
+              <summary>{sectionTitle(section)}</summary>
+              <ul>
+                {statements.map((statement, index) => (
+                  <li key={`${section}-${index}`}>
+                    <span className={`investigation-status status-${statement.status.toLowerCase()}`}>{statement.status}</span>
+                    <span>{statement.text}</span>
+                    {statement.citations?.length ? <small>{statement.citations.join(", ")}</small> : null}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          );
+        })}
+      </div>
+      <details className="investigation-section">
+        <summary>Citations</summary>
+        <ul>
+          {(report.evidence_references ?? []).map((reference, index) => (
+            <li key={String(reference.id ?? index)}>
+              <span className="investigation-status status-verified">{String(reference.id ?? `ref-${index + 1}`)}</span>
+              <span>{String(reference.file ?? reference.route ?? reference.title ?? reference.source ?? "Evidence")}</span>
+              {reference.line ? <small>line {String(reference.line)}</small> : null}
+            </li>
+          ))}
+        </ul>
+      </details>
+    </div>
+  );
 }
 
 export function AIFindingActions({ finding, scanId }: { finding: Finding; scanId?: string }) {
@@ -248,6 +357,7 @@ export function AIFindingActions({ finding, scanId }: { finding: Finding; scanId
             <span className="ai-result-label">{labels.recommendation}</span>
             <p><StableRevealText text={structured.recommendation} /></p>
           </div>
+          {structured.investigation_report ? <InvestigationReportView report={structured.investigation_report} jobId={result?.job_id} /> : null}
           <span className="mono ai-generated-label">Gen. by Qwen{result?.cached ? " / cached" : ""}{result?.latency_ms ? ` / ${Math.round(result.latency_ms / 1000)}s` : ""}</span>
         </div>
       ) : null}

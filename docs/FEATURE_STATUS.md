@@ -18,7 +18,8 @@ The long phase-by-phase history is archived in [`audits/`](audits/). I keep it a
 | Evidence gate | Working | Weak rule hits are checked against nearby evidence before they become normal findings. This was added because noisy findings are worse than no findings. |
 | Dynamic/ZAP path | Working for declared sandbox apps | Node/Python fixture workflows can run behind the runner boundary. Unsupported apps are reported plainly. |
 | Findings lifecycle | Working | Findings keep stable fingerprints, evidence sources, lifecycle state, suppressions, recurrence, and reintroduction history. |
-| Qwen actions | Working when the local model is mounted | Explain, Challenge, Fix, Test, and Patch Review run as durable jobs with a 24-hour cache. |
+| Qwen actions | Working when the local model is mounted | Explain, Challenge, Fix, Test, Patch Review, and Investigation run as durable jobs with a 24-hour cache. |
+| AI Investigation Engine | Working when the local model is mounted | Investigation reports cite deterministic evidence, reconstruct attack flow, link related findings, record unknowns, and export JSON/Markdown/PDF. |
 | Repository intelligence and RAG | Working locally | Retrieval is exact, lexical, route-aware, symbol-aware, graph-aware, finding-centered, and vector-assisted through Qdrant using local CPU sentence-transformers embeddings. It sends focused evidence, not whole repos. |
 | Reports | Working | JSON, Markdown, SARIF, and PDF reports are generated from persisted scan data. |
 | Drift and baselines | Working inside project folders | NOPE compares scans from the same folder so unrelated ZIPs do not create fake drift. |

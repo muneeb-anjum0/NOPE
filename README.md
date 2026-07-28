@@ -286,8 +286,28 @@ Qwen action prompts are mode-specific:
 | Fix | Give remediation guidance, root-cause reasoning, and guarded patch steps without pretending code was changed. |
 | Regression Test | Suggest fixtures, assertions, positive/negative cases, and expected outcomes after a fix. |
 | Patch Review | Describe what a future patch must prove, including bypass checks and acceptance/rejection criteria. |
+| Investigate | Build a full investigation report with root cause, attack flow, trust boundary, exploitability, impact, fix guidance, verification steps, related findings, related files/routes, unknowns, and citation-backed evidence references. |
 
-Every mode uses the same hard boundary: repository text is treated as untrusted data, Qwen must use only supplied evidence, and the response must be structured JSON with `summary`, `evidence`, `reasoning`, `recommendation`, `confidence`, and `risk`.
+Every mode uses the same hard boundary: repository text is treated as untrusted data, Qwen must use only supplied evidence, and the response must be structured JSON. Explain/Challenge/Fix/Test/Patch Review return `summary`, `evidence`, `reasoning`, `recommendation`, `confidence`, and `risk`. Investigate adds an `investigation_report` where every statement is marked `Verified`, `Supported`, `Likely`, `Possible`, or `Unknown` and points back to deterministic citations. AI can connect and explain evidence, but it cannot create findings, promote candidates, suppress findings, or change severity.
+
+## AI Investigation Engine
+
+The Stage 15 investigation path is for the moment when a finding needs a real security-review trail, not just a quick explanation. It starts from a promoted finding, pulls Rules v2/scanner evidence and hybrid repository context, reconstructs likely attack flow, finds related findings by shared route/file/category/package/source, and stores the completed investigation as a durable AI job. The report can be regenerated and exported as JSON, Markdown, or PDF.
+
+```mermaid
+flowchart LR
+  finding["Promoted finding"]
+  evidence["Rules and scanner evidence"]
+  repo["Repository intelligence"]
+  rag["Hybrid RAG packet"]
+  engine["AI Investigation Engine"]
+  report["Structured investigation report"]
+  exports["JSON / Markdown / PDF"]
+
+  finding --> evidence --> repo --> rag --> engine --> report --> exports
+  evidence -. "authority" .-> report
+  engine -. "cannot create findings" .-> finding
+```
 
 ## Architecture
 

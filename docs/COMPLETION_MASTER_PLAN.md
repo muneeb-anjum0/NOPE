@@ -64,3 +64,24 @@ Remaining honest boundary:
 
 - The index is designed for local repository snapshots and selected-scan retrieval. It is not a full language-server database or cross-repository semantic code search product.
 - GitHub CI uses the explicit `local_hashing` test mode for repository-intelligence benchmarks so CI does not download neural models. Docker/local product verification uses the real `sentence_transformers` provider.
+
+## Stage 15: AI Investigation Engine
+
+Pre-stage commit: `9e72cd2b4acf7dba13ea143d122be366f2a98327`
+
+Stage 15 turns Qwen from a short explanation helper into a citation-bound investigation engine for already-promoted findings.
+
+Implemented local scope:
+
+- Added a durable `investigate` AI action alongside Explain, Challenge, Fix, Regression Test, and Patch Review.
+- Investigation reports cover root cause, evidence, repository context, attack flow, trust boundary, exploitability, prerequisites, impact, promotion rationale, confidence explanation, fix guidance, verification steps, false-positive considerations, related findings, related files/routes, database/policy/auth/middleware/storage notes, framework notes, unknowns, AI reasoning notes, and evidence references.
+- Every investigation statement is normalized as Verified, Supported, Likely, Possible, or Unknown with deterministic citation IDs.
+- Related-finding discovery links findings that share files, folders, routes, categories, packages, advisories, or scanner sources. These links are investigation leads only and never become new findings.
+- Malformed Qwen output falls back to a deterministic investigation report instead of failing the UI or inventing evidence.
+- Investigation jobs use the existing durable AI job/cache tables, so history stores prompt version, RAG version, model, quantization, evidence hash, settings hash, timestamps, latency, result, and context metadata.
+- Investigation exports are protected and support JSON, Markdown, and PDF.
+- The dashboard has a dedicated Investigations page and the Findings AI action panel can render the full report.
+
+Explicit boundary:
+
+- Rules v2 decision-making was not modified. AI still cannot create findings, promote withheld candidates, suppress findings, change severity, or change confidence.

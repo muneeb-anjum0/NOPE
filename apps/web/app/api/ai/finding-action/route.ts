@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { API_BASE } from "@/lib/api";
 import { isE2EFixtureMode } from "@/lib/nope-data";
 
-const actions = new Set(["explain", "challenge", "fix", "test", "regression_test", "patch_review"]);
+const actions = new Set(["explain", "challenge", "fix", "test", "regression_test", "patch_review", "investigate"]);
 
 async function authHeaders() {
   const token = (await cookies()).get("nope_session")?.value;
@@ -40,6 +40,11 @@ function fixtureResult(action: string) {
       reasoning: "A patch is acceptable only if it breaks the risky route-to-data edge or adds a verified authorization edge.",
       recommendation: "Compare the changed files with the finding line range and require a passing regression test.",
     },
+    investigate: {
+      summary: "The investigation engine connects the promoted finding to evidence, context, attack flow, and unknowns.",
+      reasoning: "It keeps Rules v2 authoritative, cites deterministic evidence, lists related findings, and treats repository text as untrusted data.",
+      recommendation: "Use the report sections and citations to decide the manual review path.",
+    },
   };
   const copy = labels[action] ?? labels.explain;
   return {
@@ -62,6 +67,17 @@ function fixtureResult(action: string) {
       recommendation: copy.recommendation,
       confidence: "high",
       risk: "stage8-fixture",
+      investigation_report: action === "investigate" ? {
+        version: "stage15-investigation-v1",
+        mode: "Security Engineer",
+        finding_id: "fixture-finding",
+        finding_fingerprint: "fixture-fingerprint",
+        summary: [{ status: "Verified", text: copy.summary, citations: ["finding-evidence-1"] }],
+        attack_flow: [{ status: "Supported", text: "Route, handler, data edge, and risk node are connected in fixture evidence.", citations: ["finding-evidence-1"] }],
+        developer_fix: [{ status: "Supported", text: copy.recommendation, citations: ["finding-evidence-1"] }],
+        unknowns: [{ status: "Unknown", text: "No live repository was queried in fixture mode.", citations: ["finding-evidence-1"] }],
+        evidence_references: [{ id: "finding-evidence-1", type: "fixture", source: "Stage 15 E2E fixture" }],
+      } : null,
     },
   };
 }

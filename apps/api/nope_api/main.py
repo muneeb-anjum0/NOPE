@@ -16,6 +16,7 @@ from nope_api.ai import (
     finding_action,
     normalize_ai_action,
     prepare_ai_action_job,
+    render_investigation_export,
     run_ai_action_job,
 )
 from nope_api.auth import AuthRateLimitError, create_or_login, delete_session, get_user_for_token
@@ -1374,6 +1375,24 @@ async def cancel_finding_ai_action(job_id: str, authorization: str | None = Head
     if response is None:
         raise HTTPException(status_code=404, detail="AI action job not found.")
     return response
+
+
+@app.get("/api/ai-actions/{job_id}/investigation.{fmt}")
+async def export_finding_investigation(job_id: str, fmt: str, authorization: str | None = Header(default=None)) -> Response:
+    owner_user_id = _require_owner_user_id(authorization)
+    job = store.get_ai_action_job(job_id, owner_user_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="AI action job not found.")
+    try:
+        media_type, body = render_investigation_export(job, fmt)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    suffix = "md" if fmt == "markdown" else fmt
+    return Response(
+        body,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="nope-investigation-{job_id}.{suffix}"'},
+    )
 
 
 @app.post("/api/findings/explain")

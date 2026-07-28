@@ -41,12 +41,14 @@ export function FindingTable({
   selectedId,
   searchQuery,
   total,
+  basePath = "/app/projects/local/findings",
 }: {
   findings: Finding[];
   scanId?: string;
   selectedId?: string;
   searchQuery?: string;
   total?: number;
+  basePath?: string;
 }) {
   const router = useRouter();
   const search = useMemo(() => new URLSearchParams(searchQuery), [searchQuery]);
@@ -65,7 +67,7 @@ export function FindingTable({
     if (scanId) params.set("scan", scanId);
     params.set("finding", finding.id);
     params.set("detail", "open");
-    return `/app/projects/local/findings?${params.toString()}`;
+    return `${basePath}?${params.toString()}`;
   };
   const clampedShownCount = Math.min(shownCount, findings.length);
   const visibleFindings = useMemo(() => findings.slice(0, clampedShownCount), [findings, clampedShownCount]);

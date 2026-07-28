@@ -67,7 +67,9 @@ Deduplication merges repeated evidence for the same issue while preserving scann
 
 RAG retrieves bounded, provenance-carrying context around findings, routes, files, finding-centered graph neighbors, scanner evidence, and security guidance. Repository text is treated as untrusted data.
 
-Qwen is optional and runs through `nope-ai` llama.cpp. It receives focused evidence only, not whole repositories, and cannot silently downgrade deterministic findings. Finding actions are durable jobs for Explain, Challenge, Fix, Regression Test, and Patch Review. Completed action output is cached for 24 hours and invalidates when evidence, settings, prompt version, RAG version, model, or quantization changes. If Qwen fails, deterministic scans continue and AI coverage records the failure.
+Qwen is optional and runs through `nope-ai` llama.cpp. It receives focused evidence only, not whole repositories, and cannot silently downgrade deterministic findings. Finding actions are durable jobs for Explain, Challenge, Fix, Regression Test, Patch Review, and Investigate. Completed action output is cached for 24 hours and invalidates when evidence, settings, prompt version, RAG version, model, or quantization changes. If Qwen fails, deterministic scans continue and AI coverage records the failure.
+
+The Investigation Engine is the long-form review path. It starts from a promoted finding, combines deterministic evidence with repository intelligence, discovers related findings by shared route/file/category/package/source, reconstructs a likely attack flow, and returns a structured report. Each statement is tagged as Verified, Supported, Likely, Possible, or Unknown and cites deterministic evidence. The engine can investigate, explain, prioritize, and connect evidence; it cannot create findings, promote candidates, suppress findings, or change severity/confidence.
 
 ## 10. Coverage, Score, and Verdict
 
@@ -89,4 +91,4 @@ Baselines snapshot scan, repository, target, scanner, rule, model, RAG, coverage
 
 ## 12. UI
 
-The landing page lives at `/`. The dashboard lives under `/app/projects/local/*` with routes for overview, findings, attack map, coverage, scans, assets, reports, and settings. Browser checks cover desktop, tablet, and small mobile widths.
+The landing page lives at `/`. The dashboard lives under `/app/projects/local/*` with routes for overview, findings, investigations, attack map, coverage, scans, assets, reports, and settings. Browser checks cover desktop, tablet, and small mobile widths.
