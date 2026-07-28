@@ -32,6 +32,25 @@ jobs:
           NOPE_E2E_FIXTURE: "1"
         run: pnpm web:e2e
 
+      - name: Summarize browser proof artifacts
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Browser E2E proof bundle"
+            echo ""
+            echo "- Flow, accessibility, and visual regression tests run through \`pnpm web:e2e\`."
+            echo "- Full HTML report is uploaded as the \`playwright-report\` artifact."
+            echo "- Raw screenshots, videos, and traces are uploaded as the \`playwright-test-results\` artifact."
+            echo ""
+            echo "### Captured result files"
+            if [ -d apps/web/test-results ]; then
+              find apps/web/test-results -maxdepth 3 -type f | sort | sed 's#^#- #'
+            else
+              echo "- No Playwright result files were produced."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
