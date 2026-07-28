@@ -40,6 +40,8 @@ Pre-stage commit: `2c72dfd`
 
 Stage 14.1 pre-stage commit: `517d83230a7c122d5cdfd9d94fd4273a0a3aa633`
 
+Stage 14.2 hardening pre-stage commit: `6a4adba8f647796f9ae3aa304b2d0a58c1446146`
+
 Stage 14 adds a repository-intelligence index that supports hybrid retrieval for Qwen actions and direct repository search.
 
 Implemented local scope:
@@ -59,6 +61,10 @@ Implemented local scope:
 - Retrieval context includes file, line range, provenance, score reasons, retrieval reason, and untrusted-repository trust-boundary labels.
 - Repository intelligence is explicitly read-only for findings: it cannot create, promote, suppress, reject, or mutate severity/confidence.
 - Benchmark mode `repository-intelligence` checks retrieval Hit@3/Hit@5 against the benchmark fixture.
+- Mid-index cancellation is checked during file discovery, chunking, embedding batches, vector cleanup, and vector writes so a cancelled scan can stop inside repository indexing instead of waiting for the stage to finish.
+- Reindexing deletes stale Qdrant vectors for the scan before uploading the replacement chunk set, preventing old vectors from surviving after file deletion or chunk-shape changes.
+- Embedding calls are guarded by a process-local concurrency semaphore plus timeout handling.
+- CI now runs a repository-intelligence benchmark in explicit `local_hashing` mode, while Docker/local product verification can use the real CPU embedding provider.
 
 Remaining honest boundary:
 
@@ -76,11 +82,14 @@ Implemented local scope:
 - Added a durable `investigate` AI action alongside Explain, Challenge, Fix, Regression Test, and Patch Review.
 - Investigation reports cover root cause, evidence, repository context, attack flow, trust boundary, exploitability, prerequisites, impact, promotion rationale, confidence explanation, fix guidance, verification steps, false-positive considerations, related findings, related files/routes, database/policy/auth/middleware/storage notes, framework notes, unknowns, AI reasoning notes, and evidence references.
 - Every investigation statement is normalized as Verified, Supported, Likely, Possible, or Unknown with deterministic citation IDs.
-- Related-finding discovery links findings that share files, folders, routes, categories, packages, advisories, or scanner sources. These links are investigation leads only and never become new findings.
+- Related-finding discovery links findings that share files, folders, routes, categories, packages, advisories, scanner sources, auth helpers, middleware, ORM models, policies, storage buckets, owner helpers, or API groups. These links are investigation leads only and never become new findings.
+- Investigation reports support audience modes for Security Engineer, Developer, Executive, Junior Developer, and Compliance. The requested mode is enforced by NOPE even if Qwen returns a different mode.
+- Attack-flow reconstruction is deterministic and includes request, handler/file, middleware, auth/session, authorization/policy, business logic, data/storage, response, and Rules v2 authority steps when evidence exists.
 - Malformed Qwen output falls back to a deterministic investigation report instead of failing the UI or inventing evidence.
 - Investigation jobs use the existing durable AI job/cache tables, so history stores prompt version, RAG version, model, quantization, evidence hash, settings hash, timestamps, latency, result, and context metadata.
-- Investigation exports are protected and support JSON, Markdown, and PDF.
-- The dashboard has a dedicated Investigations page and the Findings AI action panel can render the full report.
+- Investigation exports are protected and support JSON, Markdown, PDF, and SARIF enrichment.
+- The dashboard has a dedicated Investigations page and the Findings AI action panel can render the full report with mode controls, regeneration, exports, timeline, evidence tree, attack flow, relationship leads, citations, cache state, and failed-state feedback.
+- Benchmark mode `investigation` validates generated reports, citation coverage, JSON structure, export formats, deterministic attack reconstruction, relationship discovery, and fallback frequency.
 
 Explicit boundary:
 

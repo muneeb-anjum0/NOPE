@@ -274,7 +274,15 @@ async def run_repository_scan(
     try:
         from nope_api.storage import store
 
-        index_result = await build_repository_index(settings, store, scan, root)
+        async def repository_index_cancelled() -> bool:
+            return bool(cancellation_checker and await cancellation_checker(scan))
+
+        index_result = await build_repository_index(settings, store, scan, root, cancellation_checker=repository_index_cancelled)
+        if index_result.status == "cancelled":
+            scan.stages[-1]["status"] = "cancelled"
+            scan.stages[-1]["message"] = "Repository intelligence indexing was cancelled."
+            scan.stages[-1]["data"] = index_result.model_dump(mode="json")
+            raise ScanCancelled("Repository intelligence indexing was cancelled.")
         scan.stages[-1]["status"] = "completed" if index_result.status == "completed" else "partial"
         scan.stages[-1]["message"] = (
             f"{index_result.files_indexed} files, {index_result.chunks_generated} chunks, "

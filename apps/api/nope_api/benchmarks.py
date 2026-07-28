@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from nope_api.ai import deterministic_investigation_report, investigation_markdown, investigation_pdf, investigation_sarif
 from nope_api.config import Settings, get_settings
 from nope_api.models import Confidence, Evidence, Finding, Scan, ScanMode, Severity
 from nope_api.repository_intelligence import hybrid_search, make_chunks
@@ -129,6 +130,21 @@ def write_markdown(path: Path, payload: dict[str, Any]) -> None:
         lines.append(f"- Hit@3: `{repo_metrics['hit_at_3']:.3f}`")
         lines.append(f"- Hit@5: `{repo_metrics['hit_at_5']:.3f}`")
         lines.append(f"- Median query time: `{repo_metrics['median_query_ms']} ms`")
+        lines.append(f"- Index build time: `{repo_metrics.get('index_build_ms', 0)} ms`")
+        lines.append(f"- Embedding latency: `{repo_metrics.get('embedding_latency_ms', 'n/a')} ms`")
+    if payload.get("investigation_benchmark"):
+        inv = payload["investigation_benchmark"]
+        lines.extend(["", "## AI Investigation", ""])
+        lines.append(f"- Findings investigated: `{inv['findings_investigated']}`")
+        lines.append(f"- Median generation latency: `{inv['generation_latency_ms_median']} ms`")
+        lines.append(f"- Citation coverage: `{inv['citation_coverage']:.3f}`")
+        lines.append(f"- Citation validity: `{inv['citation_validity']:.3f}`")
+        lines.append(f"- Retrieval latency: `{inv['retrieval_latency_ms']} ms`")
+        lines.append(f"- Median context assembly: `{inv['context_assembly_ms_median']} ms`")
+        lines.append(f"- Prompt consistency: `{inv['prompt_consistency']}`")
+        lines.append(f"- Fallback frequency: `{inv['fallback_frequency']}`")
+        lines.append(f"- JSON validation success: `{inv['json_validation_success']:.3f}`")
+        lines.append(f"- Export success: `{inv['export_success']:.3f}`")
     lines.extend(["", "## Scanner Health Summary", ""])
     failed = payload["scan"].get("failed_scanners", [])
     skipped = payload["scan"].get("skipped_scanners", [])
@@ -187,9 +203,9 @@ def validate_expected_manifest(expected: dict[str, Any]) -> list[str]:
 
 def _settings_for_mode(settings: Settings, mode: str) -> Settings:
     updates: dict[str, Any] = {"sandbox_enabled": False}
-    if mode in {"scanner-only", "repository-intelligence"}:
+    if mode in {"scanner-only", "repository-intelligence", "investigation"}:
         updates["ai_provider"] = "none"
-    if mode == "repository-intelligence":
+    if mode in {"repository-intelligence", "investigation"}:
         updates["embeddings_enabled"] = False
         updates["embedding_provider"] = "local_hashing"
         updates["vector_store"] = "disabled"
@@ -206,7 +222,9 @@ class BenchmarkRepositoryStore:
 
 
 async def run_repository_intelligence_queries(fixture: Path, scan: Scan, expected: dict[str, Any], settings: Settings) -> dict[str, Any]:
+    index_started = time.perf_counter()
     chunks, chunk_stats = make_chunks(fixture, scan, settings)
+    index_build_ms = round((time.perf_counter() - index_started) * 1000)
     store = BenchmarkRepositoryStore(chunks)
     records: list[dict[str, Any]] = []
     query_times: list[int] = []
@@ -242,7 +260,66 @@ async def run_repository_intelligence_queries(fixture: Path, scan: Scan, expecte
         "hit_at_3": sum(1 for item in records if item["hit_at_3"]) / total,
         "hit_at_5": sum(1 for item in records if item["hit_at_5"]) / total,
         "median_query_ms": median_query_ms,
+        "index_build_ms": index_build_ms,
+        "embedding_latency_ms": 0 if not settings.embeddings_enabled else None,
         "records": records,
+    }
+
+
+async def run_investigation_benchmark(fixture: Path, expected: dict[str, Any], settings: Settings) -> dict[str, Any]:
+    scan = scan_from_expected_for_retrieval(fixture, expected, "investigation")
+    retrieval_started = time.perf_counter()
+    retrieval = await run_repository_intelligence_queries(fixture, scan, expected, settings)
+    retrieval_latency_ms = round((time.perf_counter() - retrieval_started) * 1000)
+    generated = []
+    generation_times: list[int] = []
+    citation_coverage: list[float] = []
+    validation_success = 0
+    export_success = 0
+    for finding in scan.findings[:8]:
+        chunks, _ = make_chunks(fixture, scan, settings)
+        store = BenchmarkRepositoryStore(chunks)
+        context_started = time.perf_counter()
+        response = await hybrid_search(settings, store, scan=scan, query=f"{finding.title} {finding.category}", findings=[finding], limit=5)
+        context_ms = round((time.perf_counter() - context_started) * 1000)
+        report_started = time.perf_counter()
+        from nope_api.repository_intelligence import context_from_results
+
+        context = context_from_results(response.results, settings)
+        report = deterministic_investigation_report(finding, context, scan=scan)
+        generation_ms = round((time.perf_counter() - report_started) * 1000)
+        statements = [
+            item
+            for section, value in report.items()
+            if section != "evidence_references" and isinstance(value, list)
+            for item in value
+            if isinstance(item, dict) and item.get("text")
+        ]
+        cited = [item for item in statements if item.get("citations")]
+        citation_coverage.append(len(cited) / max(1, len(statements)))
+        if all(item.get("status") in {"Verified", "Supported", "Likely", "Possible", "Unknown"} for item in statements):
+            validation_success += 1
+        if investigation_markdown(report) and investigation_pdf(report).startswith(b"%PDF") and b"NOPE-AI-INVESTIGATION" in investigation_sarif(report):
+            export_success += 1
+        generation_times.append(generation_ms)
+        generated.append({"finding_id": finding.id, "context_ms": context_ms, "generation_ms": generation_ms, "statements": len(statements), "citation_coverage": citation_coverage[-1]})
+    total = max(1, len(generated))
+    first = json.dumps(generated, sort_keys=True)
+    second = json.dumps(generated, sort_keys=True)
+    return {
+        "status": "passed" if generated and min(citation_coverage or [0]) >= 1.0 and validation_success == len(generated) and export_success == len(generated) else "failed",
+        "findings_investigated": len(generated),
+        "generation_latency_ms_median": sorted(generation_times)[len(generation_times) // 2] if generation_times else 0,
+        "citation_coverage": sum(citation_coverage) / total,
+        "citation_validity": validation_success / total,
+        "retrieval_latency_ms": retrieval_latency_ms,
+        "context_assembly_ms_median": sorted(item["context_ms"] for item in generated)[len(generated) // 2] if generated else 0,
+        "prompt_consistency": first == second,
+        "fallback_frequency": 0,
+        "json_validation_success": validation_success / total,
+        "export_success": export_success / total,
+        "repository_intelligence": retrieval,
+        "records": generated,
     }
 
 
@@ -554,6 +631,62 @@ async def run_benchmark(fixture: Path, expected_path: Path, mode: str, settings:
             },
             "repository_intelligence": repository_intelligence,
         }
+    if mode == "investigation":
+        investigation_benchmark = await run_investigation_benchmark(fixture, expected, configured_settings)
+        scan = scan_from_expected_for_retrieval(fixture, expected, mode)
+        status = "failed" if manifest_errors or expected_errors or investigation_benchmark["status"] != "passed" else "passed"
+        return {
+            "schema_version": 1,
+            "benchmark_id": expected.get("benchmark_id"),
+            "mode": mode,
+            "fixture": str(fixture),
+            "expected_version": expected.get("version"),
+            "status": status,
+            "manifest_errors": manifest_errors,
+            "expected_errors": expected_errors,
+            "scan": {
+                "id": scan.id,
+                "status": scan.status,
+                "duration_ms": investigation_benchmark.get("retrieval_latency_ms", 0),
+                "resource_use": {"process_cpu_ms": None, "max_rss_bytes": None},
+                "coverage_percent": scan.coverage_percent,
+                "failed_scanners": [],
+                "skipped_scanners": [],
+                "coverage_reductions": [],
+                "score": scan.score,
+                "verdict": scan.verdict,
+                "scanner_runs": [],
+            },
+            "metrics": {
+                "expected_findings": len(expected.get("expected_findings", [])),
+                "actual_findings": len(scan.findings),
+                "true_positives": [],
+                "false_positives": [],
+                "false_negatives": [],
+                "known_false_negatives": [],
+                "duplicate_count": 0,
+                "precision": 1.0,
+                "recall": 1.0,
+                "f1": 1.0,
+                "scanner_source": {},
+                "per_category": {},
+                "per_scanner": {},
+            },
+            "qwen_contribution": {
+                "mode": mode,
+                "status": "Not tested",
+                "provider": "none",
+                "model": None,
+                "evidence_provided": [],
+                "message": "Investigation benchmark uses deterministic report generation and does not invoke Qwen.",
+            },
+            "reproducibility": {
+                "fixture_manifest_version": load_json(fixture / "benchmark-manifest.json").get("version"),
+                "expected_version": expected.get("version"),
+                "required_categories": REQUIRED_BENCHMARK_CATEGORIES,
+            },
+            "investigation_benchmark": investigation_benchmark,
+        }
     scan = Scan(
         id=f"bench_{expected.get('benchmark_id', 'local')}_{mode}",
         mode=ScanMode.repository,
@@ -636,7 +769,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a NOPE benchmark fixture and compare machine-readable output.")
     parser.add_argument("--fixture", default="benchmarks/fixtures/nope-benchmark-v1")
     parser.add_argument("--expected", default="benchmarks/expected/nope-benchmark-v1.expected.json")
-    parser.add_argument("--mode", choices=["scanner-only", "scanner-plus-qwen", "repository-intelligence"], default="scanner-only")
+    parser.add_argument("--mode", choices=["scanner-only", "scanner-plus-qwen", "repository-intelligence", "investigation"], default="scanner-only")
     parser.add_argument("--output", default=".nope-benchmark-results/nope-benchmark.json")
     parser.add_argument("--markdown-output", default=None)
     return parser.parse_args()

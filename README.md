@@ -41,6 +41,13 @@ Latest scanner-only benchmark summary:
 
 The latest Stage 13 scanner-only run produced 41 related duplicate/supporting findings because Rules v2 adds correlated evidence without changing the expected true-positive set. The checked-in small summary is in [`examples/nope-benchmark/scanner-only-summary.md`](examples/nope-benchmark/scanner-only-summary.md).
 
+Additional local proof lanes:
+
+| Mode | Status | What it proves |
+| --- | --- | --- |
+| `repository-intelligence` | Passed | Expected vulnerable files are retrieved in the top results from the repository index. |
+| `investigation` | Passed | Investigation reports keep full citation coverage and export cleanly as JSON, Markdown, PDF, and SARIF. |
+
 ## Current State
 
 | Area | Status | Honest limit |
@@ -288,11 +295,11 @@ Qwen action prompts are mode-specific:
 | Patch Review | Describe what a future patch must prove, including bypass checks and acceptance/rejection criteria. |
 | Investigate | Build a full investigation report with root cause, attack flow, trust boundary, exploitability, impact, fix guidance, verification steps, related findings, related files/routes, unknowns, and citation-backed evidence references. |
 
-Every mode uses the same hard boundary: repository text is treated as untrusted data, Qwen must use only supplied evidence, and the response must be structured JSON. Explain/Challenge/Fix/Test/Patch Review return `summary`, `evidence`, `reasoning`, `recommendation`, `confidence`, and `risk`. Investigate adds an `investigation_report` where every statement is marked `Verified`, `Supported`, `Likely`, `Possible`, or `Unknown` and points back to deterministic citations. AI can connect and explain evidence, but it cannot create findings, promote candidates, suppress findings, or change severity.
+Every mode uses the same hard boundary: repository text is treated as untrusted data, Qwen must use only supplied evidence, and the response must be structured JSON. Explain/Challenge/Fix/Test/Patch Review return `summary`, `evidence`, `reasoning`, `recommendation`, `confidence`, and `risk`. Investigate adds an `investigation_report` where every statement is marked `Verified`, `Supported`, `Likely`, `Possible`, or `Unknown` and points back to deterministic citations. The investigation mode can be tuned for a security engineer, developer, executive, junior developer, or compliance review, but NOPE still enforces the deterministic citations and requested mode. AI can connect and explain evidence, but it cannot create findings, promote candidates, suppress findings, or change severity.
 
 ## AI Investigation Engine
 
-The Stage 15 investigation path is for the moment when a finding needs a real security-review trail, not just a quick explanation. It starts from a promoted finding, pulls Rules v2/scanner evidence and hybrid repository context, reconstructs likely attack flow, finds related findings by shared route/file/category/package/source, and stores the completed investigation as a durable AI job. The report can be regenerated and exported as JSON, Markdown, or PDF.
+The Stage 15 investigation path is for the moment when a finding needs a real security-review trail, not just a quick explanation. It starts from a promoted finding, pulls Rules v2/scanner evidence and hybrid repository context, reconstructs likely attack flow, finds related findings by shared route/file/category/package/source/code relationships, and stores the completed investigation as a durable AI job. The report can be regenerated and exported as JSON, Markdown, PDF, or SARIF.
 
 ```mermaid
 flowchart LR
@@ -302,7 +309,7 @@ flowchart LR
   rag["Hybrid RAG packet"]
   engine["AI Investigation Engine"]
   report["Structured investigation report"]
-  exports["JSON / Markdown / PDF"]
+  exports["JSON / Markdown / PDF / SARIF"]
 
   finding --> evidence --> repo --> rag --> engine --> report --> exports
   evidence -. "authority" .-> report

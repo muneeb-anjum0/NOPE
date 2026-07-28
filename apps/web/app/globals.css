@@ -1152,9 +1152,127 @@ textarea:focus-visible {
   color: var(--muted);
 }
 
+.investigation-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+  margin-top: 10px;
+}
+
+.investigation-controls label {
+  display: grid;
+  gap: 5px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.investigation-controls select,
+.investigation-export-menu summary {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  padding: 8px 10px;
+}
+
+.investigation-export-menu {
+  position: relative;
+}
+
+.investigation-export-menu summary {
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.investigation-export-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.investigation-export-menu[open] > div {
+  display: grid;
+}
+
+.investigation-export-menu > div {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 5;
+  min-width: 132px;
+  gap: 6px;
+  border: 1px solid rgba(240, 42, 86, 0.22);
+  border-radius: var(--radius-md);
+  background: rgba(7, 8, 8, 0.96);
+  padding: 8px;
+}
+
+.investigation-visuals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.investigation-visuals section {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.018);
+  padding: 10px;
+  min-width: 0;
+}
+
+.investigation-timeline {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.investigation-timeline li,
+.evidence-tree div,
+.attack-flow-strip span,
+.relationship-graph-lite span {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.investigation-timeline span,
+.evidence-tree strong {
+  color: var(--hot-pink);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.evidence-tree,
+.attack-flow-strip,
+.relationship-graph-lite {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.evidence-tree span,
+.attack-flow-strip span,
+.relationship-graph-lite span {
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 980px) {
   .investigation-page-grid,
-  .investigation-grid {
+  .investigation-grid,
+  .investigation-visuals {
     grid-template-columns: 1fr;
   }
 }

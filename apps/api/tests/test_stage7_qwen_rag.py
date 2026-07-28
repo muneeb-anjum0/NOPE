@@ -157,7 +157,7 @@ async def test_stage7_supports_all_actions_and_structured_retries(monkeypatch):
 async def test_stage7_async_job_persists_completed_state_and_redacted_cache(monkeypatch):
     store = FakeStore()
 
-    async def fake_structured(settings, action, finding, *, root=None, scan=None, context=None):
+    async def fake_structured(settings, action, finding, *, root=None, scan=None, context=None, investigation_mode=None):
         return ai.StructuredAIResult(
             summary="Explained without echoing sk-stage7-secret-value.",
             evidence=["Line 12 shows the risky lookup."],
@@ -187,7 +187,7 @@ async def test_stage7_cache_survives_restart_and_invalidates_on_evidence_change(
     shared_cache: dict[str, dict[str, Any]] = {}
     first_store = FakeStore(cache=shared_cache)
 
-    async def fake_structured(settings, action, finding, *, root=None, scan=None, context=None):
+    async def fake_structured(settings, action, finding, *, root=None, scan=None, context=None, investigation_mode=None):
         return ai.StructuredAIResult(
             summary="Cached answer.",
             evidence=["Evidence"],

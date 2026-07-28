@@ -72,7 +72,7 @@ export default async function InvestigationsPage({ searchParams }: PageProps) {
               <div><dt>Rule</dt><dd>{selected.nope_rule_id ?? selected.original_rule_id ?? "n/a"}</dd></div>
               <div><dt>Sources</dt><dd>{selected.scanner_sources.join(" + ") || "n/a"}</dd></div>
             </dl>
-            <AIFindingActions finding={selected} scanId={scan.id} />
+            <AIFindingActions finding={selected} scanId={scan.id} showInvestigationControls />
           </section>
           <section className="app-panel investigation-secondary">
             <div className="panel-title">

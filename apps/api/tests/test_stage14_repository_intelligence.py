@@ -4,10 +4,14 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from nope_api.config import Settings
 from nope_api.embeddings import HashingEmbeddingProvider
 from nope_api.models import Confidence, Evidence, Finding, GraphEdge, GraphNode, Scan, ScanMode, Severity
 from nope_api.repository_intelligence import (
+    RepositoryIndexCancelled,
+    build_repository_index,
     context_from_results,
     hybrid_search,
     make_chunks,
@@ -113,6 +117,30 @@ class FakeRepositoryStore:
         return {"id": "rsrch_test"}
 
 
+class FakeIndexStore(FakeRepositoryStore):
+    def __init__(self, chunks=None) -> None:
+        super().__init__(chunks or [])
+        self.failed: list[dict[str, Any]] = []
+        self.completed: list[dict[str, Any]] = []
+        self.saved: list[dict[str, Any]] = []
+        self.existing_hashes = {"ric_stale": "old-hash"}
+
+    def create_repository_index_job(self, index_id, scan, owner_user_id, settings, status="running"):
+        return {"id": index_id, "status": status}
+
+    def repository_chunk_hashes(self, scan_id: str, owner_user_id: str | None = None):
+        return dict(self.existing_hashes)
+
+    def save_repository_index(self, index_id, scan, owner_user_id, settings, chunks, result):
+        self.saved.append({"index_id": index_id, "chunks": chunks, "result": result})
+
+    def fail_repository_index_job(self, index_id, owner_user_id, message, result):
+        self.failed.append({"index_id": index_id, "message": message, "result": result})
+
+    def complete_repository_index_job(self, index_id, owner_user_id, result):
+        self.completed.append({"index_id": index_id, "result": result})
+
+
 def test_stage14_ast_chunks_include_provenance_redaction_and_skip_noise(tmp_path):
     root = build_repo(tmp_path)
     scan = sample_scan()
@@ -212,3 +240,92 @@ def test_stage14_owner_filter_can_return_no_chunks(tmp_path):
 
     assert response.results == []
     assert response.diagnostics["total_chunks"] == 0
+
+
+def test_stage14_chunk_generation_honors_mid_index_cancellation(tmp_path):
+    root = build_repo(tmp_path)
+    scan = sample_scan()
+
+    with pytest.raises(RepositoryIndexCancelled):
+        make_chunks(root, scan, settings(), cancelled=lambda: True)
+
+
+@pytest.mark.asyncio
+async def test_stage14_reindex_deletes_stale_vectors_before_upload(monkeypatch, tmp_path):
+    root = build_repo(tmp_path)
+    scan = sample_scan()
+    deleted: list[str] = []
+    uploaded: list[list[str]] = []
+
+    class FakeVectorStore:
+        def __init__(self, settings, dimension):
+            self.dimension = dimension
+
+        async def health(self):
+            return {"status": "ok"}
+
+        async def ensure_collection(self):
+            return None
+
+        async def delete_scan(self, scan_id: str):
+            deleted.append(scan_id)
+
+        async def upsert(self, chunks, vectors):
+            uploaded.append([chunk.id for chunk in chunks])
+
+    monkeypatch.setattr("nope_api.repository_intelligence.VectorStore", FakeVectorStore)
+
+    store = FakeIndexStore()
+    result = await build_repository_index(
+        settings(embeddings_enabled=True, vector_store="qdrant", embedding_batch_size=2),
+        store,
+        scan,
+        root,
+        owner_user_id="owner",
+    )
+
+    assert result.status == "completed"
+    assert deleted == [scan.id]
+    assert result.vectors_deleted == 1
+    assert result.vectors_reused == 0
+    assert uploaded
+
+
+@pytest.mark.asyncio
+async def test_stage14_build_repository_index_can_cancel_during_embedding(monkeypatch, tmp_path):
+    root = build_repo(tmp_path)
+    scan = sample_scan()
+    checks = 0
+
+    class FakeVectorStore:
+        def __init__(self, settings, dimension):
+            pass
+
+        async def health(self):
+            return {"status": "ok"}
+
+        async def ensure_collection(self):
+            return None
+
+        async def delete_scan(self, scan_id: str):
+            return None
+
+        async def upsert(self, chunks, vectors):
+            return None
+
+    async def cancelled():
+        nonlocal checks
+        checks += 1
+        return checks > 2
+
+    monkeypatch.setattr("nope_api.repository_intelligence.VectorStore", FakeVectorStore)
+    result = await build_repository_index(
+        settings(embeddings_enabled=True, vector_store="qdrant", embedding_batch_size=1),
+        FakeIndexStore(),
+        scan,
+        root,
+        cancellation_checker=cancelled,
+    )
+
+    assert result.status == "cancelled"
+    assert "cancelled" in result.errors[0]

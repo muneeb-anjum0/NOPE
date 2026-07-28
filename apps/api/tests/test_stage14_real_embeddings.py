@@ -101,6 +101,31 @@ def test_stage14_embedding_timeout_is_reported_cleanly():
         asyncio.run(run_embedding_call(slow_embed, ["x"], timeout_seconds=0))
 
 
+def test_stage14_embedding_concurrency_limit_is_enforced():
+    active = 0
+    max_active = 0
+
+    def slow_embed(texts):
+        nonlocal active, max_active
+        active += 1
+        max_active = max(max_active, active)
+        time.sleep(0.05)
+        active -= 1
+        return [[0.0] * 384 for _ in texts]
+
+    async def run_many():
+        await asyncio.gather(
+            *[
+                run_embedding_call(slow_embed, [str(index)], timeout_seconds=1, max_concurrency=1)
+                for index in range(6)
+            ]
+        )
+
+    asyncio.run(run_many())
+
+    assert max_active == 1
+
+
 class FakeResponse:
     def __init__(self, status_code: int, payload: dict[str, Any]) -> None:
         self.status_code = status_code
@@ -135,4 +160,3 @@ def test_stage14_qdrant_dimension_mismatch_requires_reindex(monkeypatch, tmp_pat
 
     with pytest.raises(EmbeddingCompatibilityError, match="dimension 128"):
         asyncio.run(vector_store.ensure_collection())
-

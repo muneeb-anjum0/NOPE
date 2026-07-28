@@ -35,6 +35,13 @@ $env:PYTHONPATH='apps/api'
 python -m nope_api.benchmarks --mode repository-intelligence --output .nope-benchmark-results/repository-intelligence.json --markdown-output .nope-benchmark-results/repository-intelligence.md
 ```
 
+Investigation benchmark:
+
+```powershell
+$env:PYTHONPATH='apps/api'
+python -m nope_api.benchmarks --mode investigation --output .nope-benchmark-results/investigation.json --markdown-output .nope-benchmark-results/investigation.md
+```
+
 The same command works inside the API container:
 
 ```powershell
@@ -47,6 +54,7 @@ When the stack is already running, use `exec`:
 docker compose exec -T nope-api python -m nope_api.benchmarks --mode scanner-only --output /tmp/nope-benchmark-scanner-only.json
 docker compose exec -T nope-api python -m nope_api.benchmarks --mode scanner-plus-qwen --output /tmp/nope-benchmark-scanner-plus-qwen.json
 docker compose exec -T nope-api python -m nope_api.benchmarks --mode repository-intelligence --output /tmp/nope-benchmark-repository-intelligence.json
+docker compose exec -T nope-api python -m nope_api.benchmarks --mode investigation --output /tmp/nope-benchmark-investigation.json
 ```
 
 ## Output
@@ -90,11 +98,17 @@ Verified on 2026-07-28 from local Stage 14 repository-intelligence mode:
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | repository-intelligence | passed | 46 | 41 | 1.000 | 1.000 | 0 ms |
 
+Verified on 2026-07-29 from local Stage 15 investigation mode:
+
+| Mode | Status | Findings investigated | Citation coverage | JSON validation | Export success |
+| --- | --- | ---: | ---: | ---: | ---: |
+| investigation | passed | 8 | 1.000 | 1.000 | 1.000 |
+
 The duplicate count represents related supporting evidence from multiple scanners, overlapping expected fixture concepts, or Rules v2 correlated evidence. It is not counted as a false positive when it is tied to a matched expected file/category.
 
 ## CI artifacts
 
-`.github/workflows/benchmarks.yml` runs the scanner-only benchmark in the API scanner image on pushes and pull requests. It uploads `.nope-benchmark-results/scanner-only.json` and `.nope-benchmark-results/scanner-only.md` as the `scanner-only-benchmark` artifact.
+`.github/workflows/benchmarks.yml` runs the scanner-only, repository-intelligence, and investigation benchmarks in the API scanner image on pushes and pull requests. It uploads Markdown/JSON proof bundles as `scanner-only-benchmark`, `repository-intelligence-benchmark`, and `investigation-benchmark` artifacts.
 
 The scanner-plus-Qwen benchmark stays local because GitHub runners do not have the GGUF model, NVIDIA GPU access, or the user-owned model mount.
 
@@ -103,5 +117,6 @@ The scanner-plus-Qwen benchmark stays local because GitHub runners do not have t
 - `scanner-only` disables AI by setting the local benchmark settings provider to `none`.
 - `scanner-plus-qwen` leaves the configured Qwen provider active. If Qwen is unavailable, the benchmark records the AI review state honestly through `qwen_contribution`.
 - `repository-intelligence` indexes the benchmark fixture directly and checks whether each expected finding retrieves its own source file in the top five results. It does not run scanners or Qwen. CI uses the explicit `local_hashing` provider for this benchmark so GitHub does not download neural models; Docker/local product runs use `sentence_transformers` with `BAAI/bge-small-en-v1.5`.
+- `investigation` builds deterministic investigation reports over benchmark findings and checks citation coverage, structured report shape, relationship/attack-flow output, and JSON/Markdown/PDF/SARIF export generation. CI runs this without live Qwen so the check stays deterministic.
 
 No external credentials are required.

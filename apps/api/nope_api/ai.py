@@ -24,6 +24,7 @@ PROMPT_VERSION = "stage15-investigation-prompt-v1"
 ACTION_CACHE_TTL_SECONDS = 24 * 60 * 60
 _ACTION_CACHE: dict[str, tuple[float, "StructuredAIResult"]] = {}
 INVESTIGATION_VERSION = "stage15-investigation-v1"
+INVESTIGATION_MODES = {"Executive", "Developer", "Security Engineer", "Junior Developer", "Compliance"}
 INVESTIGATION_SECTIONS = [
     "summary",
     "root_cause",
@@ -122,6 +123,16 @@ def normalize_ai_action(action: str) -> AIAction:
     if action in CANONICAL_AI_ACTIONS:
         return action  # type: ignore[return-value]
     raise ValueError(f"Unsupported finding AI action: {action}")
+
+
+def normalize_investigation_mode(mode: str | None) -> str:
+    if not mode:
+        return "Security Engineer"
+    cleaned = " ".join(str(mode).strip().split())
+    for allowed in INVESTIGATION_MODES:
+        if cleaned.lower() == allowed.lower():
+            return allowed
+    return "Security Engineer"
 
 
 def _stable_hash(payload: Any) -> str:
@@ -244,12 +255,35 @@ def _primary_citation(citations: dict[str, dict[str, Any]]) -> str:
     return next(iter(citations), "finding-evidence-1")
 
 
+def _relationship_tokens(finding: Finding) -> dict[str, set[str]]:
+    haystack = " ".join(
+        [
+            finding.affected_file or "",
+            finding.affected_route or "",
+            finding.description or "",
+            finding.remediation or "",
+            " ".join(item.message or "" for item in finding.evidence),
+            " ".join(item.snippet or "" for item in finding.evidence),
+        ]
+    ).lower()
+    return {
+        "auth helper": set(re.findall(r"\b(requireuser|auth[a-z0-9_]*|session[a-z0-9_]*|authorize[a-z0-9_]*)\b", haystack)),
+        "middleware": set(re.findall(r"\b([a-z0-9_/-]*middleware[a-z0-9_/-]*)\b", haystack)),
+        "ORM model": set(re.findall(r"\b(?:prisma|db)\.([a-z][a-z0-9_]*)\b", haystack)),
+        "policy": set(re.findall(r"\b([a-z0-9_/-]*(?:policy|rls)[a-z0-9_/-]*)\b", haystack)),
+        "storage bucket": set(re.findall(r"\b(?:bucket|storage)[(\"'`:\s.]+([a-z0-9_.-]{3,})", haystack)),
+        "owner helper": set(re.findall(r"\b([a-z0-9_]*(?:owner|tenant)[a-z0-9_]*)\b", haystack)),
+        "API group": {part for part in (finding.affected_route or "").strip("/").split("/")[:2] if part},
+    }
+
+
 def _related_findings(finding: Finding, scan: Scan | None, limit: int = 8) -> list[dict[str, Any]]:
     if not scan:
         return []
     related: list[dict[str, Any]] = []
     file_prefix = (finding.affected_file or "").rsplit("/", 1)[0]
     sources = set(finding.scanner_sources)
+    tokens = _relationship_tokens(finding)
     for other in scan.findings:
         if other.id == finding.id:
             continue
@@ -269,6 +303,11 @@ def _related_findings(finding: Finding, scan: Scan | None, limit: int = 8) -> li
         shared_sources = sources.intersection(other.scanner_sources)
         if shared_sources:
             reasons.append("same scanner source: " + ", ".join(sorted(shared_sources)))
+        other_tokens = _relationship_tokens(other)
+        for label, values in tokens.items():
+            shared = values.intersection(other_tokens.get(label, set()))
+            if shared:
+                reasons.append(f"shared {label}: " + ", ".join(sorted(shared)[:2]))
         if reasons:
             related.append(
                 {
@@ -290,18 +329,38 @@ def _attack_flow(finding: Finding, context: RagContext, citations: dict[str, dic
     steps = []
     if finding.affected_route:
         steps.append(_status_statement("Supported", f"Request reaches route {finding.affected_route}.", [primary]))
-    if finding.affected_file:
-        steps.append(_status_statement("Supported", f"The route or scanner evidence maps to file {finding.affected_file}.", [primary]))
-    auth_chunks = [chunk for chunk in context.chunks if any(term in f"{chunk.title} {chunk.text}".lower() for term in ["auth", "session", "middleware", "owner", "tenant"])]
-    data_chunks = [chunk for chunk in context.chunks if any(term in f"{chunk.title} {chunk.text}".lower() for term in ["select", "prisma", "database", "bucket", "storage", "query", "sql"])]
-    if auth_chunks:
-        steps.append(_status_statement("Supported", "Repository context includes authentication or authorization-related code near this finding.", [_citation_label("rag", context.chunks.index(auth_chunks[0]))]))
     else:
-        steps.append(_status_statement("Unknown", "No nearby authentication or authorization helper was retrieved for this finding.", [primary]))
+        steps.append(_status_statement("Unknown", "No request route was mapped for this finding.", [primary]))
+    if finding.affected_file:
+        steps.append(_status_statement("Supported", f"Route or scanner evidence maps to file {finding.affected_file}.", [primary]))
+    middleware_chunks = [chunk for chunk in context.chunks if "middleware" in f"{chunk.title} {chunk.text}".lower()]
+    authn_chunks = [chunk for chunk in context.chunks if any(term in f"{chunk.title} {chunk.text}".lower() for term in ["auth", "session", "jwt", "login", "requireuser"])]
+    authz_chunks = [chunk for chunk in context.chunks if any(term in f"{chunk.title} {chunk.text}".lower() for term in ["owner", "tenant", "permission", "policy", "authorize", "rls"])]
+    business_chunks = [chunk for chunk in context.chunks if any(term in f"{chunk.title} {chunk.text}".lower() for term in ["handler", "controller", "service", "action", "loader", "business"])]
+    data_chunks = [chunk for chunk in context.chunks if any(term in f"{chunk.title} {chunk.text}".lower() for term in ["select", "prisma", "database", "bucket", "storage", "query", "sql"])]
+    response_chunks = [chunk for chunk in context.chunks if any(term in f"{chunk.title} {chunk.text}".lower() for term in ["return", "response", "json(", "redirect"])]
+    if middleware_chunks:
+        steps.append(_status_statement("Supported", "Middleware context was retrieved near this path.", [_citation_label("rag", context.chunks.index(middleware_chunks[0]))]))
+    else:
+        steps.append(_status_statement("Unknown", "No middleware step was proven by retrieved evidence.", [primary]))
+    if authn_chunks:
+        steps.append(_status_statement("Supported", "Authentication/session context was retrieved near this path.", [_citation_label("rag", context.chunks.index(authn_chunks[0]))]))
+    else:
+        steps.append(_status_statement("Unknown", "No authentication step was proven by retrieved evidence.", [primary]))
+    if authz_chunks:
+        steps.append(_status_statement("Supported", "Authorization, owner, tenant, policy, or permission context was retrieved near this path.", [_citation_label("rag", context.chunks.index(authz_chunks[0]))]))
+    else:
+        steps.append(_status_statement("Unknown", "No authorization/ownership step was proven by retrieved evidence.", [primary]))
+    if business_chunks:
+        steps.append(_status_statement("Supported", "Business logic or route-handler context was retrieved.", [_citation_label("rag", context.chunks.index(business_chunks[0]))]))
     if data_chunks:
-        steps.append(_status_statement("Supported", "Repository context includes data-access or storage behavior near this finding.", [_citation_label("rag", context.chunks.index(data_chunks[0]))]))
+        steps.append(_status_statement("Supported", "ORM, database, query, or storage behavior was retrieved near this finding.", [_citation_label("rag", context.chunks.index(data_chunks[0]))]))
     elif finding.category.lower() in {"authorization", "idor", "supabase", "storage", "privacy"}:
         steps.append(_status_statement("Possible", "The finding category suggests a data or storage boundary, but retrieved context did not prove the full downstream path.", [primary]))
+    if response_chunks:
+        steps.append(_status_statement("Supported", "Response-return behavior was retrieved near this path.", [_citation_label("rag", context.chunks.index(response_chunks[0]))]))
+    else:
+        steps.append(_status_statement("Unknown", "No response step was proven by retrieved evidence.", [primary]))
     steps.append(_status_statement("Verified", "Rules v2 or scanner evidence created the finding before AI investigation began; AI did not promote it.", [primary]))
     return steps
 
@@ -504,15 +563,17 @@ def _evidence_hash(finding: Finding, context: RagContext) -> str:
     return _stable_hash(payload)
 
 
-def action_cache_factors(settings: Settings, finding: Finding, action: AIAction, context: RagContext) -> dict[str, str]:
+def action_cache_factors(settings: Settings, finding: Finding, action: AIAction, context: RagContext, *, investigation_mode: str | None = None) -> dict[str, str]:
     canonical = normalize_ai_action(action)
+    mode = normalize_investigation_mode(investigation_mode) if canonical == "investigate" else ""
     evidence_hash = _evidence_hash(finding, context)
-    settings_hash = _settings_hash(settings)
+    settings_hash = _stable_hash({"settings": _settings_hash(settings), "investigation_mode": mode})
     quantization = _model_quantization(settings)
     cache_key = _stable_hash(
         {
             "finding_fingerprint": finding.fingerprint,
             "action": canonical,
+            "investigation_mode": mode,
             "provider": settings.ai_provider,
             "model": settings.ai_model_name,
             "quantization": quantization,
@@ -525,6 +586,7 @@ def action_cache_factors(settings: Settings, finding: Finding, action: AIAction,
     return {
         "cache_key": cache_key,
         "action": canonical,
+        "investigation_mode": mode,
         "provider": settings.ai_provider,
         "model": settings.ai_model_name,
         "quantization": quantization,
@@ -809,7 +871,7 @@ def _normalize_investigation_report(candidate: dict[str, Any], fallback: dict[st
     if not citation_ids:
         citation_ids = {"finding-evidence-1"}
     normalized = dict(fallback)
-    normalized["mode"] = str(candidate.get("mode") or fallback.get("mode") or "Security Engineer")
+    normalized["mode"] = str(fallback.get("mode") or "Security Engineer")
     normalized["version"] = INVESTIGATION_VERSION
     for section in INVESTIGATION_SECTIONS:
         if section == "evidence_references":
@@ -838,13 +900,13 @@ def _normalize_investigation_report(candidate: dict[str, Any], fallback: dict[st
     return _sanitize_value(normalized)
 
 
-def _structured_fallback(action: AIAction, finding: Finding, content: str, error: Exception) -> StructuredAIResult:
+def _structured_fallback(action: AIAction, finding: Finding, content: str, error: Exception, *, investigation_mode: str | None = None) -> StructuredAIResult:
     action = normalize_ai_action(action)
     location = finding.affected_file or finding.affected_route or "unknown location"
     line = f":{finding.start_line}" if finding.start_line else ""
     if action == "investigate":
         context = retrieve_context([finding], Settings().ai_max_retrieved_chunks)
-        report = deterministic_investigation_report(finding, context)
+        report = deterministic_investigation_report(finding, context, mode=normalize_investigation_mode(investigation_mode))
         raw = _bounded(content.strip(), 900) if content.strip() else None
         if raw:
             report["ai_reasoning_notes"].append(_status_statement("Supported", f"Raw malformed model text was retained only as non-authoritative context: {raw}", [_primary_citation(_finding_citations(finding, context))]))
@@ -926,11 +988,13 @@ async def structured_completion(
     root: Path | None = None,
     scan: Scan | None = None,
     context: RagContext | None = None,
+    investigation_mode: str | None = None,
 ) -> StructuredAIResult:
     action = normalize_ai_action(action)
     context = context or await retrieve_context_async([finding], settings.ai_max_retrieved_chunks, settings=settings, root=root, scan=scan)
     if action == "investigate":
-        fallback_report = deterministic_investigation_report(finding, context, scan=scan)
+        mode = normalize_investigation_mode(investigation_mode)
+        fallback_report = deterministic_investigation_report(finding, context, scan=scan, mode=mode)
         citation_ids = [item["id"] for item in fallback_report.get("evidence_references", []) if isinstance(item, dict) and item.get("id")]
         section_list = ", ".join(INVESTIGATION_SECTIONS)
         system = (
@@ -943,8 +1007,16 @@ async def structured_completion(
             "citations must use only citation ids supplied in the input. Do not invent citations. "
             "If evidence is missing, say Unknown and cite the closest deterministic evidence."
         )
+        mode_guidance = {
+            "Executive": "Use concise business-risk language, avoid implementation jargon, and keep evidence unchanged.",
+            "Developer": "Use practical code-review language and emphasize implementation steps while keeping evidence unchanged.",
+            "Security Engineer": "Use senior application-security triage language and keep evidence unchanged.",
+            "Junior Developer": "Explain terms gently with concrete examples while keeping evidence unchanged.",
+            "Compliance": "Use audit/control language, emphasize evidence and traceability, and keep evidence unchanged.",
+        }[mode]
         user = (
             "Build a structured investigation report for the selected promoted finding.\n"
+            f"Audience mode: {mode}. {mode_guidance}\n"
             f"Required top-level sections: {section_list}\n"
             "Every section except evidence_references must be a list of cited status statements.\n"
             "Use concise but useful senior AppSec reasoning. Include root cause, attack flow, trust boundary, exploit prerequisites, impact, fix guidance, verification checklist, false-positive considerations, related findings, related files, routes, policies, auth helpers, middleware, storage, framework notes, unknowns, and AI reasoning notes.\n"
@@ -976,7 +1048,7 @@ async def structured_completion(
             except (ValidationError, ValueError, json.JSONDecodeError, KeyError) as exc:
                 parse_error = exc
                 user += "\n\nPrevious response failed validation. Return only JSON using the required cited statement format."
-        return sanitize_result(_structured_fallback(action, finding, completion_content, parse_error or ValueError("Malformed investigation JSON")))
+        return sanitize_result(_structured_fallback(action, finding, completion_content, parse_error or ValueError("Malformed investigation JSON"), investigation_mode=investigation_mode))
     action_instruction = {
         "explain": (
             "EXPLAIN MODE. Translate this exact finding into plain engineering language. "
@@ -1244,7 +1316,7 @@ def _cache_hit_to_job(
         result=cache_row["result"],
         cached=True,
         latency_ms=0,
-        metadata={"cache": "hit", "context_metadata": cache_row.get("context_metadata") or {}},
+        metadata={"cache": "hit", "context_metadata": cache_row.get("context_metadata") or {}, "investigation_mode": factors.get("investigation_mode", "")},
     )
 
 
@@ -1256,8 +1328,11 @@ async def prepare_ai_action_job(
     finding_id: str,
     action: str,
     owner_user_id: str | None,
+    investigation_mode: str | None = None,
+    force: bool = False,
 ) -> tuple[dict[str, Any], bool]:
     canonical = normalize_ai_action(action)
+    mode = normalize_investigation_mode(investigation_mode) if canonical == "investigate" else ""
     finding = _find_scan_finding(scan, finding_id)
     if not finding:
         raise ValueError("Finding was not found in this scan.")
@@ -1265,7 +1340,7 @@ async def prepare_ai_action_job(
     if root and not root.exists():
         root = None
     context = await retrieve_context_async([finding], settings.ai_max_retrieved_chunks, settings=settings, root=root, scan=scan)
-    factors = action_cache_factors(settings, finding, canonical, context)
+    factors = action_cache_factors(settings, finding, canonical, context, investigation_mode=mode)
     if settings.ai_provider == "none":
         job = store.create_ai_action_job(
             job_id=new_id("aia"),
@@ -1287,10 +1362,10 @@ async def prepare_ai_action_job(
             context_chunks=0,
             result=None,
             cached=False,
-            metadata={"context_metadata": _context_metadata(context)},
+            metadata={"context_metadata": _context_metadata(context), "investigation_mode": mode, "force": force},
         )
         return job, False
-    cached = store.get_ai_action_cache(factors["cache_key"], owner_user_id)
+    cached = None if force else store.get_ai_action_cache(factors["cache_key"], owner_user_id)
     if cached:
         return _cache_hit_to_job(store, owner_user_id=owner_user_id, scan=scan, finding=finding, factors=factors, cache_row=cached), False
     job = store.create_ai_action_job(
@@ -1311,7 +1386,7 @@ async def prepare_ai_action_job(
         cache_key=factors["cache_key"],
         message="Qwen action queued.",
         context_chunks=len(context.chunks),
-        metadata={"context_metadata": _context_metadata(context)},
+        metadata={"context_metadata": _context_metadata(context), "investigation_mode": mode, "force": force},
     )
     return job, True
 
@@ -1352,8 +1427,11 @@ async def run_ai_action_job(settings: Settings, store: Any, job_id: str, owner_u
     if root and not root.exists():
         root = None
     context = await retrieve_context_async([finding], settings.ai_max_retrieved_chunks, settings=settings, root=root, scan=scan, owner_user_id=owner_user_id)
-    factors = action_cache_factors(settings, finding, started["action"], context)
-    cached = store.get_ai_action_cache(factors["cache_key"], owner_user_id)
+    metadata = started.get("metadata") or {}
+    investigation_mode = normalize_investigation_mode(metadata.get("investigation_mode")) if started["action"] == "investigate" else ""
+    force = bool(metadata.get("force"))
+    factors = action_cache_factors(settings, finding, started["action"], context, investigation_mode=investigation_mode)
+    cached = None if force else store.get_ai_action_cache(factors["cache_key"], owner_user_id)
     if cached:
         store.complete_ai_action_job(
             job_id,
@@ -1364,12 +1442,12 @@ async def run_ai_action_job(settings: Settings, store: Any, job_id: str, owner_u
             latency_ms=0,
             context_chunks=len((cached.get("context_metadata") or {}).get("chunks", [])),
             cached=True,
-            metadata={"cache": "hit", "context_metadata": cached.get("context_metadata") or {}},
+            metadata={"cache": "hit", "context_metadata": cached.get("context_metadata") or {}, "investigation_mode": investigation_mode},
         )
         return
     start = time.perf_counter()
     try:
-        result = sanitize_result(await structured_completion(settings, started["action"], finding, root=root, scan=scan, context=context))
+        result = sanitize_result(await structured_completion(settings, started["action"], finding, root=root, scan=scan, context=context, investigation_mode=investigation_mode))
         elapsed_ms = int((time.perf_counter() - start) * 1000)
         result_json = result.model_dump(mode="json")
         context_metadata = _context_metadata(context)
@@ -1398,7 +1476,7 @@ async def run_ai_action_job(settings: Settings, store: Any, job_id: str, owner_u
             latency_ms=elapsed_ms,
             context_chunks=len(context.chunks),
             cached=False,
-            metadata={"cache": "miss", "context_metadata": context_metadata},
+            metadata={"cache": "miss", "context_metadata": context_metadata, "investigation_mode": investigation_mode, "force": force},
         )
     except Exception as exc:
         elapsed_ms = int((time.perf_counter() - start) * 1000)
@@ -1487,6 +1565,58 @@ def investigation_pdf(report: dict[str, Any]) -> bytes:
     return buffer.getvalue()
 
 
+def investigation_sarif(report: dict[str, Any]) -> bytes:
+    finding_id = str(report.get("finding_id") or "investigation")
+    refs = [ref for ref in report.get("evidence_references", []) if isinstance(ref, dict)]
+    primary = refs[0] if refs else {}
+    location = primary.get("file") or primary.get("route") or "NOPE investigation"
+    line = int(primary.get("line") or 1)
+    summary = " ".join(str(item.get("text", "")) for item in report.get("summary", []) if isinstance(item, dict)).strip()
+    payload = {
+        "version": "2.1.0",
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "NOPE AI Investigation Engine",
+                        "informationUri": "https://github.com/muneeb-anjum0/NOPE",
+                        "rules": [
+                            {
+                                "id": f"NOPE-AI-INVESTIGATION-{finding_id}",
+                                "name": "AI investigation enrichment",
+                                "shortDescription": {"text": "Cited investigation metadata for a deterministic NOPE finding."},
+                            }
+                        ],
+                    }
+                },
+                "results": [
+                    {
+                        "ruleId": f"NOPE-AI-INVESTIGATION-{finding_id}",
+                        "message": {"text": summary or "NOPE investigation metadata is available."},
+                        "locations": [
+                            {
+                                "physicalLocation": {
+                                    "artifactLocation": {"uri": str(location)},
+                                    "region": {"startLine": max(1, line)},
+                                }
+                            }
+                        ],
+                        "properties": {
+                            "nopeInvestigationVersion": report.get("version", INVESTIGATION_VERSION),
+                            "mode": report.get("mode", "Security Engineer"),
+                            "findingFingerprint": report.get("finding_fingerprint"),
+                            "evidenceReferences": refs,
+                            "sections": {section: report.get(section) for section in INVESTIGATION_SECTIONS if section != "evidence_references"},
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+    return json.dumps(payload, indent=2, default=str).encode("utf-8")
+
+
 def render_investigation_export(job: dict[str, Any], fmt: str) -> tuple[str, bytes]:
     result = job.get("result") or {}
     report = result.get("investigation_report") if isinstance(result, dict) else None
@@ -1499,4 +1629,6 @@ def render_investigation_export(job: dict[str, Any], fmt: str) -> tuple[str, byt
         return "text/markdown", investigation_markdown(report).encode("utf-8")
     if fmt == "pdf":
         return "application/pdf", investigation_pdf(report)
+    if fmt == "sarif":
+        return "application/sarif+json", investigation_sarif(report)
     raise ValueError("Unsupported investigation export format.")

@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { freezeForVisuals, login } from "./helpers";
 
 const denseRoutes = [
-  ["/app/projects/local", "overview"],
+  ["/app/projects/local?scan=scan_stage8_completed", "overview"],
   ["/app/projects/local/findings?scan=scan_stage8_completed&finding=fnd_stage8_idor&detail=open", "findings"],
   ["/app/projects/local/attack-map?scan=scan_stage8_completed", "attack-map"],
   ["/app/projects/local/coverage?scan=scan_stage8_completed", "coverage"],
@@ -14,7 +14,7 @@ const denseRoutes = [
 test.describe("Stage 8 deterministic visuals", () => {
   test("app shell is stable at the configured viewport", async ({ page }, testInfo) => {
     await login(page);
-    await page.goto("/app/projects/local");
+    await page.goto("/app/projects/local?scan=scan_stage8_completed");
     await freezeForVisuals(page);
     await expect(page).toHaveScreenshot(`dashboard-shell-${testInfo.project.name}.png`, {
       fullPage: true,

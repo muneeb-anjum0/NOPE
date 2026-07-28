@@ -3,11 +3,12 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import re
+import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 import httpx
 from pydantic import BaseModel, Field
@@ -26,6 +27,10 @@ INDEX_SCHEMA_VERSION = "repo-intelligence.v1"
 CHUNKER_VERSION = "stage14-chunker-v1"
 RAG_VERSION = "stage14-hybrid-rag-v1"
 QDRANT_COLLECTION = "nope_repository_chunks_v1"
+
+
+class RepositoryIndexCancelled(RuntimeError):
+    """Raised when repository-intelligence indexing is cancelled cleanly."""
 
 SOURCE_SUFFIXES = {
     ".js",
@@ -332,12 +337,18 @@ def should_index(path: Path, root: Path, settings: Settings) -> tuple[bool, str 
     return True, None
 
 
-def read_repository_files(root: Path, settings: Settings) -> tuple[list[RepositoryFile], dict[str, Any]]:
+def _raise_if_cancelled(cancelled: Callable[[], bool] | None) -> None:
+    if cancelled and cancelled():
+        raise RepositoryIndexCancelled("Repository intelligence indexing was cancelled.")
+
+
+def read_repository_files(root: Path, settings: Settings, cancelled: Callable[[], bool] | None = None) -> tuple[list[RepositoryFile], dict[str, Any]]:
     files: list[RepositoryFile] = []
     skipped = 0
     total_bytes = 0
     discovered = 0
     for path in root.rglob("*"):
+        _raise_if_cancelled(cancelled)
         if not path.is_file():
             continue
         discovered += 1
@@ -373,7 +384,8 @@ def line_for_index(lines: list[str], index: int) -> int:
     return max(1, min(len(lines) or 1, index + 1))
 
 
-def semantic_blocks(repo_file: RepositoryFile, settings: Settings) -> list[tuple[str | None, str, int, int, str]]:
+def semantic_blocks(repo_file: RepositoryFile, settings: Settings, cancelled: Callable[[], bool] | None = None) -> list[tuple[str | None, str, int, int, str]]:
+    _raise_if_cancelled(cancelled)
     lines = repo_file.text.splitlines()
     if not lines:
         return []
@@ -386,6 +398,7 @@ def semantic_blocks(repo_file: RepositoryFile, settings: Settings) -> list[tuple
         offset += len(line) + 1
     if matches:
         for idx, match in enumerate(matches):
+            _raise_if_cancelled(cancelled)
             symbol = next((group for group in match.groups() if group), None)
             start_line = repo_file.text.count("\n", 0, match.start()) + 1
             next_start = matches[idx + 1].start() if idx + 1 < len(matches) else len(repo_file.text)
@@ -398,6 +411,7 @@ def semantic_blocks(repo_file: RepositoryFile, settings: Settings) -> list[tuple
         if repo_file.language in {"json", "yaml", "toml", "dockerfile", "sql", "markdown", "shell", "terraform"}:
             window = max(20, settings.retrieval_max_chunk_chars // 80)
             for start in range(1, len(lines) + 1, window):
+                _raise_if_cancelled(cancelled)
                 end = min(len(lines), start + window - 1)
                 blocks.append((None, "configuration" if repo_file.language != "markdown" else "section", start, end, "\n".join(lines[start - 1 : end])))
         else:
@@ -405,8 +419,8 @@ def semantic_blocks(repo_file: RepositoryFile, settings: Settings) -> list[tuple
     return blocks
 
 
-def make_chunks(root: Path, scan: Scan, settings: Settings) -> tuple[list[IndexedChunk], dict[str, Any]]:
-    repo_files, stats = read_repository_files(root, settings)
+def make_chunks(root: Path, scan: Scan, settings: Settings, cancelled: Callable[[], bool] | None = None) -> tuple[list[IndexedChunk], dict[str, Any]]:
+    repo_files, stats = read_repository_files(root, settings, cancelled)
     chunks: list[IndexedChunk] = []
     evidence_by_file: dict[str, list[str]] = {}
     for finding in scan.findings:
@@ -416,8 +430,10 @@ def make_chunks(root: Path, scan: Scan, settings: Settings) -> tuple[list[Indexe
             if evidence.file:
                 evidence_by_file.setdefault(evidence.file, []).append(finding.id)
     for repo_file in repo_files:
+        _raise_if_cancelled(cancelled)
         route_meta = route_metadata(repo_file.rel, repo_file.text)
-        for symbol, symbol_type, start_line, end_line, text in semantic_blocks(repo_file, settings):
+        for symbol, symbol_type, start_line, end_line, text in semantic_blocks(repo_file, settings, cancelled):
+            _raise_if_cancelled(cancelled)
             if not text.strip():
                 continue
             if len(chunks) >= settings.retrieval_max_chunks:
@@ -565,7 +581,14 @@ def context_from_results(results: list[RetrievalResult], settings: Settings, *, 
     return RagContext(chunks=selected, limits=limits, total_candidates=len(results), truncated=len(selected) < len(results), embeddings_used=True)
 
 
-async def build_repository_index(settings: Settings, store: Any, scan: Scan, root: Path, owner_user_id: str | None = None) -> IndexResult:
+async def build_repository_index(
+    settings: Settings,
+    store: Any,
+    scan: Scan,
+    root: Path,
+    owner_user_id: str | None = None,
+    cancellation_checker: Callable[[], Awaitable[bool]] | None = None,
+) -> IndexResult:
     started = time.perf_counter()
     provider = embedding_provider(settings)
     if settings.embeddings_enabled:
@@ -581,26 +604,54 @@ async def build_repository_index(settings: Settings, store: Any, scan: Scan, roo
         embedding_provider=provider.provider_name,
         embedding_dimension=provider.dimension,
     )
+    cancel_event = threading.Event()
+    monitor_task: asyncio.Task[None] | None = None
+
+    async def check_cancelled() -> None:
+        if cancellation_checker and await cancellation_checker():
+            cancel_event.set()
+        if cancel_event.is_set():
+            raise RepositoryIndexCancelled("Repository intelligence indexing was cancelled.")
+
+    async def monitor_cancelled() -> None:
+        while True:
+            if cancellation_checker and await cancellation_checker():
+                cancel_event.set()
+                return
+            await asyncio.sleep(0.05)
+
+    if cancellation_checker:
+        monitor_task = asyncio.create_task(monitor_cancelled())
     try:
-        chunks, stats = await asyncio.to_thread(make_chunks, root, scan, settings)
+        await check_cancelled()
+        chunks, stats = await asyncio.to_thread(make_chunks, root, scan, settings, cancel_event.is_set)
+        await check_cancelled()
         result.files_discovered = stats.get("files_discovered", 0)
         result.files_indexed = stats.get("files_indexed", 0)
         result.files_skipped = stats.get("files_skipped", 0)
         result.chunks_generated = len(chunks)
         existing_hashes = store.repository_chunk_hashes(scan.id, owner_user_id)
-        changed_chunks = [chunk for chunk in chunks if existing_hashes.get(chunk.id) != chunk.content_hash]
-        result.vectors_reused = len(chunks) - len(changed_chunks)
+        changed_chunks = chunks
+        result.vectors_reused = 0
         vector_store = VectorStore(settings, provider.dimension)
         vector_health = await vector_store.health()
         if settings.embeddings_enabled and settings.vector_store == "qdrant" and vector_health.get("status") == "ok":
             await vector_store.ensure_collection()
+            await check_cancelled()
+            if existing_hashes:
+                await vector_store.delete_scan(scan.id)
+                result.vectors_deleted = len(existing_hashes)
+            await check_cancelled()
             for start in range(0, len(changed_chunks), max(1, settings.embedding_batch_size)):
+                await check_cancelled()
                 batch = changed_chunks[start : start + max(1, settings.embedding_batch_size)]
                 vectors = await run_embedding_call(
                     provider.embed_documents,
                     [chunk.text for chunk in batch],
                     timeout_seconds=settings.embedding_timeout_seconds,
+                    max_concurrency=settings.embedding_max_concurrency,
                 )
+                await check_cancelled()
                 await vector_store.upsert(batch, vectors)
                 result.chunks_embedded += len(batch)
                 result.vectors_added += len(batch)
@@ -608,10 +659,21 @@ async def build_repository_index(settings: Settings, store: Any, scan: Scan, roo
             result.errors.append(f"Vector store unavailable or embeddings disabled: {vector_health.get('message') or vector_health.get('status')}")
         store.save_repository_index(index_id, scan, owner_user_id, settings, chunks, result)
         result.status = "completed" if not result.errors else "partial"
+    except RepositoryIndexCancelled as exc:
+        result.status = "cancelled"
+        result.errors.append(str(exc))
+        store.fail_repository_index_job(index_id, owner_user_id, str(exc), result)
     except Exception as exc:
         result.status = "failed"
         result.errors.append(str(exc))
         store.fail_repository_index_job(index_id, owner_user_id, str(exc), result)
+    finally:
+        if monitor_task:
+            monitor_task.cancel()
+            try:
+                await monitor_task
+            except asyncio.CancelledError:
+                pass
     result.duration_ms = int((time.perf_counter() - started) * 1000)
     store.complete_repository_index_job(index_id, owner_user_id, result)
     return result
@@ -643,7 +705,12 @@ async def hybrid_search(
             vector_store = VectorStore(settings, provider.dimension)
             vector_health = await vector_store.health()
             if vector_health.get("status") == "ok":
-                query_vector = await run_embedding_call(provider.embed_query, clean_query, timeout_seconds=settings.embedding_timeout_seconds)
+                query_vector = await run_embedding_call(
+                    provider.embed_query,
+                    clean_query,
+                    timeout_seconds=settings.embedding_timeout_seconds,
+                    max_concurrency=settings.embedding_max_concurrency,
+                )
                 vector_rows = await vector_store.search(query_vector, owner_filter={"scan_id": scan.id, "project_id": scan.project_id}, limit=top_k)
                 for row in vector_rows:
                     vector_scores[str(row.get("id"))] = float(row.get("score") or 0.0)

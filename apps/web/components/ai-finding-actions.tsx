@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Finding } from "@/lib/types";
 
@@ -43,6 +43,7 @@ const actionLabels: Array<[AIAction, string]> = [
   ["patch_review", "Patch Review"],
   ["investigate", "Investigate"],
 ];
+const investigationModes = ["Security Engineer", "Developer", "Executive", "Junior Developer", "Compliance"] as const;
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const CACHE_VERSION = "v2";
@@ -133,6 +134,10 @@ function statementList(value: unknown): InvestigationStatement[] {
 }
 
 function InvestigationReportView({ report, jobId }: { report: InvestigationReport; jobId?: string }) {
+  const references = report.evidence_references ?? [];
+  const attackStatements = statementList(report.attack_flow);
+  const relatedStatements = statementList(report.related_findings);
+  const relatedFiles = statementList(report.related_files);
   return (
     <div className="investigation-report">
       <div className="investigation-report-head">
@@ -141,14 +146,54 @@ function InvestigationReportView({ report, jobId }: { report: InvestigationRepor
           <strong>{report.mode ?? "Security Engineer"} / {report.version ?? "stage15"}</strong>
         </div>
         {jobId ? (
-          <div className="button-row compact-actions">
-            {(["json", "md", "pdf"] as const).map((fmt) => (
-              <a className="button-secondary" key={fmt} href={`/api/ai/investigation-export?job=${encodeURIComponent(jobId)}&format=${fmt}`}>
-                {fmt.toUpperCase()}
-              </a>
+          <details className="investigation-export-menu">
+            <summary>Export</summary>
+            <div>
+              {(["json", "md", "pdf", "sarif"] as const).map((fmt) => (
+                <a className="button-secondary" key={fmt} href={`/api/ai/investigation-export?job=${encodeURIComponent(jobId)}&format=${fmt}`}>
+                  {fmt.toUpperCase()}
+                </a>
+              ))}
+            </div>
+          </details>
+        ) : null}
+      </div>
+      <div className="investigation-visuals">
+        <section>
+          <span className="ai-result-label">Timeline</span>
+          <ol className="investigation-timeline">
+            {["Promoted by deterministic rules", "Repository context retrieved", "Qwen investigated cited evidence", "Report stored and exportable"].map((item, index) => (
+              <li key={item}><span>{String(index + 1).padStart(2, "0")}</span>{item}</li>
+            ))}
+          </ol>
+        </section>
+        <section>
+          <span className="ai-result-label">Evidence tree</span>
+          <div className="evidence-tree">
+            {references.slice(0, 6).map((reference, index) => (
+              <div key={String(reference.id ?? index)}>
+                <strong>{String(reference.id ?? `ref-${index + 1}`)}</strong>
+                <span>{String(reference.file ?? reference.route ?? reference.title ?? reference.source ?? "Evidence")}</span>
+              </div>
             ))}
           </div>
-        ) : null}
+        </section>
+        <section>
+          <span className="ai-result-label">Attack flow</span>
+          <div className="attack-flow-strip">
+            {attackStatements.slice(0, 8).map((statement, index) => (
+              <span key={`${statement.text}-${index}`}>{statement.status}: {statement.text}</span>
+            ))}
+          </div>
+        </section>
+        <section>
+          <span className="ai-result-label">Repository relationships</span>
+          <div className="relationship-graph-lite">
+            {[...relatedStatements, ...relatedFiles].slice(0, 8).map((statement, index) => (
+              <span key={`${statement.text}-${index}`}>{statement.text}</span>
+            ))}
+          </div>
+        </section>
       </div>
       <div className="investigation-grid">
         {investigationSections.map((section) => {
@@ -182,16 +227,32 @@ function InvestigationReportView({ report, jobId }: { report: InvestigationRepor
           ))}
         </ul>
       </details>
+      {relatedStatements.length ? (
+        <details className="investigation-section" open>
+          <summary>Investigation Leads</summary>
+          <ul>
+            {relatedStatements.map((statement, index) => (
+              <li key={`lead-${index}`}>
+                <span className={`investigation-status status-${statement.status.toLowerCase()}`}>{statement.status}</span>
+                <span>{statement.text}</span>
+                {statement.citations?.length ? <small>{statement.citations.join(", ")}</small> : null}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </div>
   );
 }
 
-export function AIFindingActions({ finding, scanId }: { finding: Finding; scanId?: string }) {
+export function AIFindingActions({ finding, scanId, showInvestigationControls = false }: { finding: Finding; scanId?: string; showInvestigationControls?: boolean }) {
   const [activeAction, setActiveAction] = useState<AIAction | null>(null);
   const [selectedAction, setSelectedAction] = useState<AIAction | null>(null);
+  const [investigationMode, setInvestigationMode] = useState<(typeof investigationModes)[number]>("Security Engineer");
   const [results, setResults] = useState<Partial<Record<AIAction, AIActionResult>>>({});
   const [jobs, setJobs] = useState<Partial<Record<AIAction, string>>>({});
   const [error, setError] = useState<string | null>(null);
+  const modeMountedRef = useRef(false);
   const cacheKey = useMemo(() => `nope:ai-finding-actions:${CACHE_VERSION}:${finding.id}:${finding.fingerprint ?? "no-fingerprint"}`, [finding.fingerprint, finding.id]);
 
   useEffect(() => {
@@ -224,6 +285,25 @@ export function AIFindingActions({ finding, scanId }: { finding: Finding; scanId
       // Cache failure should never block the analysis action.
     }
   }, [cacheKey]);
+
+  useEffect(() => {
+    if (!modeMountedRef.current) {
+      modeMountedRef.current = true;
+      return;
+    }
+    setResults((current) => {
+      if (!current.investigate) return current;
+      const next = { ...current };
+      delete next.investigate;
+      return next;
+    });
+    setJobs((current) => {
+      if (!current.investigate) return current;
+      const next = { ...current };
+      delete next.investigate;
+      return next;
+    });
+  }, [investigationMode]);
 
   useEffect(() => {
     const activeJobs = Object.entries(jobs).filter(([, jobId]) => Boolean(jobId)) as Array<[AIAction, string]>;
@@ -263,8 +343,8 @@ export function AIFindingActions({ finding, scanId }: { finding: Finding; scanId
     };
   }, [cacheResults, jobs]);
 
-  async function runAction(action: AIAction) {
-    if (results[action]?.state === "completed" && results[action]?.result) {
+  async function runAction(action: AIAction, options: { force?: boolean } = {}) {
+    if (!options.force && results[action]?.state === "completed" && results[action]?.result) {
       setSelectedAction(action);
       setError(null);
       return;
@@ -276,7 +356,7 @@ export function AIFindingActions({ finding, scanId }: { finding: Finding; scanId
       const response = await fetch("/api/ai/finding-action", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action, finding, scanId, findingId: finding.id }),
+        body: JSON.stringify({ action, finding, scanId, findingId: finding.id, investigationMode, force: Boolean(options.force) }),
       });
       const data = await response.json();
       if (!response.ok || data.state === "failed" || data.status === "Failed") {
@@ -321,6 +401,19 @@ export function AIFindingActions({ finding, scanId }: { finding: Finding; scanId
           </button>
         ))}
       </div>
+      {showInvestigationControls || selectedAction === "investigate" || activeAction === "investigate" || results.investigate ? (
+        <div className="investigation-controls">
+          <label>
+            <span>Mode</span>
+            <select value={investigationMode} onChange={(event) => setInvestigationMode(event.target.value as (typeof investigationModes)[number])}>
+              {investigationModes.map((mode) => <option key={mode} value={mode}>{mode}</option>)}
+            </select>
+          </label>
+          <button className="button-secondary" type="button" onClick={() => runAction("investigate", { force: true })} disabled={activeAction !== null || !results.investigate?.result}>
+            Regenerate
+          </button>
+        </div>
+      ) : null}
       {selectedAction && runningState && ["queued", "running"].includes(runningState) ? (
         <p className="muted">
           {runningState === "queued" ? "Queued" : "Qwen is writing"}.

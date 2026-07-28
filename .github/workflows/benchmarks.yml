@@ -40,3 +40,78 @@ jobs:
           path: .nope-benchmark-results/
           if-no-files-found: error
           include-hidden-files: true
+
+  repository-intelligence:
+    name: Repository-intelligence benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build API benchmark image
+        run: docker build -f docker/api.Dockerfile -t nope-api-benchmark .
+
+      - name: Run repository-intelligence benchmark
+        run: |
+          set -o pipefail
+          mkdir -p .nope-repository-benchmark-results
+          chmod 0777 .nope-repository-benchmark-results
+          docker run --rm \
+            -e NOPE_EMBEDDINGS_ENABLED=false \
+            -e NOPE_EMBEDDING_PROVIDER=local_hashing \
+            -e NOPE_VECTOR_STORE=disabled \
+            -v "${{ github.workspace }}/.nope-repository-benchmark-results:/app/.nope-repository-benchmark-results" \
+            nope-api-benchmark \
+            python -m nope_api.benchmarks \
+              --mode repository-intelligence \
+              --output .nope-repository-benchmark-results/repository-intelligence.json \
+              --markdown-output .nope-repository-benchmark-results/repository-intelligence.md \
+            | tee .nope-repository-benchmark-results/repository-intelligence.stdout.txt
+
+      - name: Upload repository benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repository-intelligence-benchmark
+          path: .nope-repository-benchmark-results/
+          if-no-files-found: error
+          include-hidden-files: true
+
+  investigation:
+    name: AI investigation benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build API benchmark image
+        run: docker build -f docker/api.Dockerfile -t nope-api-benchmark .
+
+      - name: Run investigation benchmark
+        run: |
+          set -o pipefail
+          mkdir -p .nope-investigation-benchmark-results
+          chmod 0777 .nope-investigation-benchmark-results
+          docker run --rm \
+            -e NOPE_AI_PROVIDER=none \
+            -e NOPE_EMBEDDINGS_ENABLED=false \
+            -e NOPE_EMBEDDING_PROVIDER=local_hashing \
+            -e NOPE_VECTOR_STORE=disabled \
+            -v "${{ github.workspace }}/.nope-investigation-benchmark-results:/app/.nope-investigation-benchmark-results" \
+            nope-api-benchmark \
+            python -m nope_api.benchmarks \
+              --mode investigation \
+              --output .nope-investigation-benchmark-results/investigation.json \
+              --markdown-output .nope-investigation-benchmark-results/investigation.md \
+            | tee .nope-investigation-benchmark-results/investigation.stdout.txt
+
+      - name: Upload investigation benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: investigation-benchmark
+          path: .nope-investigation-benchmark-results/
+          if-no-files-found: error
+          include-hidden-files: true

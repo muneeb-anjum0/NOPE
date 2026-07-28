@@ -33,7 +33,7 @@ test.describe("Stage 8 core browser flows", () => {
     await expect(page.getByText("Stage 8 Workspace").first()).toBeVisible();
     await page.waitForLoadState("networkidle");
 
-    await page.getByRole("link", { name: /Stage 8 Workspace/i }).first().click({ noWaitAfter: true });
+    await page.locator("main").getByRole("link", { name: /Stage 8 Workspace/i }).first().click();
     await expect(page).toHaveURL(/\/scans\/project_stage8/);
     await expect(page.getByText("Upload ZIP")).toBeVisible();
     await expect(page.locator('[data-scan-launcher-ready="true"]')).toBeVisible();
@@ -42,8 +42,10 @@ test.describe("Stage 8 core browser flows", () => {
     await page.locator('input[name="repository"]').setInputFiles({ name: "stage8.zip", mimeType: "application/zip", buffer: zip });
     await expect(page.getByText("stage8.zip")).toBeVisible();
     await page.getByLabel(/permission/i).check();
-    await page.getByRole("button", { name: "Start evidence scan" }).click({ noWaitAfter: true });
-    await expect(page).toHaveURL(/scan=scan_stage8_running/);
+    await Promise.all([
+      page.waitForURL(/scan=scan_stage8_running/, { timeout: 20_000 }),
+      page.getByRole("button", { name: "Start evidence scan" }).click(),
+    ]);
     await expect(page.getByText("running").first()).toBeVisible();
     await expect(page.locator(".scan-progress-rail").first()).toBeVisible();
 
@@ -131,5 +133,51 @@ test.describe("Stage 8 core browser flows", () => {
       await page.getByRole("button", { name: /Collapse sidebar/i }).click();
       await expect(page.getByRole("button", { name: /Expand sidebar/i })).toBeVisible();
     }
+  });
+
+  test("investigation page, modes, cache, regenerate, citations, exports, and failed state", async ({ page }) => {
+    test.setTimeout(90_000);
+    await login(page);
+    await page.goto("/app/projects/local/investigations?scan=scan_stage8_completed&finding=fnd_stage8_idor");
+    await expect(page.getByText("Manual-review brain")).toBeVisible();
+    await expect(page.getByText("Selected finding")).toBeVisible();
+    await page.getByLabel("Mode").selectOption("Developer");
+
+    const generate = page.waitForResponse((response) => response.url().includes("/api/ai/finding-action") && response.request().method() === "POST");
+    await page.getByRole("button", { name: "Investigate" }).click();
+    await expect((await generate).ok()).toBeTruthy();
+    await expect(page.getByText("AI Investigation Engine")).toBeVisible();
+    await expect(page.getByText("Timeline")).toBeVisible();
+    await expect(page.getByText("Evidence tree")).toBeVisible();
+    await expect(page.getByText("Attack flow", { exact: true })).toBeVisible();
+    await expect(page.getByText("Repository relationships", { exact: true })).toBeVisible();
+    await expect(page.getByText("Citations", { exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: "Investigate" }).click();
+    await expect(page.getByText("Gen. by Qwen").first()).toBeVisible();
+
+    const regenerate = page.waitForResponse((response) => response.url().includes("/api/ai/finding-action") && response.request().method() === "POST");
+    await page.getByRole("button", { name: "Regenerate" }).click();
+    await expect((await regenerate).ok()).toBeTruthy();
+
+    await page.locator(".investigation-export-menu summary").click();
+    const exportMenu = page.locator(".investigation-export-menu");
+    for (const label of ["JSON", "MD", "PDF", "SARIF"]) {
+      const link = exportMenu.getByRole("link", { name: label, exact: true });
+      await expect(link).toBeVisible();
+      const response = await page.request.get(await link.getAttribute("href") ?? "");
+      await expect(response.ok()).toBeTruthy();
+    }
+
+    await page.route("**/api/ai/finding-action", async (route) => {
+      if (route.request().method() === "POST") {
+        await route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ status: "Failed", state: "failed", message: "Fixture investigation failed." }) });
+      } else {
+        await route.continue();
+      }
+    });
+    await page.getByLabel("Mode").selectOption("Compliance");
+    await page.getByRole("button", { name: "Investigate" }).click();
+    await expect(page.getByText("Fixture investigation failed.")).toBeVisible();
   });
 });

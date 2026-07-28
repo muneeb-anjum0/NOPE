@@ -24,6 +24,18 @@ class EmbeddingCompatibilityError(EmbeddingError):
     """Raised when persisted vectors are incompatible with current settings."""
 
 
+_EMBEDDING_SEMAPHORES: dict[int, asyncio.Semaphore] = {}
+
+
+def _embedding_semaphore(max_concurrency: int) -> asyncio.Semaphore:
+    bounded = max(1, int(max_concurrency or 1))
+    semaphore = _EMBEDDING_SEMAPHORES.get(bounded)
+    if semaphore is None:
+        semaphore = asyncio.Semaphore(bounded)
+        _EMBEDDING_SEMAPHORES[bounded] = semaphore
+    return semaphore
+
+
 @dataclass
 class EmbeddingMetrics:
     provider: str
@@ -279,9 +291,11 @@ async def run_embedding_call(
     func: Callable[..., list[list[float]] | list[float]],
     *args: Any,
     timeout_seconds: float,
+    max_concurrency: int = 1,
 ) -> list[list[float]] | list[float]:
     try:
         bounded_timeout = max(0.001, float(timeout_seconds))
-        return await asyncio.wait_for(asyncio.to_thread(func, *args), timeout=bounded_timeout)
+        async with _embedding_semaphore(max_concurrency):
+            return await asyncio.wait_for(asyncio.to_thread(func, *args), timeout=bounded_timeout)
     except asyncio.TimeoutError as exc:
         raise EmbeddingError(f"Embedding call timed out after {timeout_seconds}s") from exc

@@ -21,8 +21,7 @@ python -m pytest apps/api/tests/test_stage6_findings_lifecycle.py apps/api/tests
 python -m pytest apps/api/tests/test_stage9_github_integration.py apps/api/tests/test_persistence.py -q
 python -m pytest apps/api/tests/test_stage11_self_security.py apps/api/tests/test_api_auth.py apps/api/tests/test_security.py -q
 python -m pytest apps/api/tests/test_stage13_rules_v2.py -q
-python -m pytest apps/api/tests/test_stage14_real_embeddings.py apps/api/tests/test_stage14_repository_intelligence.py -q
-python -m pytest apps/api/tests/test_stage15_investigation_engine.py -q
+python -m pytest apps/api/tests/test_stage14_real_embeddings.py apps/api/tests/test_stage14_repository_intelligence.py apps/api/tests/test_stage15_investigation_engine.py -q
 ```
 
 Host Ruff is optional. The Docker image contains the scanner/runtime dependencies used by the product; do not treat missing host Ruff as a product failure.
@@ -87,6 +86,14 @@ Repository intelligence uses real local CPU embeddings in the product stack. Dow
 ```powershell
 docker compose exec -T nope-api python -m nope_api.embedding_cli download --model BAAI/bge-small-en-v1.5 --cache-dir /app/.nope-model-cache --device cpu
 docker compose exec -T nope-api python -m nope_api.embedding_cli smoke --model BAAI/bge-small-en-v1.5 --cache-dir /app/.nope-model-cache --device cpu
+```
+
+Repository-intelligence and investigation benchmark lanes:
+
+```powershell
+$env:PYTHONPATH='apps/api'
+python -m nope_api.benchmarks --mode repository-intelligence --output .nope-benchmark-results/repository-intelligence.json --markdown-output .nope-benchmark-results/repository-intelligence.md
+python -m nope_api.benchmarks --mode investigation --output .nope-benchmark-results/investigation.json --markdown-output .nope-benchmark-results/investigation.md
 ```
 
 ## Docker And Migrations

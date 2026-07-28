@@ -60,6 +60,8 @@ logger = logging.getLogger("nope_api")
 
 class AIActionRequest(BaseModel):
     action: str
+    investigation_mode: str | None = None
+    force: bool = False
 
 
 class RepositorySearchRequest(BaseModel):
@@ -1348,6 +1350,8 @@ async def create_finding_ai_action(
             finding_id=finding_id,
             action=payload.action,
             owner_user_id=owner_user_id,
+            investigation_mode=payload.investigation_mode,
+            force=payload.force,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

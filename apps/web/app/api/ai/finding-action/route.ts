@@ -13,7 +13,7 @@ async function authHeaders() {
   return headers;
 }
 
-function fixtureResult(action: string) {
+function fixtureResult(action: string, mode = "Security Engineer") {
   const labels: Record<string, { summary: string; reasoning: string; recommendation: string }> = {
     explain: {
       summary: "This finding means user-controlled input reaches sensitive behavior without enough proof of a guard.",
@@ -69,7 +69,7 @@ function fixtureResult(action: string) {
       risk: "stage8-fixture",
       investigation_report: action === "investigate" ? {
         version: "stage15-investigation-v1",
-        mode: "Security Engineer",
+        mode,
         finding_id: "fixture-finding",
         finding_fingerprint: "fixture-fingerprint",
         summary: [{ status: "Verified", text: copy.summary, citations: ["finding-evidence-1"] }],
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: "Failed", message: "Unsupported finding AI action." }, { status: 400 });
   }
   if (isE2EFixtureMode()) {
-    return NextResponse.json(fixtureResult(action));
+    return NextResponse.json(fixtureResult(action, String(body.investigationMode ?? "Security Engineer")));
   }
 
   const headers = await authHeaders();
@@ -97,7 +97,7 @@ export async function POST(request: Request) {
     const response = await fetch(`${API_BASE}/api/scans/${encodeURIComponent(String(body.scanId))}/findings/${encodeURIComponent(String(body.findingId))}/ai-actions`, {
       method: "POST",
       headers: new Headers([["content-type", "application/json"], ...headers.entries()]),
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ action, investigation_mode: body.investigationMode, force: Boolean(body.force) }),
       cache: "no-store",
     });
     const result = await response.json();
