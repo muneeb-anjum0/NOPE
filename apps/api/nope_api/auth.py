@@ -66,7 +66,6 @@ def _redis_client(settings: Settings):
 
 def _check_login_rate_limit_shared(settings: Settings, email: str) -> None:
     key = f"nope:auth:login-failures:{hashlib.sha256(_rate_limit_key(email).encode()).hexdigest()}"
-    window = max(1, int(settings.login_failure_window_seconds))
     limit = max(1, int(settings.login_failure_limit))
     client = _redis_client(settings)
     if client is None:

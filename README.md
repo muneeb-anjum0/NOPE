@@ -1,5 +1,9 @@
 ﻿# NOPE<span style="color:#f02a56">.</span>
 
+[![Core CI](https://github.com/muneeb-anjum0/NOPE/actions/workflows/core-ci.yml/badge.svg)](https://github.com/muneeb-anjum0/NOPE/actions/workflows/core-ci.yml)
+[![Benchmarks](https://github.com/muneeb-anjum0/NOPE/actions/workflows/benchmarks.yml/badge.svg)](https://github.com/muneeb-anjum0/NOPE/actions/workflows/benchmarks.yml)
+[![Browser E2E](https://github.com/muneeb-anjum0/NOPE/actions/workflows/browser-e2e.yml/badge.svg)](https://github.com/muneeb-anjum0/NOPE/actions/workflows/browser-e2e.yml)
+
 **NOPE is a local-first AppSec review workbench for authorized repository and URL scans.**
 
 I built it around a simple frustration: fast builders often get scanner output, but not enough evidence to understand what is real, what was missed, and what still needs a human decision.
@@ -12,9 +16,10 @@ NOPE does **not** prove an application is secure, compliant, or safe to ship. It
 
 If you only want to judge the repo quickly, start here:
 
-1. Read the small benchmark artifacts in [`examples/nope-benchmark`](examples/nope-benchmark).
-2. Check the current capability table in [`docs/CAPABILITY_MATRIX.md`](docs/CAPABILITY_MATRIX.md).
-3. Run the scanner-only benchmark if Docker is available:
+1. Check the GitHub Actions badges above. They cover API regressions, backend lint, web lint/typecheck/build, Docker Compose/image builds, browser E2E/accessibility/visual checks, benchmarks, and rule/docs proof.
+2. Read the small benchmark artifacts in [`examples/nope-benchmark`](examples/nope-benchmark).
+3. Check the current capability table in [`docs/CAPABILITY_MATRIX.md`](docs/CAPABILITY_MATRIX.md).
+4. Run the scanner-only benchmark if Docker is available:
 
 ```powershell
 docker build -f docker/api.Dockerfile -t nope-api-benchmark .

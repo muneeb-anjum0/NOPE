@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from nope_api.models import CoverageRecord, Finding, Scan
+from nope_api.models import Finding, Scan
 
 
 DriftType = Literal[

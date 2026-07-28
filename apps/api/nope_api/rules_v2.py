@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from nope_api.models import AttackSurfaceItem, Confidence, Evidence, Finding, Scan, Severity, now_utc
+from nope_api.models import Confidence, Evidence, Finding, Scan, Severity, now_utc
 from nope_api.rules_engine import canonical_fingerprint, dedupe_findings, load_rules
 from nope_api.security import redact
 
@@ -677,7 +677,6 @@ def _file_candidates(scan: Scan, files: list[RepositoryFile], context: Repositor
         is_route = any(token in lower_rel for token in ("app/api/", "pages/api/", "src/routes/", "route.", "+server.", "server/action"))
         is_client = "'use client'" in text[:200].lower() or '"use client"' in text[:200].lower() or lower_rel.endswith((".tsx", ".jsx", ".svelte"))
         has_auth = bool(AUTH_RE.search(text))
-        has_owner = bool(OWNER_RE.search(text))
         has_db_read = bool(DB_READ_RE.search(text))
         has_db_mutation = bool(DB_MUTATION_RE.search(text))
         has_input_id = bool(INPUT_ID_RE.search(text))

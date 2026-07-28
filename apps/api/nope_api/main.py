@@ -18,7 +18,7 @@ from nope_api.ai import (
     prepare_ai_action_job,
     run_ai_action_job,
 )
-from nope_api.auth import AuthRateLimitError, create_or_login, delete_session, get_user_for_token, init_auth_db
+from nope_api.auth import AuthRateLimitError, create_or_login, delete_session, get_user_for_token
 from nope_api.config import get_settings
 from nope_api.db import migration_status, run_migrations
 from nope_api.drift import BaselineSnapshot, baseline_snapshot, compare_scans
@@ -33,7 +33,6 @@ from nope_api.repository_intelligence import (
     RAG_VERSION as HYBRID_RAG_VERSION,
     VectorStore,
     build_repository_index,
-    context_from_results,
     embedding_provider,
     hybrid_search,
 )
@@ -753,7 +752,6 @@ def get_coverage(scan_id: str, authorization: str | None = Header(default=None))
 
 @app.post("/api/scans/{scan_id}/baseline")
 def create_scan_baseline(scan_id: str, payload: dict | None = None, authorization: str | None = Header(default=None)):
-    owner_user_id = _require_owner_user_id(authorization)
     scan = _load_scan(scan_id, authorization)
     snapshot = baseline_snapshot(scan)
     baseline = store.create_security_baseline(
@@ -1393,13 +1391,20 @@ async def finding_action_endpoint(action: str, finding: dict, authorization: str
     owner_user_id = _require_owner_user_id(authorization)
     try:
         canonical_action = normalize_ai_action(action)
-    except ValueError as exc:
+    except ValueError:
         raise HTTPException(status_code=404, detail="Unsupported finding AI action.")
     from nope_api.models import Finding
 
     parsed = Finding(**finding)
     scan, root = _scan_context_for_finding(parsed.scan_id, owner_user_id)
-    return await finding_action(settings, parsed, canonical_action, root=root, scan=scan)
+    return await finding_action(
+        settings,
+        parsed,
+        canonical_action,
+        root=root,
+        scan=scan,
+        owner_user_id=owner_user_id,
+    )
 
 
 def _scan_context_for_finding(scan_id: str | None, owner_user_id: str) -> tuple[Scan | None, Path | None]:

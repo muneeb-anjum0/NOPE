@@ -726,6 +726,7 @@ async def finding_action(
     *,
     root: Path | None = None,
     scan: Scan | None = None,
+    owner_user_id: str | None = None,
 ) -> dict:
     action = normalize_ai_action(action)
     if settings.ai_provider == "none":

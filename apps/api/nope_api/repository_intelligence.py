@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -15,13 +14,12 @@ from pydantic import BaseModel, Field
 
 from nope_api.config import Settings
 from nope_api.embeddings import (
-    BaseEmbeddingProvider as EmbeddingProvider,
     EmbeddingCompatibilityError,
     embedding_provider,
     run_embedding_call,
 )
 from nope_api.models import Finding, Scan, new_id
-from nope_api.rag import RagChunk, RagContext, RagLimits, rag_limits, redact_text
+from nope_api.rag import RagChunk, RagContext, rag_limits, redact_text
 
 
 INDEX_SCHEMA_VERSION = "repo-intelligence.v1"

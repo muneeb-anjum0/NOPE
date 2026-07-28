@@ -6,7 +6,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from nope_api.config import Settings
-from nope_api.models import AttackSurfaceItem, CodeGraph, Evidence, Finding, Scan, ScannerRun, StackEvidence
+from nope_api.models import AttackSurfaceItem, CodeGraph, Finding, Scan, ScannerRun, StackEvidence
 from nope_api.security import redact
 
 
