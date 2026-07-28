@@ -49,7 +49,7 @@ The latest Stage 13 scanner-only run produced 41 related duplicate/supporting fi
 | Findings lifecycle | Verified locally | More semantic graph precision can improve future root-cause grouping. |
 | Reports | Verified locally | JSON, Markdown, SARIF, and PDF use persisted scan data. |
 | Baselines and drift | Verified inside project folders | Different project folders are not compared. |
-| Repository intelligence | Verified locally | Hybrid retrieval improves Qwen context and repo search; it does not promote or change findings. |
+| Repository intelligence | Verified locally | Hybrid retrieval uses local CPU embeddings through sentence-transformers and Qdrant; it does not promote or change findings. |
 | Qwen actions | Verified when local model is mounted | First uncached responses are hardware/model-bound. |
 | GitHub integration | Locally implemented, externally blocked | Real private repository access requires operator credentials and installation. |
 
@@ -182,7 +182,15 @@ flowchart LR
 
 ## Repository Intelligence and RAG
 
-NOPE now uses hybrid retrieval. During a scan it builds a repository-intelligence index from security-relevant files, symbols, route hints, imports, code-graph metadata, finding evidence, and CPU-generated vectors stored in Qdrant when that service is available.
+NOPE now uses hybrid retrieval. During a scan it builds a repository-intelligence index from security-relevant files, symbols, route hints, imports, code-graph metadata, finding evidence, and local CPU embeddings stored in Qdrant when that service is available.
+
+The default embedding provider is `sentence_transformers` with `BAAI/bge-small-en-v1.5` on CPU. The model is not pulled silently during image build or during an ordinary scan. For a first local run, download it into the persistent Docker model cache explicitly:
+
+```powershell
+docker compose exec -T nope-api python -m nope_api.embedding_cli download --model BAAI/bge-small-en-v1.5 --cache-dir /app/.nope-model-cache --device cpu
+```
+
+After that, API and worker containers read the same mounted cache. If the cache is missing, the API reports embedding health clearly and repository indexing records the failure instead of pretending vector retrieval worked. Tests can still opt into `local_hashing`, but that provider is explicit test/troubleshooting mode, not the default product path.
 
 The retrieval layer currently uses:
 
@@ -381,6 +389,19 @@ flowchart LR
 | MinIO | `nope-minio` | Raw scanner artifacts and binary report artifacts |
 | Qdrant | `nope-qdrant` | Vector store for repository-intelligence chunks |
 | AI | `nope-ai` | Optional llama.cpp server for local Qwen |
+
+## Local Embedding Settings
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `NOPE_EMBEDDING_PROVIDER` | `sentence_transformers` | Real local embedding provider used by API and worker |
+| `NOPE_EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Small CPU-friendly code/text retrieval model |
+| `NOPE_EMBEDDING_DEVICE` | `cpu` | CPU-first by default; GPU is opt-in |
+| `NOPE_EMBEDDING_CACHE_DIR` | `/app/.nope-model-cache` | Persistent model cache mounted into API and worker |
+| `NOPE_EMBEDDING_ALLOW_MODEL_DOWNLOAD` | `false` | Prevents surprise model downloads during normal scans |
+| `NOPE_EMBEDDING_TIMEOUT_SECONDS` | `120` | Bound for embedding batches and queries |
+
+If you change model/provider/dimension, rebuild or recreate the repository index. NOPE checks the Qdrant collection dimension before writing vectors so old incompatible indexes do not get reused silently.
 
 ## Documentation
 

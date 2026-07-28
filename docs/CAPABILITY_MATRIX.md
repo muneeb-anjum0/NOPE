@@ -1,6 +1,6 @@
 ﻿# NOPE Capability Matrix
 
-Date: 2026-07-19
+Date: 2026-07-28
 This is the companion table to the GitHub-facing README. Older build/audit notes live in [`audits/`](audits/).
 
 | Capability | Local-product status | Evidence | External or production limit |
@@ -18,7 +18,7 @@ This is the companion table to the GitHub-facing README. Older build/audit notes
 | Reports | Works | JSON, Markdown, SARIF, and PDF reports use persisted data, redaction, partial/failed coverage honesty, durable status, retry, and ownership checks. | Large local PDFs can take time on slow hardware. |
 | Drift and baselines | Works | Latest-vs-previous, latest-vs-baseline, arbitrary comparison, version changes, recurrence, reintroduction, and cleanup tests. | Incremental scan support remains conservative advisory metadata. |
 | Qwen actions | Works when the model is mounted | Durable async jobs, structured JSON validation with retries, cancellation, 24h cache, cache invalidation, and UI state support. | First uncached generation speed is hardware/model-bound. |
-| Repository intelligence and RAG | Works locally | Hybrid retrieval combines exact, lexical, symbol, route, graph, finding-centered, and Qdrant vector context with provenance, trust boundaries, token/file/chunk/depth limits, and prompt-injection tests. | Retrieval improves search and Qwen context only; it does not create, promote, suppress, or change findings. |
+| Repository intelligence and RAG | Works locally | Hybrid retrieval combines exact, lexical, symbol, route, graph, finding-centered, and Qdrant vector context from real local CPU sentence-transformers embeddings, with provenance, trust boundaries, token/file/chunk/depth limits, and prompt-injection tests. | Retrieval improves search and Qwen context only; it does not create, promote, suppress, or change findings. |
 | GitHub | Local contracts work; external activation blocked | Encrypted credential storage, OAuth/App-compatible state/callback validation, repository listing/snapshot contracts, policy checks, disconnect/revocation, audit, and fake-server protocol tests. | Real private repo access requires operator GitHub credentials and installation. |
 | Frontend | Works for local product scope | Playwright covers core flows, mobile widths, accessibility checks, keyboard behavior, visual snapshots, and fixture-mode deterministic states. | Fixture mode is used for deterministic browser CI. |
 | NOPE self-security | Works locally with residuals | Auth/session/rate-limit/CSRF-origin/CORS/request-limit/container/dependency/security tests and docs. | Documented protobuf scanner-chain advisory and local Docker runner residual risk. |

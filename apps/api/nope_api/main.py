@@ -1,3 +1,4 @@
+import logging
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -54,6 +55,7 @@ from nope_api.storage import store
 
 settings = get_settings()
 github_adapter = SecureGitHubAdapter(store, settings)
+logger = logging.getLogger("nope_api")
 
 
 class AIActionRequest(BaseModel):
@@ -120,6 +122,21 @@ async def security_boundary(request: Request, call_next):
 def startup() -> None:
     run_migrations(settings)
     store.backfill_report_bodies()
+    if settings.embeddings_enabled and settings.embedding_provider == "sentence_transformers":
+        provider = embedding_provider(settings)
+        health = provider.health(load=True)
+        if health.get("status") != "ok":
+            logger.warning("Local embedding provider is not ready: %s", health.get("message") or health)
+            if settings.embedding_strict_startup:
+                raise RuntimeError(f"Local embedding provider is not ready: {health.get('message')}")
+        else:
+            logger.info(
+                "Local embedding provider ready: provider=%s model=%s device=%s dimension=%s",
+                health.get("provider"),
+                health.get("model"),
+                health.get("device"),
+                health.get("dimension"),
+            )
 
 
 @app.get("/health")

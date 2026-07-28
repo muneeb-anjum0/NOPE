@@ -160,6 +160,22 @@ docker compose logs --tail 200 nope-api
 
 PDF bodies are persisted in Postgres; MinIO stores binary artifacts when reachable.
 
+## Repository Intelligence Says The Embedding Model Is Missing
+
+NOPE does not silently download embedding models during normal scans. Download the local CPU model once into the shared Docker cache:
+
+```powershell
+docker compose exec -T nope-api python -m nope_api.embedding_cli download --model BAAI/bge-small-en-v1.5 --cache-dir /app/.nope-model-cache --device cpu
+```
+
+Then smoke-test the cached model:
+
+```powershell
+docker compose exec -T nope-api python -m nope_api.embedding_cli smoke --model BAAI/bge-small-en-v1.5 --cache-dir /app/.nope-model-cache --device cpu
+```
+
+If you change the embedding model or dimension, recreate affected repository indexes. NOPE checks Qdrant vector dimensions and refuses to reuse incompatible vectors.
+
 ## GitHub Repositories Are Empty
 
 This is expected without verified GitHub credentials. NOPE stores local GitHub contract settings but does not fake private repository access. Configure and verify real GitHub App/OAuth credentials before expecting repository listings.

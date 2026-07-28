@@ -9,6 +9,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .nope-workspaces/
+.nope-model-cache/
 .nope-benchmark-results/
 .tmp/
 .env

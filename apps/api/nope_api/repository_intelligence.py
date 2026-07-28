@@ -3,8 +3,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import math
-import os
 import re
 import time
 from dataclasses import dataclass, field
@@ -16,6 +14,12 @@ import httpx
 from pydantic import BaseModel, Field
 
 from nope_api.config import Settings
+from nope_api.embeddings import (
+    BaseEmbeddingProvider as EmbeddingProvider,
+    EmbeddingCompatibilityError,
+    embedding_provider,
+    run_embedding_call,
+)
 from nope_api.models import Finding, Scan, new_id
 from nope_api.rag import RagChunk, RagContext, RagLimits, rag_limits, redact_text
 
@@ -239,74 +243,6 @@ class IndexResult(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
-@dataclass
-class EmbeddingProvider:
-    settings: Settings
-    dimension: int = 384
-    model_revision: str = "local"
-
-    @property
-    def provider_name(self) -> str:
-        return self.settings.embedding_provider
-
-    @property
-    def model_name(self) -> str:
-        return self.settings.embedding_model
-
-    def health(self) -> dict[str, Any]:
-        return {"status": "ok", "provider": self.provider_name, "model": self.model_name, "device": self.settings.embedding_device, "dimension": self.dimension}
-
-    def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return [self._hash_embedding(f"{self.settings.embedding_document_prefix}{text}") for text in texts]
-
-    def embed_query(self, text: str) -> list[float]:
-        return self._hash_embedding(f"{self.settings.embedding_query_prefix}{text}")
-
-    def _hash_embedding(self, text: str) -> list[float]:
-        vector = [0.0] * self.dimension
-        tokens = re.findall(r"[A-Za-z0-9_.$:/-]{2,}", text.lower())
-        if not tokens:
-            return vector
-        for token in tokens:
-            digest = hashlib.blake2b(token.encode("utf-8", errors="ignore"), digest_size=8).digest()
-            index = int.from_bytes(digest[:4], "big") % self.dimension
-            sign = 1.0 if digest[4] & 1 else -1.0
-            vector[index] += sign * (1.0 + min(len(token), 24) / 24.0)
-        norm = math.sqrt(sum(item * item for item in vector)) or 1.0
-        return [item / norm for item in vector]
-
-
-class SentenceTransformersEmbeddingProvider(EmbeddingProvider):
-    _model: Any = None
-
-    def _load(self) -> Any:
-        if self._model is None:
-            from sentence_transformers import SentenceTransformer  # type: ignore
-
-            self._model = SentenceTransformer(self.settings.embedding_model, device=self.settings.embedding_device)
-            self.dimension = int(self._model.get_sentence_embedding_dimension())
-            self.model_revision = getattr(self._model, "_model_card_vars", {}).get("model_name", "unknown")
-        return self._model
-
-    def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        model = self._load()
-        vectors = model.encode(texts, batch_size=max(1, self.settings.embedding_batch_size), normalize_embeddings=True, show_progress_bar=False)
-        return [list(map(float, vector)) for vector in vectors]
-
-    def embed_query(self, text: str) -> list[float]:
-        return self.embed_documents([text])[0]
-
-
-def embedding_provider(settings: Settings) -> EmbeddingProvider:
-    if settings.embedding_provider == "sentence_transformers":
-        try:
-            return SentenceTransformersEmbeddingProvider(settings)
-        except Exception:
-            if os.environ.get("NOPE_EMBEDDING_STRICT") == "1":
-                raise
-    return EmbeddingProvider(settings)
-
-
 class VectorStore:
     def __init__(self, settings: Settings, dimension: int):
         self.settings = settings
@@ -328,6 +264,13 @@ class VectorStore:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.get(f"{self.url}/collections/{QDRANT_COLLECTION}")
             if response.status_code == 200:
+                data = response.json().get("result", {})
+                vectors = data.get("config", {}).get("params", {}).get("vectors", {})
+                size = vectors.get("size") if isinstance(vectors, dict) else None
+                if size is not None and int(size) != int(self.dimension):
+                    raise EmbeddingCompatibilityError(
+                        f"Qdrant collection {QDRANT_COLLECTION} has dimension {size}, but the configured embedding model uses {self.dimension}. Recreate the repository index after clearing the old vector collection."
+                    )
                 return
             payload = {"vectors": {"size": self.dimension, "distance": "Cosine"}, "optimizers_config": {"default_segment_number": 2}}
             response = await client.put(f"{self.url}/collections/{QDRANT_COLLECTION}", json=payload)
@@ -627,6 +570,8 @@ def context_from_results(results: list[RetrievalResult], settings: Settings, *, 
 async def build_repository_index(settings: Settings, store: Any, scan: Scan, root: Path, owner_user_id: str | None = None) -> IndexResult:
     started = time.perf_counter()
     provider = embedding_provider(settings)
+    if settings.embeddings_enabled:
+        provider.health(load=True)
     index_id = new_id("ridx")
     store.create_repository_index_job(index_id, scan, owner_user_id, settings, status="running")
     result = IndexResult(
@@ -653,7 +598,11 @@ async def build_repository_index(settings: Settings, store: Any, scan: Scan, roo
             await vector_store.ensure_collection()
             for start in range(0, len(changed_chunks), max(1, settings.embedding_batch_size)):
                 batch = changed_chunks[start : start + max(1, settings.embedding_batch_size)]
-                vectors = await asyncio.to_thread(provider.embed_documents, [chunk.text for chunk in batch])
+                vectors = await run_embedding_call(
+                    provider.embed_documents,
+                    [chunk.text for chunk in batch],
+                    timeout_seconds=settings.embedding_timeout_seconds,
+                )
                 await vector_store.upsert(batch, vectors)
                 result.chunks_embedded += len(batch)
                 result.vectors_added += len(batch)
@@ -688,21 +637,23 @@ async def hybrid_search(
     terms = set(re.findall(r"[A-Za-z0-9_.$:/-]{2,}", clean_query.lower()))
     vector_scores: dict[str, float] = {}
     vector_error: str | None = None
-    provider = embedding_provider(settings)
     vector_health = {"status": "not_used"}
     if settings.embeddings_enabled and settings.vector_store == "qdrant":
-        vector_store = VectorStore(settings, provider.dimension)
-        vector_health = await vector_store.health()
-        if vector_health.get("status") == "ok":
-            try:
-                query_vector = await asyncio.to_thread(provider.embed_query, clean_query)
+        try:
+            provider = embedding_provider(settings)
+            provider.health(load=True)
+            vector_store = VectorStore(settings, provider.dimension)
+            vector_health = await vector_store.health()
+            if vector_health.get("status") == "ok":
+                query_vector = await run_embedding_call(provider.embed_query, clean_query, timeout_seconds=settings.embedding_timeout_seconds)
                 vector_rows = await vector_store.search(query_vector, owner_filter={"scan_id": scan.id, "project_id": scan.project_id}, limit=top_k)
                 for row in vector_rows:
                     vector_scores[str(row.get("id"))] = float(row.get("score") or 0.0)
-            except Exception as exc:
-                vector_error = str(exc)
-        else:
-            vector_error = vector_health.get("message") or "vector store unavailable"
+            else:
+                vector_error = vector_health.get("message") or "vector store unavailable"
+        except Exception as exc:
+            vector_health = {"status": "failed", "message": str(exc)}
+            vector_error = str(exc)
     results: list[RetrievalResult] = []
     for chunk in chunks:
         scores = {

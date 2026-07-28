@@ -19,7 +19,7 @@ The long phase-by-phase history is archived in [`audits/`](audits/). I keep it a
 | Dynamic/ZAP path | Working for declared sandbox apps | Node/Python fixture workflows can run behind the runner boundary. Unsupported apps are reported plainly. |
 | Findings lifecycle | Working | Findings keep stable fingerprints, evidence sources, lifecycle state, suppressions, recurrence, and reintroduction history. |
 | Qwen actions | Working when the local model is mounted | Explain, Challenge, Fix, Test, and Patch Review run as durable jobs with a 24-hour cache. |
-| Repository intelligence and RAG | Working locally | Retrieval is exact, lexical, route-aware, symbol-aware, graph-aware, finding-centered, and vector-assisted through Qdrant when available. It sends focused evidence, not whole repos. |
+| Repository intelligence and RAG | Working locally | Retrieval is exact, lexical, route-aware, symbol-aware, graph-aware, finding-centered, and vector-assisted through Qdrant using local CPU sentence-transformers embeddings. It sends focused evidence, not whole repos. |
 | Reports | Working | JSON, Markdown, SARIF, and PDF reports are generated from persisted scan data. |
 | Drift and baselines | Working inside project folders | NOPE compares scans from the same folder so unrelated ZIPs do not create fake drift. |
 | Browser tests | Working in CI fixture mode | Playwright covers core flows, accessibility checks, and visual snapshots. |

@@ -102,6 +102,6 @@ The scanner-plus-Qwen benchmark stays local because GitHub runners do not have t
 
 - `scanner-only` disables AI by setting the local benchmark settings provider to `none`.
 - `scanner-plus-qwen` leaves the configured Qwen provider active. If Qwen is unavailable, the benchmark records the AI review state honestly through `qwen_contribution`.
-- `repository-intelligence` indexes the benchmark fixture directly and checks whether each expected finding retrieves its own source file in the top five results. It does not run scanners or Qwen.
+- `repository-intelligence` indexes the benchmark fixture directly and checks whether each expected finding retrieves its own source file in the top five results. It does not run scanners or Qwen. CI uses the explicit `local_hashing` provider for this benchmark so GitHub does not download neural models; Docker/local product runs use `sentence_transformers` with `BAAI/bge-small-en-v1.5`.
 
 No external credentials are required.

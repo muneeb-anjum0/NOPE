@@ -71,7 +71,7 @@ The local implementation uses Postgres for local authentication and scan persist
 
 Current scan objects are also stored as JSON snapshots so the API contract remains stable while normalized tables preserve the high-value relational records used by reports, history, and status views.
 
-Repository intelligence adds normalized index tables for repository indexes, files, chunks, retrieval sessions, retrieval results, and indexing failures. Redacted chunk metadata lives in Postgres. Vector payloads live in Qdrant when the vector service is reachable. If Qdrant is unavailable, scans keep their deterministic findings and the index is marked partial instead of failing the scan.
+Repository intelligence adds normalized index tables for repository indexes, files, chunks, retrieval sessions, retrieval results, and indexing failures. Redacted chunk metadata lives in Postgres. Vector payloads live in Qdrant when the vector service is reachable. API and worker use the same local CPU `sentence_transformers` embedding cache, defaulting to `BAAI/bge-small-en-v1.5`. If Qdrant or the local embedding model is unavailable, scans keep their deterministic findings and the index records the partial or failed embedding state instead of faking semantic retrieval.
 
 ## Finding lifecycle
 

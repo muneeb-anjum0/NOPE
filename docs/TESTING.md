@@ -21,6 +21,7 @@ python -m pytest apps/api/tests/test_stage6_findings_lifecycle.py apps/api/tests
 python -m pytest apps/api/tests/test_stage9_github_integration.py apps/api/tests/test_persistence.py -q
 python -m pytest apps/api/tests/test_stage11_self_security.py apps/api/tests/test_api_auth.py apps/api/tests/test_security.py -q
 python -m pytest apps/api/tests/test_stage13_rules_v2.py -q
+python -m pytest apps/api/tests/test_stage14_real_embeddings.py apps/api/tests/test_stage14_repository_intelligence.py -q
 ```
 
 Host Ruff is optional. The Docker image contains the scanner/runtime dependencies used by the product; do not treat missing host Ruff as a product failure.
@@ -79,6 +80,13 @@ docker compose run --rm --no-deps -e NOPE_AI_PROVIDER=llama.cpp -e NOPE_QWEN_END
 ```
 
 The Qwen benchmark requires the local model runtime to be up and reachable.
+
+Repository intelligence uses real local CPU embeddings in the product stack. Download and smoke-test the model in Docker before a full local semantic retrieval verification:
+
+```powershell
+docker compose exec -T nope-api python -m nope_api.embedding_cli download --model BAAI/bge-small-en-v1.5 --cache-dir /app/.nope-model-cache --device cpu
+docker compose exec -T nope-api python -m nope_api.embedding_cli smoke --model BAAI/bge-small-en-v1.5 --cache-dir /app/.nope-model-cache --device cpu
+```
 
 ## Docker And Migrations
 

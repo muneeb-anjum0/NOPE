@@ -191,6 +191,7 @@ def _settings_for_mode(settings: Settings, mode: str) -> Settings:
         updates["ai_provider"] = "none"
     if mode == "repository-intelligence":
         updates["embeddings_enabled"] = False
+        updates["embedding_provider"] = "local_hashing"
         updates["vector_store"] = "disabled"
         updates["retrieval_final_k"] = 5
     return settings.model_copy(update=updates)

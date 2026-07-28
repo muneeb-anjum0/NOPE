@@ -48,8 +48,8 @@ RUN curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEA
     && chmod 0777 /tmp/trivy \
     && mkdir -p /tmp/nope-npm-cache /tmp/nope-yarn-cache /tmp/nope-pnpm-home \
     && chmod 0777 /tmp/nope-npm-cache /tmp/nope-yarn-cache /tmp/nope-pnpm-home \
-    && mkdir -p /app/.nope-workspaces \
-    && chmod 0777 /app/.nope-workspaces
+    && mkdir -p /app/.nope-workspaces /app/.nope-model-cache \
+    && chmod 0777 /app/.nope-workspaces /app/.nope-model-cache
 
 COPY apps/api/requirements.txt /app/apps/api/requirements.txt
 RUN pip install --no-cache-dir -r /app/apps/api/requirements.txt \

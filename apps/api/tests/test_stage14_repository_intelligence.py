@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Any
 
 from nope_api.config import Settings
+from nope_api.embeddings import HashingEmbeddingProvider
 from nope_api.models import Confidence, Evidence, Finding, GraphEdge, GraphNode, Scan, ScanMode, Severity
 from nope_api.repository_intelligence import (
-    EmbeddingProvider,
     context_from_results,
     hybrid_search,
     make_chunks,
@@ -23,6 +23,7 @@ def write(path: Path, text: str) -> None:
 def settings(**overrides: Any) -> Settings:
     values: dict[str, Any] = {
         "embeddings_enabled": False,
+        "embedding_provider": "local_hashing",
         "vector_store": "disabled",
         "retrieval_final_k": 6,
         "retrieval_top_k": 12,
@@ -135,7 +136,7 @@ def test_stage14_ast_chunks_include_provenance_redaction_and_skip_noise(tmp_path
 
 
 def test_stage14_local_embeddings_are_cpu_deterministic_and_normalized():
-    provider = EmbeddingProvider(settings())
+    provider = HashingEmbeddingProvider(settings())
     first = provider.embed_query("owner scoped invoice lookup")
     second = provider.embed_query("owner scoped invoice lookup")
 

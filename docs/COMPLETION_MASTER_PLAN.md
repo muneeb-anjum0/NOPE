@@ -38,6 +38,8 @@ Remaining honest boundary:
 
 Pre-stage commit: `2c72dfd`
 
+Stage 14.1 pre-stage commit: `517d83230a7c122d5cdfd9d94fd4273a0a3aa633`
+
 Stage 14 adds a repository-intelligence index that supports hybrid retrieval for Qwen actions and direct repository search.
 
 Implemented local scope:
@@ -46,6 +48,11 @@ Implemented local scope:
 - Security-relevant files are chunked with symbol/configuration awareness and bounded file, byte, chunk, and token limits.
 - Redacted chunk metadata, file metadata, index jobs, retrieval sessions, retrieval results, and indexing failures persist in Postgres.
 - Qdrant is included in Compose as the vector store for redacted repository chunk vectors.
+- Real local CPU embeddings are provided by `sentence_transformers` with `BAAI/bge-small-en-v1.5`; `local_hashing` remains explicit test/troubleshooting mode only.
+- API and worker share a persistent embedding-model cache at `/app/.nope-model-cache`.
+- Model download is an explicit operator command, not a hidden Docker-build or scan-time side effect.
+- Embedding calls enforce batch, timeout, device, normalization, and health reporting boundaries.
+- Qdrant collection dimension is checked before vector writes so incompatible indexes require reindexing instead of being reused silently.
 - Retrieval combines exact file/route/symbol matches, keyword scoring, graph hints, finding-centered evidence, and vector scores when Qdrant is available.
 - Qwen actions prefer the Stage 14 hybrid RAG packet and fall back to the older deterministic RAG path if an index is unavailable.
 - Repository search UI and owner-scoped API endpoints expose index status and search results.
@@ -55,5 +62,5 @@ Implemented local scope:
 
 Remaining honest boundary:
 
-- The default local embedding provider is deterministic CPU hashing so the stack is self-contained and fast in CI. A `sentence_transformers` provider hook exists for BGE-style embeddings when the operator installs the dependency/model, but the local verified path does not download or require that neural model.
 - The index is designed for local repository snapshots and selected-scan retrieval. It is not a full language-server database or cross-repository semantic code search product.
+- GitHub CI uses the explicit `local_hashing` test mode for repository-intelligence benchmarks so CI does not download neural models. Docker/local product verification uses the real `sentence_transformers` provider.
