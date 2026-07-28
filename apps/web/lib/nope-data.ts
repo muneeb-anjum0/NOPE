@@ -7,6 +7,8 @@ import type {
   ModelSettings,
   Project,
   ProjectSettings,
+  RepositoryIndexStatus,
+  RepositorySearchResponse,
   RulesV2CandidateResult,
   RulesV2Summary,
   Scan,
@@ -170,6 +172,61 @@ export async function getRulesV2Candidates(scanId: string, searchParams?: URLSea
   try {
     const query = searchParams?.toString();
     return await api<RulesV2CandidateResult>(`/api/scans/${scanId}/rules-v2/candidates${query ? `?${query}` : ""}`);
+  } catch {
+    return null;
+  }
+}
+
+export async function getRepositoryIndexStatus(scanId: string): Promise<RepositoryIndexStatus | null> {
+  if (isE2EFixtureMode()) {
+    return {
+      scan_id: scanId,
+      status: { status: "completed", active: true, files_indexed: 12, chunks_generated: 24, chunks_embedded: 24, vectors_added: 24, vectors_reused: 0 },
+      embedding: { provider: "local_hashing", model: "BAAI/bge-small-en-v1.5", device: "cpu" },
+      vector_store: { status: "ok", store: "qdrant" },
+      rag_version: "stage14-hybrid-rag-v1",
+    };
+  }
+  try {
+    return await api<RepositoryIndexStatus>(`/api/scans/${scanId}/repository-index`);
+  } catch {
+    return null;
+  }
+}
+
+export async function repositorySearch(scanId: string, query: string): Promise<RepositorySearchResponse | null> {
+  if (isE2EFixtureMode()) {
+    return {
+      query,
+      scan_id: scanId,
+      project_id: "project_stage8",
+      diagnostics: { rag_version: "stage14-hybrid-rag-v1", vector_health: { status: "ok" }, total_chunks: 24 },
+      results: [
+        {
+          chunk_id: "ric_fixture_owner",
+          relative_path: "Raqm/apps/web/src/routes/app/invoices/[id]/+server.ts",
+          language: "typescript",
+          symbol_name: "loadInvoice",
+          symbol_type: "symbol",
+          start_line: 31,
+          end_line: 52,
+          text: "const invoice = await prisma.invoice.findUnique({ where: { id: params.id } });",
+          sources: ["exact", "keyword", "graph", "vector", "finding"],
+          score: 0.94,
+          score_reasons: { exact: 0.75, keyword: 1, graph: 0.8, vector: 0.86, finding: 1 },
+          retrieval_reason: "exact, keyword, graph, vector, finding",
+          trust_boundary: "untrusted_repository_data",
+          metadata: { framework_hints: ["sveltekit", "prisma"], data_access_relevance: true },
+        },
+      ],
+    };
+  }
+  try {
+    return await api<RepositorySearchResponse>(`/api/scans/${scanId}/repository-search`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query, limit: 10 }),
+    });
   } catch {
     return null;
   }

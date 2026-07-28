@@ -219,6 +219,50 @@ export type RulesV2CandidateResult = {
   items: Array<{ candidate: RulesV2Candidate; decision: RulesV2Decision }>;
 };
 
+export type RepositoryIndexStatus = {
+  scan_id: string;
+  status: {
+    id?: string;
+    status: string;
+    active?: boolean;
+    files_indexed?: number;
+    chunks_generated?: number;
+    chunks_embedded?: number;
+    vectors_added?: number;
+    vectors_reused?: number;
+    duration_ms?: number;
+    error_message?: string | null;
+  };
+  embedding?: Record<string, unknown>;
+  vector_store?: Record<string, unknown>;
+  rag_version?: string;
+};
+
+export type RepositorySearchResult = {
+  chunk_id: string;
+  relative_path: string;
+  language: string;
+  symbol_name?: string | null;
+  symbol_type: string;
+  start_line: number;
+  end_line: number;
+  text: string;
+  sources: string[];
+  score: number;
+  score_reasons: Record<string, number>;
+  retrieval_reason: string;
+  trust_boundary: string;
+  metadata: Record<string, unknown>;
+};
+
+export type RepositorySearchResponse = {
+  query: string;
+  scan_id: string;
+  project_id?: string | null;
+  results: RepositorySearchResult[];
+  diagnostics: Record<string, unknown>;
+};
+
 export type Project = {
   id: string;
   name: string;

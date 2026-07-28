@@ -33,3 +33,27 @@ Stage 13.5 completion pass:
 Remaining honest boundary:
 
 - Rules v2 is production-grade for the local NOPE scope, but it is still a bounded static analysis engine, not a language-server-grade compiler for every framework in existence.
+
+## Stage 14: Hybrid Semantic Retrieval and Repository Intelligence
+
+Pre-stage commit: `2c72dfd`
+
+Stage 14 adds a repository-intelligence index that supports hybrid retrieval for Qwen actions and direct repository search.
+
+Implemented local scope:
+
+- Repository indexing stage runs after finding promotion and before Qwen review, without changing deterministic scan success.
+- Security-relevant files are chunked with symbol/configuration awareness and bounded file, byte, chunk, and token limits.
+- Redacted chunk metadata, file metadata, index jobs, retrieval sessions, retrieval results, and indexing failures persist in Postgres.
+- Qdrant is included in Compose as the vector store for redacted repository chunk vectors.
+- Retrieval combines exact file/route/symbol matches, keyword scoring, graph hints, finding-centered evidence, and vector scores when Qdrant is available.
+- Qwen actions prefer the Stage 14 hybrid RAG packet and fall back to the older deterministic RAG path if an index is unavailable.
+- Repository search UI and owner-scoped API endpoints expose index status and search results.
+- Retrieval context includes file, line range, provenance, score reasons, retrieval reason, and untrusted-repository trust-boundary labels.
+- Repository intelligence is explicitly read-only for findings: it cannot create, promote, suppress, reject, or mutate severity/confidence.
+- Benchmark mode `repository-intelligence` checks retrieval Hit@3/Hit@5 against the benchmark fixture.
+
+Remaining honest boundary:
+
+- The default local embedding provider is deterministic CPU hashing so the stack is self-contained and fast in CI. A `sentence_transformers` provider hook exists for BGE-style embeddings when the operator installs the dependency/model, but the local verified path does not download or require that neural model.
+- The index is designed for local repository snapshots and selected-scan retrieval. It is not a full language-server database or cross-repository semantic code search product.

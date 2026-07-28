@@ -308,6 +308,42 @@ def retrieve_context(
     )
 
 
+async def retrieve_context_async(
+    findings: list[Finding],
+    max_chunks: int,
+    *,
+    settings: Settings,
+    root: Path | None = None,
+    scan: Scan | None = None,
+    owner_user_id: str | None = None,
+) -> RagContext:
+    if scan and findings and (root or scan.repository_workspace_path):
+        try:
+            from nope_api.repository_intelligence import context_from_results, hybrid_search
+            from nope_api.storage import store
+
+            query_parts = []
+            for finding in findings[:3]:
+                query_parts.extend(
+                    [
+                        finding.title,
+                        finding.description,
+                        finding.affected_file or "",
+                        finding.affected_route or "",
+                        finding.symbol or "",
+                        finding.category,
+                    ]
+                )
+            query = " ".join(part for part in query_parts if part).strip()
+            if query and store.get_repository_index_status(scan.id, owner_user_id):
+                response = await hybrid_search(settings, store, scan=scan, query=query, owner_user_id=owner_user_id, findings=findings, limit=max_chunks)
+                if response.results:
+                    return context_from_results(response.results, settings, max_chunks=max_chunks)
+        except Exception:
+            pass
+    return retrieve_context(findings, max_chunks, settings=settings, root=root, scan=scan)
+
+
 def context_as_prompt(context: RagContext | list[RagChunk] | list[RetrievedContext]) -> str:
     if isinstance(context, RagContext):
         return rag_context_as_prompt(context)
@@ -547,7 +583,7 @@ async def structured_completion(
     context: RagContext | None = None,
 ) -> StructuredAIResult:
     action = normalize_ai_action(action)
-    context = context or retrieve_context([finding], settings.ai_max_retrieved_chunks, settings=settings, root=root, scan=scan)
+    context = context or await retrieve_context_async([finding], settings.ai_max_retrieved_chunks, settings=settings, root=root, scan=scan)
     action_instruction = {
         "explain": (
             "EXPLAIN MODE. Translate this exact finding into plain engineering language. "
@@ -656,7 +692,7 @@ async def run_ai_review(
             model=settings.ai_model_name,
             message="No findings required AI review.",
         )
-    context = retrieve_context(findings, settings.ai_max_retrieved_chunks, settings=settings, root=root, scan=scan)
+    context = await retrieve_context_async(findings, settings.ai_max_retrieved_chunks, settings=settings, root=root, scan=scan)
     if not context.chunks:
         return AIReview(status="Not tested", provider=settings.ai_provider, model=settings.ai_model_name, message="No findings required AI review.")
     try:
@@ -707,7 +743,14 @@ async def finding_action(
             "context_chunks": 0,
             "result": cached.model_dump(mode="json"),
         }
-    context = retrieve_context([finding], settings.ai_max_retrieved_chunks, settings=settings, root=root, scan=scan)
+    context = await retrieve_context_async(
+        [finding],
+        settings.ai_max_retrieved_chunks,
+        settings=settings,
+        root=root,
+        scan=scan,
+        owner_user_id=owner_user_id,
+    )
     try:
         result = await structured_completion(settings, action, finding, root=root, scan=scan, context=context)
         result = sanitize_result(result)
@@ -825,7 +868,7 @@ async def prepare_ai_action_job(
     root = Path(scan.repository_workspace_path) if scan.repository_workspace_path else None
     if root and not root.exists():
         root = None
-    context = retrieve_context([finding], settings.ai_max_retrieved_chunks, settings=settings, root=root, scan=scan)
+    context = await retrieve_context_async([finding], settings.ai_max_retrieved_chunks, settings=settings, root=root, scan=scan)
     factors = action_cache_factors(settings, finding, canonical, context)
     if settings.ai_provider == "none":
         job = store.create_ai_action_job(
@@ -912,7 +955,7 @@ async def run_ai_action_job(settings: Settings, store: Any, job_id: str, owner_u
     root = Path(scan.repository_workspace_path) if scan.repository_workspace_path else None
     if root and not root.exists():
         root = None
-    context = retrieve_context([finding], settings.ai_max_retrieved_chunks, settings=settings, root=root, scan=scan)
+    context = await retrieve_context_async([finding], settings.ai_max_retrieved_chunks, settings=settings, root=root, scan=scan, owner_user_id=owner_user_id)
     factors = action_cache_factors(settings, finding, started["action"], context)
     cached = store.get_ai_action_cache(factors["cache_key"], owner_user_id)
     if cached:

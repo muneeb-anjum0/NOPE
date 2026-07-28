@@ -4826,6 +4826,91 @@ textarea:focus-visible {
   }
 }
 
+.repository-search-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.repository-search-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.repository-index-strip,
+.source-badge-row,
+.score-breakdown div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.repository-index-strip span,
+.source-badge,
+.score-breakdown span {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 6px 9px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.repository-index-strip strong,
+.source-badge {
+  color: var(--accent-hot);
+}
+
+.repository-results {
+  display: grid;
+  gap: 12px;
+}
+
+.repository-result-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: rgba(16, 18, 17, 0.78);
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.repository-result-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.repository-result-head code {
+  color: var(--text-primary);
+  font-size: 0.92rem;
+}
+
+.repository-result-head p,
+.score-breakdown summary {
+  color: var(--text-secondary);
+}
+
+.repository-result-head > strong {
+  color: var(--accent-hot);
+  font-size: 1.35rem;
+}
+
+.repository-result-card pre {
+  margin: 0;
+  overflow: auto;
+  max-height: 260px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 12px;
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.22);
+  white-space: pre-wrap;
+}
+
+.score-breakdown {
+  color: var(--text-secondary);
+}
+
 @media (max-width: 1120px) {
   .app-grid.split {
     grid-template-columns: 1fr;

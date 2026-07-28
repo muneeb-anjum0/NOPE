@@ -12,6 +12,7 @@ from nope_api.config import get_settings
 from nope_api.db import connect, run_migrations
 from nope_api.lifecycle import LifecycleTransitionRequest, apply_transition
 from nope_api.models import BaselineState, FindingStatus, Project, Scan, ScanEvent, now_utc, new_id
+from nope_api.repository_intelligence import INDEX_SCHEMA_VERSION, QDRANT_COLLECTION, IndexedChunk
 from nope_api.reports import render_report
 
 
@@ -62,6 +63,12 @@ def _scanner_event_type(status: str, message: str = "") -> str:
 class PostgresStore:
     def __init__(self) -> None:
         self.settings = get_settings()
+
+    def _owner_for_scan(self, conn, scan_id: str, fallback: str | None = None) -> str | None:
+        if fallback:
+            return fallback
+        row = conn.execute("select owner_user_id from scans where id = %s", (scan_id,)).fetchone()
+        return row["owner_user_id"] if row else None
 
     def migrate(self) -> list[str]:
         return run_migrations(self.settings)
@@ -2402,6 +2409,362 @@ class PostgresStore:
             "total": len(rows),
             "items": rows[start : start + page_size],
         }
+
+    def create_repository_index_job(
+        self,
+        index_id: str,
+        scan: Scan,
+        owner_user_id: str | None,
+        settings,
+        *,
+        status: str,
+    ) -> dict[str, Any]:
+        self.migrate()
+        with connect(self.settings) as conn:
+            conn.execute(
+                """
+                insert into repository_indexes (
+                  id, owner_user_id, project_id, scan_id, status, active, index_schema_version,
+                  chunker_version, embedding_provider, embedding_model, embedding_dimension,
+                  distance_metric, vector_store, vector_collection, metadata
+                )
+                values (%s, %s, %s, %s, %s, false, %s, %s, %s, %s, %s, 'Cosine', %s, %s, %s)
+                on conflict (id) do update set
+                  status = excluded.status,
+                  updated_at = now()
+                """,
+                (
+                    index_id,
+                    owner_user_id,
+                    scan.project_id,
+                    scan.id,
+                    status,
+                    INDEX_SCHEMA_VERSION,
+                    "stage14-chunker-v1",
+                    settings.embedding_provider,
+                    settings.embedding_model,
+                    384,
+                    settings.vector_store,
+                    QDRANT_COLLECTION,
+                    Jsonb({"created_by": "stage14", "scan_id": scan.id}),
+                ),
+            )
+        return {"id": index_id, "status": status}
+
+    def repository_chunk_hashes(self, scan_id: str, owner_user_id: str | None = None) -> dict[str, str]:
+        self.migrate()
+        query = """
+            select c.id, c.content_hash
+            from repository_indexed_chunks c
+            join repository_indexes i on i.id = c.index_id
+            where i.active = true
+              and (
+                c.scan_id = %s
+                or (
+                  c.project_id is not null
+                  and c.project_id = (select project_id from scans where id = %s)
+                )
+              )
+        """
+        params: tuple[Any, ...] = (scan_id, scan_id)
+        if owner_user_id:
+            query += " and c.owner_user_id = %s"
+            params = (scan_id, scan_id, owner_user_id)
+        with connect(self.settings) as conn:
+            rows = conn.execute(query, params).fetchall()
+        return {row["id"]: row["content_hash"] for row in rows}
+
+    def save_repository_index(self, index_id: str, scan: Scan, owner_user_id: str | None, settings, chunks: list[IndexedChunk], result) -> None:
+        self.migrate()
+        files: dict[str, dict[str, Any]] = {}
+        for chunk in chunks:
+            current = files.setdefault(
+                chunk.relative_path,
+                {
+                    "language": chunk.language,
+                    "file_hash": chunk.file_hash,
+                    "byte_size": len(chunk.text.encode("utf-8", errors="ignore")),
+                    "chunk_count": 0,
+                    "framework_hints": set(chunk.framework_hints),
+                },
+            )
+            current["chunk_count"] += 1
+            current["framework_hints"].update(chunk.framework_hints)
+        with connect(self.settings) as conn:
+            owner_user_id = self._owner_for_scan(conn, scan.id, owner_user_id)
+            conn.execute("delete from repository_indexed_files where index_id = %s", (index_id,))
+            conn.execute("delete from repository_indexed_chunks where index_id = %s", (index_id,))
+            for relative_path, data in files.items():
+                conn.execute(
+                    """
+                    insert into repository_indexed_files (
+                      id, index_id, owner_user_id, project_id, scan_id, relative_path, language,
+                      file_hash, byte_size, chunk_count, framework_hints, status
+                    )
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'indexed')
+                    """,
+                    (
+                        "rif_" + sha256(f"{index_id}:{relative_path}".encode("utf-8", errors="ignore")).hexdigest()[:24],
+                        index_id,
+                        owner_user_id,
+                        scan.project_id,
+                        scan.id,
+                        relative_path,
+                        data["language"],
+                        data["file_hash"],
+                        data["byte_size"],
+                        data["chunk_count"],
+                        Jsonb(sorted(data["framework_hints"])),
+                    ),
+                )
+            for chunk in chunks:
+                conn.execute(
+                    """
+                    insert into repository_indexed_chunks (
+                      id, index_id, owner_user_id, project_id, scan_id, relative_path, language,
+                      framework_hints, symbol_name, symbol_type, start_line, end_line,
+                      parent_symbol, imports, exported, route_metadata, auth_relevance,
+                      data_access_relevance, storage_relevance, ai_relevance, rule_evidence_refs,
+                      content_hash, file_hash, chunker_version, index_schema_version, token_estimate,
+                      text_preview, vector_status
+                    )
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    on conflict (id) do update set
+                      index_id = excluded.index_id,
+                      owner_user_id = excluded.owner_user_id,
+                      project_id = excluded.project_id,
+                      scan_id = excluded.scan_id,
+                      relative_path = excluded.relative_path,
+                      language = excluded.language,
+                      framework_hints = excluded.framework_hints,
+                      symbol_name = excluded.symbol_name,
+                      symbol_type = excluded.symbol_type,
+                      start_line = excluded.start_line,
+                      end_line = excluded.end_line,
+                      parent_symbol = excluded.parent_symbol,
+                      imports = excluded.imports,
+                      exported = excluded.exported,
+                      route_metadata = excluded.route_metadata,
+                      auth_relevance = excluded.auth_relevance,
+                      data_access_relevance = excluded.data_access_relevance,
+                      storage_relevance = excluded.storage_relevance,
+                      ai_relevance = excluded.ai_relevance,
+                      rule_evidence_refs = excluded.rule_evidence_refs,
+                      content_hash = excluded.content_hash,
+                      file_hash = excluded.file_hash,
+                      chunker_version = excluded.chunker_version,
+                      index_schema_version = excluded.index_schema_version,
+                      token_estimate = excluded.token_estimate,
+                      text_preview = excluded.text_preview,
+                      vector_status = excluded.vector_status,
+                      updated_at = now()
+                    """,
+                    (
+                        chunk.id,
+                        index_id,
+                        owner_user_id,
+                        scan.project_id,
+                        scan.id,
+                        chunk.relative_path,
+                        chunk.language,
+                        Jsonb(chunk.framework_hints),
+                        chunk.symbol_name,
+                        chunk.symbol_type,
+                        chunk.start_line,
+                        chunk.end_line,
+                        chunk.parent_symbol,
+                        Jsonb(chunk.imports),
+                        chunk.exported,
+                        Jsonb(chunk.route_metadata),
+                        chunk.auth_relevance,
+                        chunk.data_access_relevance,
+                        chunk.storage_relevance,
+                        chunk.ai_relevance,
+                        Jsonb(chunk.rule_evidence_refs),
+                        chunk.content_hash,
+                        chunk.file_hash,
+                        chunk.chunker_version,
+                        chunk.index_schema_version,
+                        chunk.token_estimate,
+                        chunk.text,
+                    "embedded" if result.chunks_embedded else "metadata_only",
+                    ),
+                )
+
+    def complete_repository_index_job(self, index_id: str, owner_user_id: str | None, result) -> None:
+        self.migrate()
+        with connect(self.settings) as conn:
+            row = conn.execute("select scan_id from repository_indexes where id = %s", (index_id,)).fetchone()
+            if row and result.status in {"completed", "partial"}:
+                conn.execute("update repository_indexes set active = false where scan_id = %s", (row["scan_id"],))
+            conn.execute(
+                """
+                update repository_indexes
+                set status = %s,
+                    files_discovered = %s,
+                    files_indexed = %s,
+                    files_skipped = %s,
+                    chunks_generated = %s,
+                    chunks_embedded = %s,
+                    vectors_added = %s,
+                    vectors_reused = %s,
+                    vectors_deleted = %s,
+                    duration_ms = %s,
+                    embedding_provider = %s,
+                    embedding_model = %s,
+                    embedding_dimension = %s,
+                    error_message = %s,
+                    metadata = %s,
+                    completed_at = now(),
+                    updated_at = now(),
+                    active = %s
+                where id = %s
+                """,
+                (
+                    result.status,
+                    result.files_discovered,
+                    result.files_indexed,
+                    result.files_skipped,
+                    result.chunks_generated,
+                    result.chunks_embedded,
+                    result.vectors_added,
+                    result.vectors_reused,
+                    result.vectors_deleted,
+                    result.duration_ms,
+                    result.embedding_provider,
+                    result.embedding_model,
+                    result.embedding_dimension,
+                    "; ".join(result.errors)[:2000] if result.errors else None,
+                    Jsonb(result.model_dump(mode="json")),
+                    result.status in {"completed", "partial"},
+                    index_id,
+                ),
+            )
+
+    def fail_repository_index_job(self, index_id: str, owner_user_id: str | None, message: str, result) -> None:
+        self.migrate()
+        with connect(self.settings) as conn:
+            row = conn.execute("select project_id, scan_id from repository_indexes where id = %s", (index_id,)).fetchone()
+            conn.execute(
+                """
+                insert into repository_index_failures (id, owner_user_id, project_id, scan_id, index_id, stage, message, data)
+                values (%s, %s, %s, %s, %s, 'indexing', %s, %s)
+                """,
+                (
+                    new_id("rifail"),
+                    owner_user_id,
+                    row["project_id"] if row else None,
+                    row["scan_id"] if row else None,
+                    index_id,
+                    message[:2000],
+                    Jsonb(result.model_dump(mode="json") if hasattr(result, "model_dump") else {}),
+                ),
+            )
+
+    def get_repository_index_status(self, scan_id: str, owner_user_id: str | None = None) -> dict[str, Any] | None:
+        self.migrate()
+        query = "select * from repository_indexes where scan_id = %s"
+        params: tuple[Any, ...] = (scan_id,)
+        if owner_user_id:
+            query += " and owner_user_id = %s"
+            params = (scan_id, owner_user_id)
+        query += " order by active desc, created_at desc limit 1"
+        with connect(self.settings) as conn:
+            row = conn.execute(query, params).fetchone()
+        return dict(row) if row else None
+
+    def list_repository_chunks(self, scan_id: str, owner_user_id: str | None = None) -> list[IndexedChunk]:
+        self.migrate()
+        query = """
+            select c.*
+            from repository_indexed_chunks c
+            join repository_indexes i on i.id = c.index_id
+            where c.scan_id = %s and i.active = true
+        """
+        params: tuple[Any, ...] = (scan_id,)
+        if owner_user_id:
+            query += " and c.owner_user_id = %s"
+            params = (scan_id, owner_user_id)
+        query += " order by c.relative_path, c.start_line, c.id"
+        with connect(self.settings) as conn:
+            rows = conn.execute(query, params).fetchall()
+        chunks: list[IndexedChunk] = []
+        for row in rows:
+            chunks.append(
+                IndexedChunk(
+                    id=row["id"],
+                    project_id=row["project_id"],
+                    scan_id=row["scan_id"],
+                    relative_path=row["relative_path"],
+                    language=row["language"],
+                    framework_hints=row["framework_hints"] or [],
+                    symbol_name=row["symbol_name"],
+                    symbol_type=row["symbol_type"],
+                    start_line=row["start_line"],
+                    end_line=row["end_line"],
+                    parent_symbol=row["parent_symbol"],
+                    imports=row["imports"] or [],
+                    exported=row["exported"],
+                    route_metadata=row["route_metadata"] or {},
+                    auth_relevance=row["auth_relevance"],
+                    data_access_relevance=row["data_access_relevance"],
+                    storage_relevance=row["storage_relevance"],
+                    ai_relevance=row["ai_relevance"],
+                    rule_evidence_refs=row["rule_evidence_refs"] or [],
+                    content_hash=row["content_hash"],
+                    file_hash=row["file_hash"],
+                    chunker_version=row["chunker_version"],
+                    index_schema_version=row["index_schema_version"],
+                    token_estimate=row["token_estimate"],
+                    text=row["text_preview"],
+                )
+            )
+        return chunks
+
+    def save_retrieval_session(self, owner_user_id: str | None, scan: Scan, query: str, response) -> dict[str, Any]:
+        self.migrate()
+        session_id = new_id("rsrch")
+        started_hash = sha256(query.encode("utf-8", errors="ignore")).hexdigest()
+        with connect(self.settings) as conn:
+            conn.execute(
+                """
+                insert into repository_retrieval_sessions (
+                  id, owner_user_id, project_id, scan_id, query, query_hash, result_count,
+                  duration_ms, vector_used, diagnostics
+                )
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    session_id,
+                    owner_user_id,
+                    scan.project_id,
+                    scan.id,
+                    query[:600],
+                    started_hash,
+                    len(response.results),
+                    int(response.diagnostics.get("duration_ms") or 0),
+                    any("vector" in item.sources for item in response.results),
+                    Jsonb(response.diagnostics),
+                ),
+            )
+            for rank, item in enumerate(response.results, start=1):
+                conn.execute(
+                    """
+                    insert into repository_retrieval_results (id, session_id, chunk_id, rank, score, sources, score_reasons, data)
+                    values (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        "rres_" + sha256(f"{session_id}:{item.chunk_id}:{rank}".encode("utf-8", errors="ignore")).hexdigest()[:24],
+                        session_id,
+                        item.chunk_id,
+                        rank,
+                        item.score,
+                        Jsonb(item.sources),
+                        Jsonb(item.score_reasons),
+                        Jsonb(item.model_dump(mode="json")),
+                    ),
+                )
+        return {"id": session_id}
 
     def _upsert_repository_snapshot(self, conn, scan: Scan) -> None:
         if not scan.project_id or not (scan.repository_name or scan.branch or scan.commit_sha):

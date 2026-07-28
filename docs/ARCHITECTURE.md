@@ -31,7 +31,8 @@ Repository ZIP / Authorized URL
   -> Optional internal ZAP dynamic baseline scan
   -> NOPE rules engine
   -> Finding normalization and deduplication
-  -> Focused retrieval
+  -> Repository intelligence indexing
+  -> Hybrid retrieval
   -> Optional AI reasoning
   -> Coverage, reports, drift metadata
   -> Dashboard/API exports
@@ -45,6 +46,7 @@ Repository ZIP / Authorized URL
 - `nope-postgres`: local auth, project, scan, finding, coverage, stage, scanner-run, and generated report persistence.
 - `nope-redis`: queue broker.
 - `nope-minio`: object/artifact storage.
+- `nope-qdrant`: vector storage for redacted repository-intelligence chunks.
 - `nope-ai`: optional llama.cpp server for local Qwen inference, enabled with CPU or GPU Compose profiles.
 
 ## UI architecture
@@ -55,6 +57,7 @@ Repository ZIP / Authorized URL
 - `/app/projects/local/findings`: findings and detail workflow.
 - `/app/projects/local/attack-map`: attack graph canvas.
 - `/app/projects/local/coverage`: coverage matrix.
+- `/app/projects/local/search`: repository-intelligence search.
 - `/app/projects/local/scans`: scan launcher and history.
 - `/app/projects/local/assets`: asset classes.
 - `/app/projects/local/reports`: report exports.
@@ -67,6 +70,8 @@ The app shell uses a route-aware LineSidebar-style icon rail and a single graphi
 The local implementation uses Postgres for local authentication and scan persistence. The migration-backed repository stores projects, scans, stages, scanner runs, findings, evidence, finding sources/history, coverage, generated report bodies and report generation state, settings, baselines, drift events, artifacts, audit logs, durable Qwen jobs/cache, and GitHub contract entities.
 
 Current scan objects are also stored as JSON snapshots so the API contract remains stable while normalized tables preserve the high-value relational records used by reports, history, and status views.
+
+Repository intelligence adds normalized index tables for repository indexes, files, chunks, retrieval sessions, retrieval results, and indexing failures. Redacted chunk metadata lives in Postgres. Vector payloads live in Qdrant when the vector service is reachable. If Qdrant is unavailable, scans keep their deterministic findings and the index is marked partial instead of failing the scan.
 
 ## Finding lifecycle
 
@@ -98,6 +103,6 @@ NOPE separates evidence from reasoning:
 
 - Deterministic scanners and custom rules create findings.
 - The pipeline normalizes, deduplicates, and connects findings to evidence.
-- RAG retrieves focused context only.
+- Repository intelligence indexes focused code context and RAG retrieves only the chunks relevant to a selected finding or search query.
 - AI analysis can challenge or explain findings through llama.cpp, but cannot silently downgrade scanner evidence.
 - Failed scanners and failed AI are visible coverage gaps.

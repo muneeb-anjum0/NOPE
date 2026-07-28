@@ -4,7 +4,7 @@
 
 I built it around a simple frustration: fast builders often get scanner output, but not enough evidence to understand what is real, what was missed, and what still needs a human decision.
 
-NOPE runs deterministic scanners first, validates candidate findings against surrounding evidence, tracks coverage and drift, generates reports, and can ask a local Qwen GGUF model through llama.cpp to explain or challenge promoted findings.
+NOPE runs deterministic scanners first, validates candidate findings against surrounding evidence, indexes focused repository context, tracks coverage and drift, generates reports, and can ask a local Qwen GGUF model through llama.cpp to explain or challenge promoted findings.
 
 NOPE does **not** prove an application is secure, compliant, or safe to ship. It reports evidence-backed findings, coverage gaps, scanner failures, dynamic-scan limitations, and residual risk so a human reviewer can make a better decision.
 
@@ -49,6 +49,7 @@ The latest Stage 13 scanner-only run produced 41 related duplicate/supporting fi
 | Findings lifecycle | Verified locally | More semantic graph precision can improve future root-cause grouping. |
 | Reports | Verified locally | JSON, Markdown, SARIF, and PDF use persisted scan data. |
 | Baselines and drift | Verified inside project folders | Different project folders are not compared. |
+| Repository intelligence | Verified locally | Hybrid retrieval improves Qwen context and repo search; it does not promote or change findings. |
 | Qwen actions | Verified when local model is mounted | First uncached responses are hardware/model-bound. |
 | GitHub integration | Locally implemented, externally blocked | Real private repository access requires operator credentials and installation. |
 
@@ -133,8 +134,9 @@ authorized ZIP / URL / GitHub snapshot
   -> stack detection and attack-surface mapping
   -> NOPE rules plus scanner plugins
   -> evidence gate and finding normalization
+  -> repository intelligence index for files, symbols, routes, graph hints, and vectors
   -> durable findings, coverage, reports, baselines, and drift
-  -> focused RAG context for a selected finding
+  -> hybrid RAG context for a selected finding
   -> optional Qwen action: Explain, Challenge, Fix, Regression Test, Patch Review
 ```
 
@@ -160,39 +162,43 @@ flowchart LR
   map["Repository map<br/>stack, routes, files, graph"]
   rules["Rules and scanners<br/>NOPE pack plus external tools"]
   gate["Evidence gate<br/>promote, merge, withhold"]
+  index["Repository intelligence<br/>chunks, symbols, graph hints, vectors"]
   store["Durable state<br/>findings, events, coverage, reports"]
-  rag["Focused RAG<br/>retrieve only relevant context"]
+  rag["Hybrid RAG<br/>retrieve only relevant context"]
   qwen["Local Qwen<br/>optional explanation and review"]
   human["Human reviewer<br/>decides what to fix or accept"]
 
-  input --> guard --> map --> rules --> gate --> store
+  input --> guard --> map --> rules --> gate --> index --> store
   store --> rag --> qwen --> store
+  index --> rag
   store --> human
   qwen --> human
 
   classDef layer fill:#101211,stroke:#f02a56,stroke-width:1.5px,color:#f5f7f5;
   classDef guardNode fill:#171012,stroke:#f02a56,stroke-width:2px,color:#f5f7f5;
-  class input,map,rules,store,rag,qwen,human layer;
+  class input,map,rules,index,store,rag,qwen,human layer;
   class guard,gate guardNode;
 ```
 
-## RAG
+## Repository Intelligence and RAG
 
-NOPE's RAG is implemented, but it is deliberately not vector search. It is a deterministic retrieval layer that builds a small, explainable evidence packet for one selected finding.
+NOPE now uses hybrid retrieval. During a scan it builds a repository-intelligence index from security-relevant files, symbols, route hints, imports, code-graph metadata, finding evidence, and CPU-generated vectors stored in Qdrant when that service is available.
 
-The retrieval code currently uses:
+The retrieval layer currently uses:
 
 - finding metadata: title, category, severity, confidence, scanner sources, affected file, route, symbol, package, CVE, remediation, and evidence rows
-- lexical terms from the finding and evidence
-- direct file and route matches
-- imported files related to the finding file
-- extracted function and class snippets
+- exact file, route, and symbol matches
+- lexical terms from findings, evidence, and repository chunks
+- extracted function, class, configuration, and route-aware snippets
+- vector similarity over redacted repository chunks
 - attack-surface route context
-- code-graph edges around the finding, bounded by graph depth
+- code-graph edges and risk neighbors around the finding
 - stack evidence and scanner-run metadata
 - small built-in security guidance for authorization, Supabase, secrets, and dependencies
 
-Before Qwen sees anything, RAG redacts secret-like values, labels repository text as untrusted, keeps scanner evidence separate from repository evidence, records why each chunk was retrieved, deduplicates chunks, and applies file, chunk, byte, graph-depth, and token limits. The cache key includes the RAG version, prompt version, model, quantization, settings hash, and evidence hash, so cached answers invalidate when the evidence or retrieval contract changes.
+Before Qwen sees anything, RAG redacts secret-like values, labels repository text as untrusted, keeps scanner evidence separate from repository evidence, records why each chunk was retrieved, deduplicates chunks, and applies file, chunk, byte, graph-depth, and token limits. The cache key includes the RAG version, prompt version, model, quantization, settings hash, evidence hash, and retrieval contract, so cached answers invalidate when the evidence or retrieval shape changes.
+
+One boundary matters a lot: repository intelligence can improve search and Qwen context, but it never creates findings, suppresses findings, promotes candidates, or changes severity/confidence. The evidence gate remains the source of truth for what enters Findings.
 
 ```mermaid
 %%{init: {
@@ -217,6 +223,7 @@ flowchart TB
     route["Route and attack-surface context"]
     codeGraph["Code graph neighbors"]
     repo["Focused repository files"]
+    vectors["Qdrant vector hits"]
     symbols["Function and class snippets"]
     stack["Stack and scanner metadata"]
     guidance["Built-in security guidance"]
@@ -236,6 +243,7 @@ flowchart TB
   finding --> route
   finding --> codeGraph
   finding --> repo
+  finding --> vectors
   finding --> symbols
   finding --> stack
   finding --> guidance
@@ -244,6 +252,7 @@ flowchart TB
   route --> score
   codeGraph --> score
   repo --> score
+  vectors --> score
   symbols --> score
   stack --> score
   guidance --> score
@@ -252,7 +261,7 @@ flowchart TB
   classDef ragNode fill:#101211,stroke:#f02a56,stroke-width:1.5px,color:#f5f7f5;
   classDef important fill:#171012,stroke:#f02a56,stroke-width:2px,color:#f5f7f5;
   class finding,packet,prompt,qwen,validate,cache,result important;
-  class scanner,route,codeGraph,repo,symbols,stack,guidance,score,limits,safety ragNode;
+  class scanner,route,codeGraph,repo,vectors,symbols,stack,guidance,score,limits,safety ragNode;
 ```
 
 Qwen action prompts are mode-specific:
@@ -305,6 +314,7 @@ flowchart LR
     worker["Worker pipeline"]
     scanners["Deterministic scanners"]
     gate["Evidence gate"]
+    repoIndex["Repository intelligence indexer"]
   end
 
   subgraph dynamic["Optional dynamic boundary"]
@@ -316,6 +326,7 @@ flowchart LR
   subgraph outputs["Evidence, AI, and exports"]
     direction TB
     minio[("MinIO artifacts")]
+    qdrant[("Qdrant vectors")]
     qwen["Local Qwen via llama.cpp"]
     reports["JSON / Markdown / SARIF / PDF"]
   end
@@ -330,6 +341,9 @@ flowchart LR
   scanners -->|"raw candidates"| gate
   gate -->|"promoted findings"| worker
   gate -.->|"withheld / rejected candidate audit"| db
+  worker -->|"index chunks, symbols, graph hints"| repoIndex
+  repoIndex -->|"metadata and retrieval sessions"| db
+  repoIndex -->|"redacted embeddings"| qdrant
 
   worker -->|"allowed manifest only"| runner
   runner -->|"isolated runtime evidence"| zap
@@ -337,7 +351,8 @@ flowchart LR
 
   worker -->|"findings, coverage, drift, reports state"| db
   worker -->|"raw outputs and generated files"| minio
-  worker -->|"focused, redacted evidence"| qwen
+  qdrant -->|"vector candidates"| api
+  api -->|"hybrid RAG packet"| qwen
   qwen -->|"explain, challenge, fix, test review"| db
 
   db -->|"dashboard data"| api
@@ -349,8 +364,8 @@ flowchart LR
   classDef service fill:#101211,stroke:#f02a56,stroke-width:2px,color:#f5f7f5;
   classDef store fill:#141716,stroke:#f02a56,stroke-width:1.5px,color:#f5f7f5;
   class client,control,pipeline,dynamic,outputs lane;
-  class user,web,api,worker,scanners,gate,runner,zap,qwen,reports service;
-  class queue,db,minio store;
+  class user,web,api,worker,scanners,gate,repoIndex,runner,zap,qwen,reports service;
+  class queue,db,minio,qdrant store;
 ```
 
 ## Services
@@ -364,6 +379,7 @@ flowchart LR
 | Postgres | `nope-postgres` | Durable users, sessions, scans, findings, events, reports, settings |
 | Redis | `nope-redis` | Queue, cancellation flags, worker heartbeat |
 | MinIO | `nope-minio` | Raw scanner artifacts and binary report artifacts |
+| Qdrant | `nope-qdrant` | Vector store for repository-intelligence chunks |
 | AI | `nope-ai` | Optional llama.cpp server for local Qwen |
 
 ## Documentation

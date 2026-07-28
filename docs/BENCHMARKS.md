@@ -28,6 +28,13 @@ $env:PYTHONPATH='apps/api'
 python -m nope_api.benchmarks --mode scanner-plus-qwen --output .nope-benchmark-results/scanner-plus-qwen.json
 ```
 
+Repository-intelligence benchmark:
+
+```powershell
+$env:PYTHONPATH='apps/api'
+python -m nope_api.benchmarks --mode repository-intelligence --output .nope-benchmark-results/repository-intelligence.json --markdown-output .nope-benchmark-results/repository-intelligence.md
+```
+
 The same command works inside the API container:
 
 ```powershell
@@ -39,6 +46,7 @@ When the stack is already running, use `exec`:
 ```powershell
 docker compose exec -T nope-api python -m nope_api.benchmarks --mode scanner-only --output /tmp/nope-benchmark-scanner-only.json
 docker compose exec -T nope-api python -m nope_api.benchmarks --mode scanner-plus-qwen --output /tmp/nope-benchmark-scanner-plus-qwen.json
+docker compose exec -T nope-api python -m nope_api.benchmarks --mode repository-intelligence --output /tmp/nope-benchmark-repository-intelligence.json
 ```
 
 ## Output
@@ -76,6 +84,12 @@ Verified on 2026-07-19 from a rebuilt Stage 13 benchmark image:
 | scanner-only | passed | 41 | 80 | 41 | 0 | 0 | 0 | 41 | 1.000 | 1.000 | 1.000 | 60.495s |
 | scanner-plus-Qwen | passed | 41 | 70 | 41 | 0 | 0 | 0 | 31 | 1.000 | 1.000 | 1.000 | 99.575s |
 
+Verified on 2026-07-28 from local Stage 14 repository-intelligence mode:
+
+| Mode | Status | Indexed chunks | Queries | Hit@3 | Hit@5 | Median query |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| repository-intelligence | passed | 46 | 41 | 1.000 | 1.000 | 0 ms |
+
 The duplicate count represents related supporting evidence from multiple scanners, overlapping expected fixture concepts, or Rules v2 correlated evidence. It is not counted as a false positive when it is tied to a matched expected file/category.
 
 ## CI artifacts
@@ -88,5 +102,6 @@ The scanner-plus-Qwen benchmark stays local because GitHub runners do not have t
 
 - `scanner-only` disables AI by setting the local benchmark settings provider to `none`.
 - `scanner-plus-qwen` leaves the configured Qwen provider active. If Qwen is unavailable, the benchmark records the AI review state honestly through `qwen_contribution`.
+- `repository-intelligence` indexes the benchmark fixture directly and checks whether each expected finding retrieves its own source file in the top five results. It does not run scanners or Qwen.
 
 No external credentials are required.

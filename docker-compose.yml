@@ -61,6 +61,14 @@ services:
       NOPE_QWEN_TIMEOUT_SECONDS: ${NOPE_QWEN_TIMEOUT_SECONDS:-180}
       NOPE_AI_GPU_MEMORY_TARGET_MB: ${NOPE_QWEN_GPU_MEMORY_TARGET_MB:-5000}
       NOPE_QWEN_GPU_MEMORY_TARGET_MB: ${NOPE_QWEN_GPU_MEMORY_TARGET_MB:-5000}
+      NOPE_EMBEDDINGS_ENABLED: ${NOPE_EMBEDDINGS_ENABLED:-true}
+      NOPE_EMBEDDING_PROVIDER: ${NOPE_EMBEDDING_PROVIDER:-local_hashing}
+      NOPE_EMBEDDING_MODEL: ${NOPE_EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
+      NOPE_EMBEDDING_DEVICE: ${NOPE_EMBEDDING_DEVICE:-cpu}
+      NOPE_EMBEDDING_BATCH_SIZE: ${NOPE_EMBEDDING_BATCH_SIZE:-16}
+      NOPE_EMBEDDING_MAX_CONCURRENCY: ${NOPE_EMBEDDING_MAX_CONCURRENCY:-1}
+      NOPE_VECTOR_STORE: qdrant
+      NOPE_QDRANT_URL: http://nope-qdrant:6333
     ports:
       - "8000:8000"
     volumes:
@@ -73,6 +81,8 @@ services:
       nope-minio:
         condition: service_healthy
       nope-ai:
+        condition: service_healthy
+      nope-qdrant:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -122,6 +132,14 @@ services:
       NOPE_QWEN_TIMEOUT_SECONDS: ${NOPE_QWEN_TIMEOUT_SECONDS:-180}
       NOPE_AI_GPU_MEMORY_TARGET_MB: ${NOPE_QWEN_GPU_MEMORY_TARGET_MB:-5000}
       NOPE_QWEN_GPU_MEMORY_TARGET_MB: ${NOPE_QWEN_GPU_MEMORY_TARGET_MB:-5000}
+      NOPE_EMBEDDINGS_ENABLED: ${NOPE_EMBEDDINGS_ENABLED:-true}
+      NOPE_EMBEDDING_PROVIDER: ${NOPE_EMBEDDING_PROVIDER:-local_hashing}
+      NOPE_EMBEDDING_MODEL: ${NOPE_EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
+      NOPE_EMBEDDING_DEVICE: ${NOPE_EMBEDDING_DEVICE:-cpu}
+      NOPE_EMBEDDING_BATCH_SIZE: ${NOPE_EMBEDDING_BATCH_SIZE:-16}
+      NOPE_EMBEDDING_MAX_CONCURRENCY: ${NOPE_EMBEDDING_MAX_CONCURRENCY:-1}
+      NOPE_VECTOR_STORE: qdrant
+      NOPE_QDRANT_URL: http://nope-qdrant:6333
     volumes:
       - nope-workspaces:/app/.nope-workspaces
     depends_on:
@@ -132,6 +150,8 @@ services:
       nope-minio:
         condition: service_healthy
       nope-ai:
+        condition: service_healthy
+      nope-qdrant:
         condition: service_healthy
       nope-runner:
         condition: service_healthy
@@ -213,6 +233,24 @@ services:
     mem_limit: 256m
     cpus: 0.5
 
+  nope-qdrant:
+    image: qdrant/qdrant:v1.12.6
+    container_name: nope-qdrant
+    volumes:
+      - nope-qdrant:/qdrant/storage
+    expose:
+      - "6333"
+    environment:
+      QDRANT__SERVICE__ENABLE_CORS: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -lc '</dev/tcp/127.0.0.1/6333'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    pids_limit: 256
+    mem_limit: 1024m
+    cpus: 1.0
+
   nope-minio:
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z
     container_name: nope-minio
@@ -289,3 +327,4 @@ volumes:
   nope-postgres:
   nope-minio:
   nope-workspaces:
+  nope-qdrant:

@@ -28,6 +28,14 @@ from nope_api.lifecycle import LifecycleTransitionRequest
 from nope_api.models import AuthorizationScope, FindingStatus, GitHubSettings, Project, ProjectSettings, Scan, ScanMode, ScanRequest, SystemSettings
 from nope_api.queue import clear_scan_cancel, enqueue_scan_job, queue_status, request_scan_cancel, scan_events
 from nope_api.reports import ReportContext, render_report
+from nope_api.repository_intelligence import (
+    RAG_VERSION as HYBRID_RAG_VERSION,
+    VectorStore,
+    build_repository_index,
+    context_from_results,
+    embedding_provider,
+    hybrid_search,
+)
 from nope_api.rules_v2 import list_rule_inventory
 from nope_api.sandbox import sandbox_health
 from nope_api.scanners import scanner_capabilities, scanner_health
@@ -50,6 +58,15 @@ github_adapter = SecureGitHubAdapter(store, settings)
 
 class AIActionRequest(BaseModel):
     action: str
+
+
+class RepositorySearchRequest(BaseModel):
+    query: str
+    limit: int | None = None
+
+
+class RepositoryIndexRequest(BaseModel):
+    force: bool = False
 
 
 class GitHubRepositoryScanRequest(BaseModel):
@@ -124,6 +141,8 @@ async def health_details(authorization: str | None = Header(default=None)) -> di
     _require_owner_user_id(authorization)
     production_warnings = settings.validate_production_secrets()
     ai_health = await check_ai_health(settings)
+    provider = embedding_provider(settings)
+    vector_health = await VectorStore(settings, provider.dimension).health()
     return {
         "status": "ok" if not production_warnings else "degraded",
         "version": __version__,
@@ -140,6 +159,12 @@ async def health_details(authorization: str | None = Header(default=None)) -> di
             "health": ai_health,
         },
         "sandbox": sandbox_health(settings),
+        "repository_intelligence": {
+            "rag_version": HYBRID_RAG_VERSION,
+            "embeddings": provider.health(),
+            "vector_store": vector_health,
+            "enabled": settings.embeddings_enabled,
+        },
         "warnings": production_warnings,
     }
 
@@ -1226,9 +1251,55 @@ def model_settings(authorization: str | None = Header(default=None)) -> dict:
             "maximum_tokens": settings.ai_rag_max_tokens,
             "maximum_graph_depth": settings.ai_rag_graph_depth,
             "chunk_characters": settings.ai_rag_chunk_chars,
-            "embeddings_required": False,
+            "embeddings_required": settings.embeddings_enabled,
+            "hybrid_rag_version": HYBRID_RAG_VERSION,
+            "embedding_provider": settings.embedding_provider,
+            "embedding_model": settings.embedding_model,
+            "vector_store": settings.vector_store,
         },
     }
+
+
+@app.get("/api/scans/{scan_id}/repository-index")
+async def get_repository_index(scan_id: str, authorization: str | None = Header(default=None)) -> dict:
+    owner_user_id = _require_owner_user_id(authorization)
+    _load_scan(scan_id, authorization)
+    provider = embedding_provider(settings)
+    status = store.get_repository_index_status(scan_id, owner_user_id)
+    return {
+        "scan_id": scan_id,
+        "status": status or {"status": "not_indexed"},
+        "embedding": provider.health(),
+        "vector_store": await VectorStore(settings, provider.dimension).health(),
+        "rag_version": HYBRID_RAG_VERSION,
+    }
+
+
+@app.post("/api/scans/{scan_id}/repository-index")
+async def create_repository_index(scan_id: str, payload: RepositoryIndexRequest | None = None, authorization: str | None = Header(default=None)) -> dict:
+    owner_user_id = _require_owner_user_id(authorization)
+    scan = _load_scan(scan_id, authorization)
+    root = Path(scan.repository_workspace_path) if scan.repository_workspace_path else None
+    if not root or not root.exists():
+        raise HTTPException(status_code=409, detail="Repository workspace is not available for indexing.")
+    existing = store.get_repository_index_status(scan_id, owner_user_id)
+    if existing and existing.get("active") and not (payload and payload.force):
+        return {"scan_id": scan_id, "status": existing, "message": "Active repository index already exists."}
+    result = await build_repository_index(settings, store, scan, root, owner_user_id)
+    return result.model_dump(mode="json")
+
+
+@app.post("/api/scans/{scan_id}/repository-search")
+async def search_repository(scan_id: str, payload: RepositorySearchRequest, authorization: str | None = Header(default=None)) -> dict:
+    owner_user_id = _require_owner_user_id(authorization)
+    scan = _load_scan(scan_id, authorization)
+    if not payload.query.strip():
+        raise HTTPException(status_code=400, detail="query is required.")
+    started = datetime.now(timezone.utc)
+    response = await hybrid_search(settings, store, scan=scan, query=payload.query, owner_user_id=owner_user_id, findings=scan.findings, limit=payload.limit)
+    response.diagnostics["duration_ms"] = int((datetime.now(timezone.utc) - started).total_seconds() * 1000)
+    store.save_retrieval_session(owner_user_id, scan, payload.query, response)
+    return response.model_dump(mode="json")
 
 
 @app.post("/api/settings/model/test")

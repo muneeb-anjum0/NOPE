@@ -31,6 +31,9 @@ Except for sanitized `GET /health` and `POST /api/auth/login`, endpoints require
 - `GET /api/scans/{scan_id}/drift` - list persisted drift events for the scan.
 - `GET /api/scans/{scan_id}/coverage` - coverage records.
 - `GET /api/scans/{scan_id}/attack-map` - attack-surface graph.
+- `GET /api/scans/{scan_id}/repository-index` - owner-scoped repository-intelligence index status for the selected scan.
+- `POST /api/scans/{scan_id}/repository-index` - rebuild the repository-intelligence index from the scan workspace when it is still available.
+- `POST /api/scans/{scan_id}/repository-search` - hybrid exact/keyword/graph/vector repository search over the selected scan's active index.
 - `GET /api/rules-v2/rules` - authenticated Rules v2 catalog inventory with rule metadata, families, versions, and validation summary.
 - `GET /api/scans/{scan_id}/rules-v2` - owner-scoped Rules v2 summary for a scan, including catalog, coverage, metrics, and failures.
 - `GET /api/scans/{scan_id}/rules-v2/candidates` - owner-scoped candidate review list with filters for `result`, `family`, `rule`, `severity`, `confidence`, `page`, and `page_size`.
@@ -78,7 +81,8 @@ Except for sanitized `GET /health` and `POST /api/auth/login`, endpoints require
 - Report failures are durable, redacted, and retryable; failed or running report rows are never served as completed downloads.
 - Retention cleanup is owner-scoped and removes expired scan-linked reports, artifacts, events, and drift rows through database-owned cascading state.
 - Finding AI actions are owner-scoped, durable, restart-recoverable, and cached for 24 hours using finding fingerprint, action, model, quantization, prompt version, RAG version, evidence hash, and settings hash.
-- Qwen receives bounded RAG context only; whole repositories and raw secrets are not persisted or sent as action context.
+- Qwen receives bounded hybrid RAG context only; whole repositories and raw secrets are not persisted or sent as action context.
+- Repository intelligence stores redacted chunk metadata in Postgres and vector payloads in Qdrant when available. Retrieval can improve Qwen context and repository search, but it cannot promote, suppress, reject, or modify findings.
 - Rules v2 candidates are owner-scoped and can be reviewed even when they are withheld from confirmed findings.
 - Project, scan, report, settings, GitHub contract, and AI explanation routes are scoped to the authenticated local user.
 - Sensitive settings are encrypted at rest and are not returned after save.

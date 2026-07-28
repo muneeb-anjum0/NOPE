@@ -15,7 +15,7 @@ SECRET_PATTERNS = [
     re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['\"]?[^'\"\s]{8,}"),
     re.compile(r"(?i)(supabase[_-]?service[_-]?role|service_role)\s*[:=]\s*['\"]?[^'\"\s]{8,}"),
 ]
-RAG_VERSION = "stage7-rag-v1"
+RAG_VERSION = "stage14-hybrid-rag-v1"
 
 SOURCE_SUFFIXES = {".js", ".jsx", ".ts", ".tsx", ".py", ".sql", ".json", ".toml", ".yaml", ".yml", ".tf", ".md"}
 SKIP_DIRS = {".git", ".next", "node_modules", "__pycache__", ".pytest_cache", "dist", "build", "coverage"}

@@ -112,6 +112,27 @@ class Settings(BaseSettings):
     ai_rag_max_tokens: int = 6000
     ai_rag_graph_depth: int = 2
     ai_rag_chunk_chars: int = 1600
+    embeddings_enabled: bool = True
+    embedding_provider: str = "local_hashing"
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    embedding_device: str = "cpu"
+    embedding_batch_size: int = 16
+    embedding_max_concurrency: int = 1
+    embedding_query_prefix: str = ""
+    embedding_document_prefix: str = ""
+    vector_store: str = "qdrant"
+    qdrant_url: str = "http://localhost:6333"
+    retrieval_top_k: int = 30
+    retrieval_final_k: int = 10
+    retrieval_max_query_chars: int = 600
+    retrieval_max_file_count: int = 8000
+    retrieval_max_file_bytes: int = 1024 * 1024
+    retrieval_max_total_bytes: int = 120 * 1024 * 1024
+    retrieval_max_chunks: int = 20000
+    retrieval_max_chunk_chars: int = 2200
+    retrieval_job_timeout_seconds: int = 300
+    retrieval_query_timeout_seconds: int = 20
+    retrieval_cpu_threads: int = 2
 
     @property
     def allowed_web_origins(self) -> list[str]:

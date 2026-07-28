@@ -8,6 +8,7 @@ from nope_api.attack_surface import build_attack_surface, build_code_graph
 from nope_api.config import Settings
 from nope_api.finding_validation import validate_findings, validation_counts
 from nope_api.models import CoverageRecord, CoverageStatus, Scan, ScanMode, ScannerRun, now_utc
+from nope_api.repository_intelligence import build_repository_index
 from nope_api.rules_engine import dedupe_findings, run_rules
 from nope_api.rules_v2 import run_rules_v2
 from nope_api.sandbox import run_sandbox_assessment
@@ -267,6 +268,25 @@ async def run_repository_scan(
     scan.findings = _promote_validated_findings(scan, findings, root)
     scan.coverage = merge_coverage(default_coverage(), sandbox_coverage, scan.scanner_runs)
     await _checkpoint(scan, progress_callback, cancellation_checker)
+
+    scan.stages.append({"name": "Indexing repository intelligence", "status": "running"})
+    await _checkpoint(scan, progress_callback, cancellation_checker)
+    try:
+        from nope_api.storage import store
+
+        index_result = await build_repository_index(settings, store, scan, root)
+        scan.stages[-1]["status"] = "completed" if index_result.status == "completed" else "partial"
+        scan.stages[-1]["message"] = (
+            f"{index_result.files_indexed} files, {index_result.chunks_generated} chunks, "
+            f"{index_result.vectors_added} vectors added, {index_result.vectors_reused} reused."
+        )
+        scan.stages[-1]["data"] = index_result.model_dump(mode="json")
+    except Exception as exc:
+        scan.stages[-1]["status"] = "partial"
+        scan.stages[-1]["message"] = f"Repository intelligence indexing failed without affecting deterministic scan results: {exc}"
+        scan.stages[-1]["data"] = {"stage14_failure_safe": True, "error": str(exc)}
+    await _checkpoint(scan, progress_callback, cancellation_checker)
+
     scan.stages.append({"name": "Running Qwen review", "status": "running"})
     await _checkpoint(scan, progress_callback, cancellation_checker)
     scan.ai_review = await run_ai_review(settings, scan.findings, root=root, scan=scan)
