@@ -10,6 +10,28 @@ jobs:
     name: Backend / API tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nope
+          POSTGRES_USER: nope
+          POSTGRES_PASSWORD: nope
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nope -d nope"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NOPE_DATABASE_URL: postgresql+psycopg://nope:nope@127.0.0.1:5432/nope
+      NOPE_AUTH_DATABASE_URL: postgresql://nope:nope@127.0.0.1:5432/nope
+      NOPE_REDIS_URL: redis://127.0.0.1:6379/0
+      NOPE_MINIO_ENDPOINT: http://127.0.0.1:9000
+      NOPE_AI_PROVIDER: none
+      NOPE_EMBEDDING_PROVIDER: local_hashing
+      NOPE_EMBEDDING_ALLOW_MODEL_DOWNLOAD: "false"
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
