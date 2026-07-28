@@ -366,9 +366,9 @@ def test_ecosystem_plugins_build_controlled_commands(tmp_path):
         BundlerAuditPlugin().build_command(tmp_path),
     ]
 
-    flat = " ".join(" ".join(command) for command in commands)
-    assert "install" not in flat
-    assert "run" not in flat
+    tokens = [token for command in commands for token in command]
+    assert "install" not in tokens
+    assert "run" not in tokens
     assert "--json" in NpmAuditPlugin().build_command(tmp_path)
     assert "--ignore-scripts" in NpmAuditPlugin().build_command(tmp_path)
     assert "--no-update" in BundlerAuditPlugin().build_command(tmp_path)
