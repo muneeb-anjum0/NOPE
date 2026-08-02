@@ -198,6 +198,8 @@ async def run_repository_scan(
     settings: Settings,
     progress_callback: ProgressCallback | None = None,
     cancellation_checker: CancellationChecker | None = None,
+    *,
+    owner_user_id: str | None = None,
 ) -> Scan:
     scan.status = "running"
     scan.stages.append({"name": "Detecting stack", "status": "running"})
@@ -277,7 +279,14 @@ async def run_repository_scan(
         async def repository_index_cancelled() -> bool:
             return bool(cancellation_checker and await cancellation_checker(scan))
 
-        index_result = await build_repository_index(settings, store, scan, root, cancellation_checker=repository_index_cancelled)
+        index_result = await build_repository_index(
+            settings,
+            store,
+            scan,
+            root,
+            owner_user_id=owner_user_id,
+            cancellation_checker=repository_index_cancelled,
+        )
         if index_result.status == "cancelled":
             scan.stages[-1]["status"] = "cancelled"
             scan.stages[-1]["message"] = "Repository intelligence indexing was cancelled."
@@ -354,8 +363,17 @@ async def run_full_scan(
     settings: Settings,
     progress_callback: ProgressCallback | None = None,
     cancellation_checker: CancellationChecker | None = None,
+    *,
+    owner_user_id: str | None = None,
 ) -> Scan:
-    await run_repository_scan(scan, root, settings, progress_callback, cancellation_checker)
+    await run_repository_scan(
+        scan,
+        root,
+        settings,
+        progress_callback,
+        cancellation_checker,
+        owner_user_id=owner_user_id,
+    )
     if scan.target_url:
         scan.stages.append({"name": "Running URL checks", "status": "running"})
         await _checkpoint(scan, progress_callback, cancellation_checker)

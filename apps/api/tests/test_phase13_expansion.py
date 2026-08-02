@@ -204,8 +204,10 @@ async def test_phase13_e2e_login_project_zip_scan_findings_qwen_report_baseline_
             persisted,
             Path(persisted.repository_workspace_path),
             Settings(ai_provider="none", sandbox_enabled=False),
+            owner_user_id=owner_id,
         )
         store.save_scan(completed, owner_id)
+        assert store.get_repository_index_status(scan_id, owner_id) is not None
 
         findings = client.get(f"/api/scans/{scan_id}/findings?severity=high&page_size=5", headers=headers)
         assert findings.status_code == 200

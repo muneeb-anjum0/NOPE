@@ -164,13 +164,18 @@ PDF bodies are persisted in Postgres; MinIO stores binary artifacts when reachab
 
 NOPE does not silently download embedding models during normal scans. Download the local CPU model once into the shared Docker cache:
 
-```powershell
+On Linux, prepare the dedicated non-secret model cache for the non-root API and worker
+containers before downloading:
+
+```bash
+mkdir -p "${NOPE_EMBEDDING_MODEL_HOST_DIR:-.nope-model-cache}"
+chmod 0777 "${NOPE_EMBEDDING_MODEL_HOST_DIR:-.nope-model-cache}"
 docker compose exec -T nope-api python -m nope_api.embedding_cli download --model BAAI/bge-small-en-v1.5 --cache-dir /app/.nope-model-cache --device cpu
 ```
 
 Then smoke-test the cached model:
 
-```powershell
+```bash
 docker compose exec -T nope-api python -m nope_api.embedding_cli smoke --model BAAI/bge-small-en-v1.5 --cache-dir /app/.nope-model-cache --device cpu
 ```
 

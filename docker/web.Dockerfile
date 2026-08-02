@@ -1,18 +1,24 @@
 FROM node:24-alpine AS deps
-WORKDIR /app/apps/web
-COPY apps/web/package.json ./
-RUN npm install
+WORKDIR /app
+RUN npm install --global pnpm@11.5.0
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web/package.json ./apps/web/package.json
+RUN pnpm install --frozen-lockfile --filter nope-web...
 
 FROM node:24-alpine AS builder
-WORKDIR /app/apps/web
-COPY --from=deps /app/apps/web/node_modules ./node_modules
-COPY apps/web ./
-RUN npm run build
+WORKDIR /app
+RUN npm install --global pnpm@11.5.0
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web ./apps/web
+RUN pnpm --dir apps/web build
 
 FROM node:24-alpine AS runtime
 WORKDIR /app/apps/web
 ENV NODE_ENV=production
 RUN addgroup -S nope && adduser -S nope -G nope
+COPY --from=builder /app/node_modules /app/node_modules
 COPY --from=builder /app/apps/web ./
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 USER nope

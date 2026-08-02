@@ -521,12 +521,26 @@ async def execute_scan_job(settings: Settings, job: dict[str, Any]) -> None:
             root = Path(str(job["repository_workspace_path"]))
             if not root.exists():
                 raise FileNotFoundError(f"Repository workspace is missing: {root}")
-            completed = await run_repository_scan(scan, root, settings, persist_progress, cancelled)
+            completed = await run_repository_scan(
+                scan,
+                root,
+                settings,
+                persist_progress,
+                cancelled,
+                owner_user_id=owner_user_id,
+            )
         else:
             root = Path(str(job["repository_workspace_path"]))
             if not root.exists():
                 raise FileNotFoundError(f"Repository workspace is missing: {root}")
-            completed = await run_full_scan(scan, root, settings, persist_progress, cancelled)
+            completed = await run_full_scan(
+                scan,
+                root,
+                settings,
+                persist_progress,
+                cancelled,
+                owner_user_id=owner_user_id,
+            )
 
         if await is_scan_cancelled(settings, scan_id):
             completed.status = "cancelled"

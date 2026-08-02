@@ -83,7 +83,9 @@ The Qwen benchmark requires the local model runtime to be up and reachable.
 
 Repository intelligence uses real local CPU embeddings in the product stack. Download and smoke-test the model in Docker before a full local semantic retrieval verification:
 
-```powershell
+```bash
+mkdir -p "${NOPE_EMBEDDING_MODEL_HOST_DIR:-.nope-model-cache}"
+chmod 0777 "${NOPE_EMBEDDING_MODEL_HOST_DIR:-.nope-model-cache}"
 docker compose exec -T nope-api python -m nope_api.embedding_cli download --model BAAI/bge-small-en-v1.5 --cache-dir /app/.nope-model-cache --device cpu
 docker compose exec -T nope-api python -m nope_api.embedding_cli smoke --model BAAI/bge-small-en-v1.5 --cache-dir /app/.nope-model-cache --device cpu
 ```
@@ -115,10 +117,15 @@ python -m alembic -c apps/api/alembic.ini current
 pnpm --dir apps/web audit --audit-level high
 docker compose run --rm --no-deps --entrypoint python nope-api -m pip check
 docker compose run --rm --no-deps -e TMPDIR=/app/.nope-workspaces --entrypoint pip-audit nope-api -r /app/apps/api/requirements.txt --progress-spinner off
+docker compose run --rm --no-deps --entrypoint pip-audit nope-api --path /opt/semgrep/lib/python3.11/site-packages --progress-spinner off
+docker compose run --rm --no-deps --entrypoint pip-audit nope-api --path /opt/checkov/lib/python3.11/site-packages --progress-spinner off
 docker compose run --rm --no-deps -e TRIVY_CACHE_DIR=/app/.nope-workspaces/trivy-cache --entrypoint trivy nope-api fs --cache-dir /app/.nope-workspaces/trivy-cache --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --exit-code 1 --skip-dirs /app/.nope-workspaces --skip-dirs /app/apps/api/tests/fixtures --skip-dirs /app/benchmarks /app
 ```
 
-`pip-audit` currently reports the documented Semgrep/OpenTelemetry protobuf scanner-chain residual in `docs/SECURITY_MODEL.md`. Production-code Trivy scanning excludes intentionally vulnerable security fixtures.
+The application dependency graph audits cleanly apart from the documented PyTorch
+index-resolution skip. Scanner-only upstream advisories are documented in
+`docs/SECURITY_MODEL.md`. Production-code Trivy scanning excludes intentionally
+vulnerable security fixtures.
 
 ## Clean-Room Verification
 

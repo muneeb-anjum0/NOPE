@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 import pytest
 
@@ -13,10 +14,39 @@ from nope_api.repository_intelligence import (
     RepositoryIndexCancelled,
     build_repository_index,
     context_from_results,
+    delete_repository_vectors,
     hybrid_search,
     make_chunks,
+    qdrant_point_id,
     stable_hash,
 )
+
+
+@pytest.mark.asyncio
+async def test_delete_repository_vectors_removes_each_qdrant_scan(monkeypatch):
+    deleted: list[str] = []
+
+    class FakeVectorStore:
+        def __init__(self, settings, dimension):
+            assert dimension == 1
+
+        async def delete_scan(self, scan_id: str):
+            deleted.append(scan_id)
+
+    monkeypatch.setattr("nope_api.repository_intelligence.VectorStore", FakeVectorStore)
+    await delete_repository_vectors(settings(vector_store="qdrant"), ["scan_one", "scan_two"])
+
+    assert deleted == ["scan_one", "scan_two"]
+
+
+@pytest.mark.asyncio
+async def test_delete_repository_vectors_is_noop_when_vector_store_is_disabled(monkeypatch):
+    monkeypatch.setattr(
+        "nope_api.repository_intelligence.VectorStore",
+        lambda *args, **kwargs: pytest.fail("disabled vector store must not be constructed"),
+    )
+
+    await delete_repository_vectors(settings(vector_store="disabled"), ["scan_one"])
 
 
 def write(path: Path, text: str) -> None:
@@ -99,6 +129,16 @@ def build_repo(tmp_path: Path) -> Path:
     write(root / "node_modules/ignored.js", "export const ignored = true;\n")
     write(root / "image.png", "not really an image\n")
     return root
+
+
+def test_stage14_qdrant_point_ids_are_deterministic_uuids():
+    chunk_id = "ric_0123456789abcdef0123456789abcdef"
+
+    point_id = qdrant_point_id(chunk_id)
+
+    assert str(UUID(point_id)) == point_id
+    assert qdrant_point_id(chunk_id) == point_id
+    assert qdrant_point_id(f"{chunk_id}-different") != point_id
 
 
 class FakeRepositoryStore:

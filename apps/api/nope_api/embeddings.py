@@ -207,7 +207,10 @@ class SentenceTransformersEmbeddingProvider(BaseEmbeddingProvider):
                 "Local embedding model is unavailable. Run the explicit model download command or set "
                 "NOPE_EMBEDDING_ALLOW_MODEL_DOWNLOAD=true for a one-time controlled download."
             ) from exc
-        self.dimension = int(self._model.get_sentence_embedding_dimension())
+        dimension_getter = getattr(self._model, "get_embedding_dimension", None)
+        if dimension_getter is None:
+            dimension_getter = self._model.get_sentence_embedding_dimension
+        self.dimension = int(dimension_getter())
         if self.dimension <= 0:
             raise EmbeddingCompatibilityError(f"Embedding model reported invalid dimension: {self.dimension}")
         self.model_revision = self.settings.embedding_model_revision or getattr(self._model, "_model_card_vars", {}).get("model_name", "local")

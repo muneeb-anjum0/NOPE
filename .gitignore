@@ -11,6 +11,8 @@ __pycache__/
 .nope-workspaces/
 .nope-model-cache/
 .nope-benchmark-results/
+.nope-investigation-benchmark-results/
+.nope-repository-benchmark-results/
 .tmp/
 .env
 !benchmarks/fixtures/nope-benchmark-v1/.env

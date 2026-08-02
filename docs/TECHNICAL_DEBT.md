@@ -8,10 +8,10 @@ This file tracks current known debt and explicit external blocks. Historical fix
 
 - **Production deployment hardening:** local Compose is suitable for trusted local operation, but production needs real secrets, TLS, backups, private service bindings, monitoring, and a hardened runner deployment.
 - **Runner residual risk:** `nope-runner` intentionally owns Docker daemon access for local sandbox/ZAP execution. The general worker is socketless, but a runner compromise is still a Docker-host compromise. Production should use rootless Docker, an authorization proxy, or a separate runner host.
-- **Python dependency residual:** `pip-audit` reports `protobuf 4.25.9` / `CVE-2026-0994` through the Semgrep/OpenTelemetry scanner chain. The documented fix requires protobuf 5/6 while the current scanner dependency path pins `<5`.
 
 ## Medium
 
+- **Scanner CLI dependency advisories:** the isolated Semgrep 1.172.0 environment pins MCP 1.23.3, and Checkov 3.3.9 pins aiohttp 3.13.5 and ecdsa 0.19.2. Current upstream scanner releases do not permit all advisory-fixed versions. Both scanners run as bounded subprocesses; Checkov uses `--skip-download`, and neither dependency is imported by the NOPE API runtime.
 - **Qwen first uncached latency:** durable caching removes repeated latency, but first-generation Explain/Challenge/Fix/Test actions remain bounded by the local 8B GGUF model and GPU throughput.
 - **Attack graph precision:** graph generation is useful and tested, but deeper interprocedural AST/data-flow precision can improve future root-cause paths.
 - **Authenticated dynamic crawling:** NOPE supports manifest-declared internal ZAP baseline scans and reports unauthenticated/partial states honestly. Full authenticated browser crawling is future scope.

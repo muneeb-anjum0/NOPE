@@ -34,6 +34,7 @@ from nope_api.repository_intelligence import (
     RAG_VERSION as HYBRID_RAG_VERSION,
     VectorStore,
     build_repository_index,
+    delete_repository_vectors,
     embedding_provider,
     hybrid_search,
 )
@@ -464,9 +465,10 @@ async def delete_project(project_id: str, authorization: str | None = Header(def
     owner_user_id = _require_owner_user_id(authorization)
     if not store.user_owns_project(project_id, owner_user_id):
         raise HTTPException(status_code=404, detail="Project not found.")
-    for scan in store.list_scans(owner_user_id):
-        if scan.project_id == project_id:
-            await request_scan_cancel(settings, scan.id)
+    project_scans = [scan for scan in store.list_scans(owner_user_id) if scan.project_id == project_id]
+    for scan in project_scans:
+        await request_scan_cancel(settings, scan.id)
+    await delete_repository_vectors(settings, [scan.id for scan in project_scans])
     store.record_audit_log("project.deleted", owner_user_id, project_id=project_id, data={"project_id": project_id})
     deleted = store.delete_project(project_id, owner_user_id)
     if not deleted:
@@ -611,6 +613,7 @@ async def delete_scan(scan_id: str, authorization: str | None = Header(default=N
     owner_user_id = _require_owner_user_id(authorization)
     scan = _load_scan(scan_id, authorization)
     await request_scan_cancel(settings, scan_id)
+    await delete_repository_vectors(settings, [scan_id])
     deleted = store.delete_scan(scan_id, owner_user_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Scan not found.")

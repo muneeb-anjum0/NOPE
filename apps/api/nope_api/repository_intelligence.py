@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable
+from uuid import UUID
 
 import httpx
 from pydantic import BaseModel, Field
@@ -27,6 +28,11 @@ INDEX_SCHEMA_VERSION = "repo-intelligence.v1"
 CHUNKER_VERSION = "stage14-chunker-v1"
 RAG_VERSION = "stage14-hybrid-rag-v1"
 QDRANT_COLLECTION = "nope_repository_chunks_v1"
+
+
+def qdrant_point_id(chunk_id: str) -> str:
+    """Map NOPE chunk identifiers to Qdrant's UUID-compatible point IDs."""
+    return str(UUID(stable_hash(chunk_id)[:32]))
 
 
 class RepositoryIndexCancelled(RuntimeError):
@@ -286,9 +292,10 @@ class VectorStore:
         for chunk, vector in zip(chunks, vectors):
             points.append(
                 {
-                    "id": chunk.id,
+                    "id": qdrant_point_id(chunk.id),
                     "vector": vector,
                     "payload": {
+                        "chunk_id": chunk.id,
                         "scan_id": chunk.scan_id,
                         "project_id": chunk.project_id,
                         "relative_path": chunk.relative_path,
@@ -321,6 +328,15 @@ class VectorStore:
             response = await client.post(f"{self.url}/collections/{QDRANT_COLLECTION}/points/delete?wait=true", json=payload)
             if response.status_code not in {200, 404}:
                 response.raise_for_status()
+
+
+async def delete_repository_vectors(settings: Settings, scan_ids: list[str]) -> None:
+    """Delete external vector data before the relational scan records disappear."""
+    if settings.vector_store != "qdrant" or not scan_ids:
+        return
+    vector_store = VectorStore(settings, dimension=1)
+    for scan_id in scan_ids:
+        await vector_store.delete_scan(scan_id)
 
 
 def should_index(path: Path, root: Path, settings: Settings) -> tuple[bool, str | None]:

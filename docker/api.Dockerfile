@@ -55,6 +55,20 @@ COPY apps/api/requirements.txt /app/apps/api/requirements.txt
 RUN pip install --no-cache-dir -r /app/apps/api/requirements.txt \
     && pip uninstall -y wheel
 
+# Semgrep is a subprocess scanner, not an application library. Keep its pinned
+# MCP/OpenTelemetry dependency graph isolated from NOPE's API dependencies.
+RUN python -m venv /opt/semgrep \
+    && /opt/semgrep/bin/pip install --no-cache-dir semgrep==1.172.0 \
+    && /opt/semgrep/bin/pip uninstall -y wheel
+RUN python -m venv /opt/checkov \
+    && /opt/checkov/bin/pip install --no-cache-dir checkov==3.3.9 \
+    && /opt/checkov/bin/pip uninstall -y wheel
+RUN ln -s /opt/semgrep/bin/semgrep /usr/local/bin/semgrep \
+    && ln -s /opt/checkov/bin/checkov /usr/local/bin/checkov \
+    && pip install --no-cache-dir --upgrade pip==26.1.2 setuptools==83.0.0 \
+    && /opt/semgrep/bin/pip install --no-cache-dir --upgrade pip==26.1.2 setuptools==83.0.0 \
+    && /opt/checkov/bin/pip install --no-cache-dir --upgrade pip==26.1.2 setuptools==83.0.0
+
 COPY apps/api /app/apps/api
 COPY apps/worker /app/apps/worker
 COPY security-packs /app/security-packs

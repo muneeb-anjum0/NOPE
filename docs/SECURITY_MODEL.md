@@ -53,7 +53,8 @@ NOPE treats every uploaded repository and every scanned target as potentially ho
 - Rootless Docker, a Docker authorization proxy, or a separate runner host would further reduce this residual risk in production deployments.
 - ZAP runs on a runner-created internal Docker network only when a repository explicitly opts in with a sandbox manifest.
 - `nope-runner` remains root inside its own container because it must reach the Docker socket. The general API, worker, and web services run non-root with dropped capabilities, `no-new-privileges`, read-only roots, tmpfs scratch space, and CPU/memory/PID limits.
-- Dependency scan residual: `pip-audit` reports `protobuf 4.25.9` / `CVE-2026-0994` (`PYSEC-2026-1805`) through the Semgrep/OpenTelemetry scanner dependency chain. The fixed protobuf versions are `5.29.6` or `6.33.5`, while the installed `opentelemetry-proto 1.25.0` requires `protobuf<5`. NOPE does not expose protobuf JSON parsing as a user-facing API path, scanner execution is time/resource bounded, and this residual should be removed when Semgrep's compatible dependency chain supports protobuf 5+.
+- Semgrep and Checkov run from dedicated virtual environments in the application image. Their CLI-only dependency graphs are isolated from NOPE's API/MCP runtime and are audited separately during release verification.
+- Current scanner-upstream residuals remain in those isolated environments: Semgrep 1.172.0 pins MCP 1.23.3, while Checkov 3.3.9 pins aiohttp 3.13.5 and ecdsa 0.19.2. Checkov runs with `--skip-download`; scanner subprocesses are time/resource bounded. These packages are not on the API runtime import path and should be upgraded when upstream scanner constraints allow it.
 
 ## Secrets
 

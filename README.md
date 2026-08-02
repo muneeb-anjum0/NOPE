@@ -198,7 +198,9 @@ NOPE now uses hybrid retrieval. During a scan it builds a repository-intelligenc
 
 The default embedding provider is `sentence_transformers` with `BAAI/bge-small-en-v1.5` on CPU. The model is not pulled silently during image build or during an ordinary scan. For a first local run, download it into the persistent Docker model cache explicitly:
 
-```powershell
+```bash
+mkdir -p "${NOPE_EMBEDDING_MODEL_HOST_DIR:-.nope-model-cache}"
+chmod 0777 "${NOPE_EMBEDDING_MODEL_HOST_DIR:-.nope-model-cache}"
 docker compose exec -T nope-api python -m nope_api.embedding_cli download --model BAAI/bge-small-en-v1.5 --cache-dir /app/.nope-model-cache --device cpu
 ```
 
