@@ -35,6 +35,9 @@ Invoke-RestMethod http://localhost:8000/health
 
 In Docker, `nope-web` uses `API_URL_INTERNAL=http://nope-api:8000` server-side and `NEXT_PUBLIC_API_URL=http://localhost:8000` for browser-facing links. If running the web app outside Docker, set `NEXT_PUBLIC_API_URL=http://localhost:8000`.
 
+If a container manager displays a published port using `0.0.0.0`, open it through
+`localhost` instead. `0.0.0.0` is the listening address, not a browser destination.
+
 ## Login Fails
 
 Passwords must be at least eight characters. Repeated failed login attempts are rate-limited for the local account key. Wait for the rate-limit window or use a different local test account.
