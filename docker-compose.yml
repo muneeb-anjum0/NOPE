@@ -8,7 +8,7 @@ services:
       API_URL_INTERNAL: http://nope-api:8000
       NEXT_PUBLIC_API_URL: http://localhost:8000
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       nope-api:
         condition: service_healthy
@@ -74,10 +74,10 @@ services:
       NOPE_VECTOR_STORE: qdrant
       NOPE_QDRANT_URL: http://nope-qdrant:6333
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - nope-workspaces:/app/.nope-workspaces
-      - ${NOPE_EMBEDDING_MODEL_HOST_DIR:-D:/Desktop/Model/embeddings}:/app/.nope-model-cache
+      - ${NOPE_EMBEDDING_MODEL_HOST_DIR:-D:/Desktop/Model/embeddings}:/app/.nope-model-cache:z
     depends_on:
       nope-postgres:
         condition: service_healthy
@@ -151,7 +151,7 @@ services:
       NOPE_QDRANT_URL: http://nope-qdrant:6333
     volumes:
       - nope-workspaces:/app/.nope-workspaces
-      - ${NOPE_EMBEDDING_MODEL_HOST_DIR:-D:/Desktop/Model/embeddings}:/app/.nope-model-cache
+      - ${NOPE_EMBEDDING_MODEL_HOST_DIR:-D:/Desktop/Model/embeddings}:/app/.nope-model-cache:z
     depends_on:
       nope-postgres:
         condition: service_healthy
@@ -219,7 +219,7 @@ services:
     volumes:
       - nope-postgres:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U nope -d nope"]
       interval: 10s
@@ -233,7 +233,7 @@ services:
     image: redis:7-alpine
     container_name: nope-redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -271,8 +271,8 @@ services:
     volumes:
       - nope-minio:/data
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 10s
@@ -307,6 +307,8 @@ services:
         source: ${NOPE_MODEL_HOST_DIR:-D:/Desktop/Model}
         target: /models
         read_only: true
+        bind:
+          selinux: Z
     ports:
       - "127.0.0.1:8081:8080"
     security_opt:
