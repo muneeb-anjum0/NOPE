@@ -161,15 +161,15 @@ def test_unknown_scanner_rule_fails_conservatively(tmp_path: Path):
     assert "WITHHELD_UNKNOWN_SCANNER_RULE" in observations[0].disposition_reason_codes
 
 
-def test_rules_v2_promotion_remains_authoritative(tmp_path: Path):
+def test_rules_v2_promotion_requires_stage15_3_semantic_proof(tmp_path: Path):
     item = finding(scanner="NOPE Rules v2", title="Confirmed authorization gap", category="Authorization", rule="NOPE-CORR-IDOR-001")
     item.verification_state = "rules_v2_promoted"
 
     confirmed, observations, _ = gate([item], tmp_path)
 
-    assert confirmed == observations
-    assert observations[0].disposition == FindingDisposition.confirmed
-    assert "PROMOTED_CONFIRMED_AUTHZ_GAP" in observations[0].disposition_reason_codes
+    assert confirmed == []
+    assert observations[0].disposition == FindingDisposition.rejected
+    assert "REJECTED_NO_SERVER_ROUTE" in observations[0].disposition_reason_codes
 
 
 def test_scanner_registry_covers_integrated_scanners():

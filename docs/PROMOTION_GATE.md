@@ -1,5 +1,7 @@
 # Promotion Gate
 
+Stage 15.3 contextual proof contracts are documented in [`SEMANTIC_VALIDATION.md`](SEMANTIC_VALIDATION.md). Rules v2 or scanner confidence is supporting evidence, not an exemption from semantic validation.
+
 The promotion gate is the line between suspicious evidence and an actual finding.
 
 ## Decisions

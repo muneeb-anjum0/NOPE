@@ -82,6 +82,50 @@ class FindingPriority(str, Enum):
     none = "none"
 
 
+class ExecutionContext(str, Enum):
+    production_runtime = "PRODUCTION_RUNTIME"
+    server_runtime = "SERVER_RUNTIME"
+    client_runtime = "CLIENT_RUNTIME"
+    build_time = "BUILD_TIME"
+    test = "TEST"
+    e2e_test = "E2E_TEST"
+    fixture = "FIXTURE"
+    mock = "MOCK"
+    benchmark = "BENCHMARK"
+    script = "SCRIPT"
+    ci = "CI"
+    configuration = "CONFIGURATION"
+    deployment_configuration = "DEPLOYMENT_CONFIGURATION"
+    type_only = "TYPE_ONLY"
+    generated = "GENERATED"
+    vendored = "VENDORED"
+    documentation = "DOCUMENTATION"
+    migration = "MIGRATION"
+    unknown = "UNKNOWN"
+
+
+class Reachability(str, Enum):
+    public_internet = "PUBLIC_INTERNET"
+    private_network = "PRIVATE_NETWORK"
+    host_loopback = "HOST_LOOPBACK"
+    container_internal = "CONTAINER_INTERNAL"
+    authenticated_only = "AUTHENTICATED_ONLY"
+    admin_only = "ADMIN_ONLY"
+    build_only = "BUILD_ONLY"
+    test_only = "TEST_ONLY"
+    unknown = "UNKNOWN"
+
+
+class DataSensitivity(str, Enum):
+    critical_secret = "CRITICAL_SECRET"
+    auth_credential = "AUTH_CREDENTIAL"
+    personal_data = "PERSONAL_DATA"
+    sensitive_internal = "SENSITIVE_INTERNAL"
+    operational_metadata = "OPERATIONAL_METADATA"
+    public_metadata = "PUBLIC_METADATA"
+    unknown = "UNKNOWN"
+
+
 class FindingStatus(str, Enum):
     new = "new"
     confirmed = "confirmed"
@@ -271,6 +315,12 @@ class Finding(BaseModel):
     compensating_controls: list[str] = Field(default_factory=list)
     contradicting_evidence: list[str] = Field(default_factory=list)
     superseded_by: str | None = None
+    execution_contexts: list[ExecutionContext] = Field(default_factory=list)
+    reachability: Reachability = Reachability.unknown
+    data_sensitivity: DataSensitivity = DataSensitivity.unknown
+    proof_contract: str | None = None
+    promotion_proof: list[dict[str, Any]] = Field(default_factory=list)
+    negative_evidence: list[str] = Field(default_factory=list)
 
 
 class ScannerRun(BaseModel):

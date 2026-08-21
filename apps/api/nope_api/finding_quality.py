@@ -17,6 +17,7 @@ from nope_api.models import (
     SecurityRelevance,
 )
 from nope_api.rules_engine import dedupe_findings
+from nope_api.semantic_validation import build_semantic_context, evaluate_semantic_finding
 
 
 @dataclass(frozen=True)
@@ -236,12 +237,15 @@ def apply_finding_quality_gate(
     validation = {str(item.get("fingerprint")): item for item in (validation_decisions or [])}
     deployment = resolve_effective_deployment(root)
     dependencies = resolve_dependency_context(root)
+    semantics = build_semantic_context(root)
     for finding in observations:
         _classify(
             finding,
             validation.get(finding.fingerprint) or validation.get(str(finding.original_fingerprint or "")),
             deployment,
             dependencies,
+            root,
+            semantics,
         )
     _apply_supersession(observations)
     confirmed = [
@@ -254,7 +258,7 @@ def apply_finding_quality_gate(
     for item in observations:
         by_scanner[item.scanner or "unknown"][item.disposition.value] += 1
     metrics: dict[str, object] = {
-        "version": "promotion-gate-v3",
+        "version": "promotion-gate-v4-semantic",
         "raw_observation_count": len(observations),
         "candidate_count": len(observations),
         "promoted_count": len(confirmed),
@@ -267,6 +271,10 @@ def apply_finding_quality_gate(
         "safe_pattern_suppressed_count": sum("REJECTED_SAFE_AUTH_PATTERN" in item.disposition_reason_codes for item in observations),
         "dev_dependency_downgraded_count": sum("DOWNGRADED_DEV_ONLY_DEPENDENCY" in item.disposition_reason_codes for item in observations),
         "compensating_control_count": sum(bool(item.compensating_controls) for item in observations),
+        "semantic_proof_count": sum(bool(item.promotion_proof) for item in observations),
+        "negative_evidence_count": sum(len(item.negative_evidence) for item in observations),
+        "reachability": semantics.reachability.value,
+        "route_count": len(semantics.routes),
         "by_scanner": {scanner: dict(scanner_counts) for scanner, scanner_counts in sorted(by_scanner.items())},
         "effective_deployment": {
             "dockerfiles": deployment.dockerfiles,
@@ -287,7 +295,7 @@ def apply_finding_quality_gate(
     return confirmed, observations, metrics
 
 
-def _classify(finding: Finding, validation: dict[str, object] | None, deployment: EffectiveDeploymentContext, dependencies: DependencyContext) -> None:
+def _classify(finding: Finding, validation: dict[str, object] | None, deployment: EffectiveDeploymentContext, dependencies: DependencyContext, root: Path | None, semantics) -> None:
     profile = scanner_trust_profile(finding.scanner)
     rule_classification = scanner_rule_classification(finding.scanner, finding.original_rule_id or finding.nope_rule_id)
     finding.security_relevance = rule_classification.relevance if rule_classification else _security_relevance(finding, profile)
@@ -328,6 +336,36 @@ def _classify(finding: Finding, validation: dict[str, object] | None, deployment
         return _set(finding, FindingDisposition.rejected, code, " ".join(validation_reasons) or "Deterministic contradictory evidence was found.", FindingPriority.none, Exposure.very_low, "no action required")
     if validation_state == "needs_context":
         return _set(finding, FindingDisposition.withheld, "WITHHELD_INSUFFICIENT_EVIDENCE", " ".join(validation_reasons) or "The candidate lacks sufficient deterministic evidence.", FindingPriority.low, Exposure.unproven, "manual review required")
+    semantic_scanners = ("rules v2", "semgrep", "bandit", "gitleaks")
+    semantic_native_rules = (
+        "NOPE-SEC-",
+        "NOPE-ENV-",
+        "NOPE-AUTHZ-",
+        "NOPE-AUTHN-",
+        "NOPE-DEBUG-",
+        "NOPE-STAGING-",
+        "NOPE-RATE-",
+        "NOPE-AI-",
+        "NOPE-LOG-",
+    )
+    semantic = (
+        evaluate_semantic_finding(finding, root, semantics)
+        if any(name in scanner for name in semantic_scanners)
+        or (scanner == "nope rules" and rule.startswith(semantic_native_rules))
+        else None
+    )
+    if semantic:
+        finding.proof_contract = semantic.contract
+        finding.promotion_proof = semantic.proof
+        finding.negative_evidence = semantic.negative_evidence
+        finding.contradicting_evidence.extend(semantic.negative_evidence)
+        if semantic.severity is not None:
+            finding.severity = semantic.severity
+        if semantic.outcome == "rejected":
+            return _set(finding, FindingDisposition.rejected, semantic.reason_code, semantic.reason, FindingPriority.none, Exposure.very_low, "no action required")
+        if semantic.outcome == "withheld":
+            return _set(finding, FindingDisposition.withheld, semantic.reason_code, semantic.reason, FindingPriority.low, Exposure.unproven, "manual review required")
+        return _set(finding, FindingDisposition.confirmed, semantic.reason_code, semantic.reason, _priority(finding), Exposure.proven, "fix before production")
     if finding.verification_state == "rules_v2_promoted" or "nope rules v2" in scanner or any("rules v2" in source.lower() for source in finding.scanner_sources):
         return _set(finding, FindingDisposition.confirmed, _rules_v2_reason(finding), "Rules v2 supplied deterministic or strongly correlated evidence with no safe-pattern contradiction.", _priority(finding), Exposure.likely, "immediate fix recommended" if finding.severity.value in {"critical", "high"} else "fix before production")
     if scanner == "nope rules" and validation_state == "promoted":

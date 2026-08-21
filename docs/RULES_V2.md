@@ -2,6 +2,8 @@
 
 Rules v2 is NOPE's newer detection layer. It does not replace scanner output. It turns raw signals into candidates, checks surrounding context, then decides whether the evidence is strong enough to become a normal finding.
 
+A Rules v2 `promoted` result is candidate-level evidence. Contextual rules must also satisfy the Stage 15.3 semantic proof contract before entering Actionable Findings; see [`SEMANTIC_VALIDATION.md`](SEMANTIC_VALIDATION.md).
+
 ## What It Adds
 
 - A versioned rule catalog with IDs, families, severity, evidence requirements, safe patterns, remediation, and benchmark references.

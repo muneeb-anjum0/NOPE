@@ -2,6 +2,8 @@
 
 The Rules v2 correlation engine connects signals that are weak alone but meaningful together.
 
+Stage 15.3 consumes deterministic correlation facts for proof but never treats vector similarity as evidence. Missing route, runtime, sink, authorization, or reachability facts remain unknown and cannot be synthesized by retrieval or Qwen.
+
 ## Inputs
 
 - repository files under bounded scan limits
@@ -24,4 +26,3 @@ The Rules v2 correlation engine connects signals that are weak alone but meaning
 - `auth route -> AI call -> no budget/rate/token controls` becomes an AI cost-abuse candidate.
 
 The current implementation is bounded and explainable. It does not try to be a full language server, but it does build a reusable context index before candidate generation so route handlers can be checked against helper functions, imported authorization wrappers, matching RLS policy files, source-block metadata, graph hints, and scanner evidence. Every candidate keeps the evidence and reason that caused it.
-

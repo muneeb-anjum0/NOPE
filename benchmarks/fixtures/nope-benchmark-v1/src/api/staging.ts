@@ -1,1 +1,3 @@
-export const stagingPreview = { public: true, anonymous: true, noAuth: true };
+export function stagingPreview() {
+  return { public: true, anonymous: true, noAuth: true };
+}

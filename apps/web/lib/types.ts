@@ -52,6 +52,12 @@ export type Finding = {
   compensating_controls?: string[];
   contradicting_evidence?: string[];
   superseded_by?: string | null;
+  execution_contexts?: string[];
+  reachability?: string;
+  data_sensitivity?: string;
+  proof_contract?: string | null;
+  promotion_proof?: Array<{ fact: string; status: string; evidence: string }>;
+  negative_evidence?: string[];
 };
 
 export type FindingsResult = {

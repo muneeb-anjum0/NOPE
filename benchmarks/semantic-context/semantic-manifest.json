@@ -1,0 +1,28 @@
+{
+  "cases": [
+    {"id":"safe-playwright","repository":"safe","file":"playwright.config.ts","title":"Preview staging environment exposed","category":"Staging","expected_confirmed":false},
+    {"id":"safe-env-read","repository":"safe","file":"server/config.ts","title":"Environment secret exposure","category":"Secrets","expected_confirmed":false},
+    {"id":"safe-env-validation","repository":"safe","file":"server/config.ts","title":"Environment validation leaks configuration","category":"Secrets","expected_confirmed":false},
+    {"id":"safe-filesystem","repository":"safe","file":"server/config.ts","title":"Filesystem environment exposure","category":"Secrets","expected_confirmed":false},
+    {"id":"safe-port","repository":"safe","file":"server/config.ts","title":"Port environment exposure","category":"Secrets","expected_confirmed":false},
+    {"id":"safe-limit","repository":"safe","file":"server/config.ts","title":"Concurrency environment exposure","category":"Secrets","expected_confirmed":false},
+    {"id":"safe-llama","repository":"safe","file":"server/config.ts","title":"Llama environment exposure","category":"Secrets","expected_confirmed":false},
+    {"id":"safe-test-token","repository":"safe","file":"tests/security.test.ts","title":"Secret token exposure","category":"Secrets","expected_confirmed":false},
+    {"id":"safe-vite","repository":"safe","file":"vite.config.ts","title":"Preview service publicly exposed","category":"Staging","expected_confirmed":false},
+    {"id":"safe-build-flag","repository":"safe","file":"next.config.ts","title":"Environment build flag exposed","category":"Secrets","expected_confirmed":false},
+    {"id":"safe-site-url","repository":"safe","file":"components/metadata.tsx","title":"NEXT_PUBLIC_SITE_URL secret exposure","category":"Secrets","expected_confirmed":false},
+    {"id":"safe-jsonld","repository":"safe","file":"components/metadata.tsx","title":"Site URL JSON-LD exposure","category":"Information disclosure","expected_confirmed":false},
+    {"id":"safe-robots","repository":"safe","file":"components/metadata.tsx","title":"Robots API URL exposure","category":"Staging","expected_confirmed":false},
+    {"id":"safe-sitemap","repository":"safe","file":"components/metadata.tsx","title":"Sitemap API URL exposure","category":"Staging","expected_confirmed":false},
+    {"id":"safe-data-dir","repository":"safe","file":"next.config.ts","title":"Build-time data directory exposure","category":"Secrets","expected_confirmed":false},
+    {"id":"safe-property-map","repository":"safe","file":"lib/github.ts","title":"Private internal repository exposed","category":"Staging","expected_confirmed":false},
+    {"id":"safe-api-client","repository":"safe","file":"components/metadata.tsx","title":"Preview API exposed","category":"Staging","expected_confirmed":false},
+    {"id":"safe-schema","repository":"safe","file":"types/api.d.ts","title":"Preview API exposed","category":"Staging","expected_confirmed":false},
+    {"id":"safe-types","repository":"safe","file":"types/api.d.ts","title":"Environment disclosure","category":"Information disclosure","expected_confirmed":false},
+    {"id":"safe-version","repository":"safe","file":"app/api/version/route.ts","route":"/api/version","title":"Version metadata disclosure","category":"Information disclosure","expected_confirmed":false},
+    {"id":"unsafe-secret-response","repository":"vulnerable","file":"app/api/leak/route.ts","route":"/api/leak","title":"Environment secret exposure","category":"Secrets","expected_confirmed":true},
+    {"id":"unsafe-public-password","repository":"vulnerable","file":"app/api/public-secret/route.ts","route":"/api/public-secret","title":"Environment secret exposure","category":"Secrets","expected_confirmed":true},
+    {"id":"unsafe-debug","repository":"vulnerable","file":"app/api/debug/route.ts","route":"/api/debug","title":"Debug endpoint exposed","category":"Staging","expected_confirmed":true},
+    {"id":"unsafe-idor","repository":"vulnerable","file":"app/api/items/[id]/route.ts","route":"/api/items/{id}","title":"IDOR authorization gap","category":"Authorization","expected_confirmed":true}
+  ]
+}

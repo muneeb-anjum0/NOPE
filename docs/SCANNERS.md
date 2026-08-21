@@ -2,6 +2,8 @@
 
 NOPE treats scanner output as evidence. Scanner findings are normalized into the shared `Finding` model, scanner runs are persisted with command/exit-code/output metadata, and missing tools are reported as failed coverage instead of being faked.
 
+External scanner severity remains upstream metadata. Contextual observations pass through Stage 15.3 execution, source/sink, route, reachability, and negative-evidence validation before promotion.
+
 ## Bundled API Image Scanners
 
 The API image installs:

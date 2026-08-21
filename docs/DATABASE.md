@@ -2,6 +2,8 @@
 
 NOPE uses PostgreSQL for local authentication and durable scan persistence.
 
+Stage 15.3 proof fields are stored inside the existing versioned finding JSON payload. Defaults preserve historical scans; no duplicate tables or migration are needed because normalized Rules v2 evidence tables already represent the lifecycle.
+
 ## Migration Runners
 
 Migrations are SQL files in `apps/api/migrations` and also have Alembic revision wrappers in `apps/api/alembic/versions`.

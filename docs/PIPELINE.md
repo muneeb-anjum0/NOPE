@@ -2,6 +2,8 @@
 
 This is the path a scan takes through NOPE. I wrote it down because a security tool that cannot explain its own pipeline is hard to trust.
 
+Stage 15.3 inserts deterministic context classification, source/sink analysis, route proof, effective reachability, negative evidence, and family-specific proof contracts between correlation and final Stage 15.2 disposition.
+
 ## 1. Authentication
 
 Users log in through `/login`. The first successful login creates a local Postgres user, stores a PBKDF2 password hash, creates a session token, and sets the `nope_session` HttpOnly cookie through the web route. Protected API calls use `Authorization: Bearer <token>`.

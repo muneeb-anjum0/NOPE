@@ -1,5 +1,7 @@
 ﻿# NOPE Benchmarks
 
+The Stage 15.3 `benchmarks/semantic-context` paired corpus measures execution context, route, reachability, source/sink, and promotion behavior against security-looking safe code and real vulnerable counterparts.
+
 Benchmarks are where I try to keep myself honest. NOPE should not get to claim "it finds things" unless a small, reviewable fixture proves what it found, what it missed, and what it duplicated.
 
 ## Fixture

@@ -212,6 +212,9 @@ function Overview({ detail, scanId }: { detail: FindingDetail; scanId: string })
         <div><dt>Disposition</dt><dd>{finding.disposition ?? "confirmed"}</dd></div>
         <div><dt>Priority</dt><dd>{finding.priority ?? "normal"}</dd></div>
         <div><dt>Exposure</dt><dd>{finding.exposure ?? "unproven"}</dd></div>
+        <div><dt>Reachability</dt><dd>{finding.reachability ?? "UNKNOWN"}</dd></div>
+        <div><dt>Data sensitivity</dt><dd>{finding.data_sensitivity ?? "UNKNOWN"}</dd></div>
+        <div><dt>Execution context</dt><dd>{finding.execution_contexts?.join(" / ") || "UNKNOWN"}</dd></div>
         <div><dt>Actionability</dt><dd>{finding.actionability ?? "manual review required"}</dd></div>
         <div><dt>Confidence</dt><dd>{finding.confidence}</dd></div>
         <div><dt>Status</dt><dd>{finding.status}</dd></div>
@@ -226,6 +229,16 @@ function Overview({ detail, scanId }: { detail: FindingDetail; scanId: string })
         <p className="mono muted">{finding.disposition_reason_codes?.join(" / ") || "HISTORICAL_DEFAULT"}</p>
         {finding.compensating_controls?.map((control) => <p key={control}>Compensating control: {control}</p>)}
       </div>
+      {finding.promotion_proof?.length ? (
+        <div className="evidence-card">
+          <strong>{finding.disposition === "confirmed" || finding.disposition === "confirmed_with_compensating_control" ? "Why NOPE promoted this" : "Why NOPE did not promote this"}</strong>
+          <p className="mono muted">Proof contract: {finding.proof_contract ?? "contextual"}</p>
+          {finding.promotion_proof.map((step, index) => (
+            <p key={`${step.fact}-${index}`}><strong>{step.fact.replaceAll("_", " ")}</strong>: {step.status} — {step.evidence}</p>
+          ))}
+          {finding.negative_evidence?.map((item) => <p key={item}>Negative evidence: {item}</p>)}
+        </div>
+      ) : null}
       <AIFindingActions finding={finding} scanId={scanId} />
     </div>
   );

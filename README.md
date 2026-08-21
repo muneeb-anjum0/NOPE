@@ -78,6 +78,8 @@ Additional local proof lanes:
 
 Scanner output is treated as **evidence**, not automatically as truth. Raw hits become dashboard findings only after NOPE records enough context to promote them.
 
+Stage 15.3 adds family-aware semantic proof: executable context, source-to-sink behavior, real server-route resolution, effective deployment reachability, authorization, sensitivity, and negative evidence. See [`Semantic validation`](docs/SEMANTIC_VALIDATION.md).
+
 ## Rules v2
 
 Rules v2 is the newer detection layer. It adds a larger versioned catalog and, more importantly, a candidate workflow:
