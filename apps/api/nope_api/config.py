@@ -23,13 +23,14 @@ class Settings(BaseSettings):
     encryption_key: str = "development-encryption-key-change-me"
     require_authenticated_api: bool = True
     api_max_request_bytes: int = 25 * 1024 * 1024
+    api_max_upload_request_bytes: int = 520 * 1024 * 1024
     login_failure_window_seconds: int = 300
     login_failure_limit: int = 5
     password_pbkdf2_iterations: int = 600_000
     cors_allowed_origins: str = ""
 
-    max_archive_bytes: int = 50 * 1024 * 1024
-    max_extracted_bytes: int = 200 * 1024 * 1024
+    max_archive_bytes: int = 512 * 1024 * 1024
+    max_extracted_bytes: int = 2 * 1024 * 1024 * 1024
     max_file_count: int = 8000
     max_archive_path_length: int = 240
     max_archive_nesting_depth: int = 24
@@ -89,7 +90,7 @@ class Settings(BaseSettings):
     qwen_batch_size: int = 256
     qwen_threads: int = 8
     qwen_parallel: int = 1
-    qwen_gpu_layers: int = 28
+    qwen_gpu_layers: int = 0
     qwen_max_output_tokens: int = 1024
     qwen_timeout_seconds: int = 180
     qwen_gpu_memory_target_mb: int = 5000
@@ -98,7 +99,7 @@ class Settings(BaseSettings):
     ai_max_output_tokens: int = 1024
     ai_temperature: float = 0.1
     ai_top_p: float = 0.9
-    ai_gpu_layers: int = 28
+    ai_gpu_layers: int = 0
     ai_gpu_memory_target_mb: int = 5000
     ai_timeout_seconds: int = 180
     ai_max_concurrent_tasks: int = 1

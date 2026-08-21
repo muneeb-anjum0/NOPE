@@ -1,0 +1,6 @@
+{
+  "name": "dev-dependency-adversarial-corpus",
+  "observations": [
+    {"id":"dev-ci","scanner":"OSV-Scanner","rule":"CVE-2026-400","title":"Build tool arbitrary code execution","category":"Dependencies","file":"package-lock.json","package":"dangerous-builder","cve":"CVE-2026-400","expected_confirmed":true,"expected_disposition":"confirmed"}
+  ]
+}

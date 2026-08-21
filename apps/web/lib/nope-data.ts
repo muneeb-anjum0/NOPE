@@ -82,6 +82,21 @@ export async function getFindings(scanId: string, searchParams?: URLSearchParams
   }
 }
 
+export async function getFindingObservations(scanId: string, disposition: string): Promise<FindingsResult | null> {
+  if (isE2EFixtureMode()) {
+    const scan = e2eScans.find((item) => item.id === scanId);
+    const items = (scan?.raw_observations ?? scan?.findings ?? []).filter((item) => disposition === "raw" || item.disposition === disposition);
+    return { scan_id: scanId, total: items.length, page: 1, page_size: 100, pages: 1, sort: "disposition", direction: "asc", filters: {}, items };
+  }
+  try {
+    const query = new URLSearchParams({ disposition, page: "1", page_size: "100" });
+    const result = await api<Omit<FindingsResult, "sort" | "direction" | "filters">>(`/api/scans/${scanId}/observations?${query.toString()}`);
+    return { ...result, sort: "disposition", direction: "asc", filters: {} };
+  } catch {
+    return null;
+  }
+}
+
 export async function getFindingDetail(scanId: string, findingId: string): Promise<FindingDetail | null> {
   if (isE2EFixtureMode()) return e2eFindingDetail(scanId, findingId);
   try {

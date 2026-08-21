@@ -112,3 +112,5 @@ Authenticated users can call `GET /api/scanners/capabilities` to see:
 ## Dynamic Sandbox Scanners
 
 Repositories can opt into sandbox workflows with `.nope/sandbox.json`. The manifest can declare allowlisted build/test commands and an optional allowlisted startup command plus ZAP baseline scan. The socketless worker delegates execution to the internal `nope-runner`, which launches disposable Docker containers with read-only repository mounts, no sandbox Docker socket, no host home, no NOPE service secrets, CPU/memory/PID/tmpfs/log limits, no arbitrary mounts/env/networks, and network disabled for ordinary workflows. When ZAP is enabled, NOPE creates an internal Docker network, starts the app container, scans it from the ZAP container, records bounded evidence, and tears the network down.
+
+Scanner output is an observation, not a confirmed finding. Scanner-specific trust and rule-classification behavior is documented in [FINDING_QUALITY.md](FINDING_QUALITY.md); unknown rules fail conservatively.

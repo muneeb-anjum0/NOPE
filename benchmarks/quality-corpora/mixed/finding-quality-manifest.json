@@ -1,0 +1,8 @@
+{
+  "name": "mixed-corpus",
+  "observations": [
+    {"id":"mixed-lint","scanner":"Hadolint","rule":"DL4006","title":"Use shell pipefail best practice","category":"Style lint","file":"Dockerfile","expected_confirmed":false,"expected_disposition":"rejected"},
+    {"id":"mixed-dev","scanner":"OSV-Scanner","rule":"CVE-2026-300","title":"Development linter advisory","category":"Dependencies","file":"package-lock.json","package":"eslint-plugin-demo","cve":"CVE-2026-300","expected_confirmed":false,"expected_disposition":"informational"},
+    {"id":"mixed-auth","scanner":"NOPE Rules v2","rule":"NOPE-CORR-IDOR-001","title":"Confirmed owner-scope gap","category":"Authorization","file":"src/api/document.ts","verification_state":"rules_v2_promoted","expected_confirmed":true,"expected_disposition":"confirmed"}
+  ]
+}

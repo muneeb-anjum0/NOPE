@@ -92,3 +92,5 @@ Baselines snapshot scan, repository, target, scanner, rule, model, RAG, coverage
 ## 12. UI
 
 The landing page lives at `/`. The dashboard lives under `/app/projects/local/*` with routes for overview, findings, investigations, attack map, coverage, scans, assets, reports, and settings. Browser checks cover desktop, tablet, and small mobile widths.
+
+Scanner adapters no longer feed the displayed findings list directly. Their normalized observations pass through context validation and Promotion Gate v3; only confirmed dispositions become `scan.findings`. See [FINDING_QUALITY.md](FINDING_QUALITY.md).

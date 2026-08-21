@@ -1,13 +1,21 @@
 FROM node:24-alpine AS deps
 WORKDIR /app
-RUN npm install --global pnpm@11.5.0
+RUN npm install --global pnpm@11.5.0 \
+    --fetch-retries=5 \
+    --fetch-retry-mintimeout=20000 \
+    --fetch-retry-maxtimeout=120000 \
+    --fetch-timeout=300000
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json ./apps/web/package.json
 RUN pnpm install --frozen-lockfile --filter nope-web...
 
 FROM node:24-alpine AS builder
 WORKDIR /app
-RUN npm install --global pnpm@11.5.0
+RUN npm install --global pnpm@11.5.0 \
+    --fetch-retries=5 \
+    --fetch-retry-mintimeout=20000 \
+    --fetch-retry-maxtimeout=120000 \
+    --fetch-timeout=300000
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./

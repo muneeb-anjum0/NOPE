@@ -137,3 +137,5 @@ docker compose up --build -d
 ```
 
 Use this only when a local data reset is acceptable.
+
+Finding-quality regressions are covered by `test_stage15_2_finding_quality.py` and `test_stage15_2_quality_benchmarks.py`, including false-negative defenses for CI-exposed dev dependencies, runtime-imported dev dependencies, missing controls, root containers, and misleading helper names.

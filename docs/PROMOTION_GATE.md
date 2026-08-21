@@ -28,3 +28,5 @@ Each decision stores:
 - machine reason
 - correlation path
 - suggested manual verification where useful
+
+Promotion Gate v3 also applies scanner trust, rule classification, dependency scope, effective deployment context, explicit compensating controls, security relevance, actionability, and supersession. Decisions use stable reason codes and preserve rejected evidence in `scan.raw_observations`. The complete contract is in [FINDING_QUALITY.md](FINDING_QUALITY.md).

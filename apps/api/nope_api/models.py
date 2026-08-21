@@ -30,6 +30,58 @@ class Confidence(str, Enum):
     uncertain = "uncertain"
 
 
+class FindingDisposition(str, Enum):
+    confirmed = "confirmed"
+    confirmed_with_compensating_control = "confirmed_with_compensating_control"
+    conditional = "conditional"
+    informational = "informational"
+    withheld = "withheld"
+    rejected = "rejected"
+
+
+class SecurityRelevance(str, Enum):
+    direct_security_vulnerability = "direct_security_vulnerability"
+    security_hardening = "security_hardening"
+    dependency_advisory = "dependency_advisory"
+    deployment_hardening = "deployment_hardening"
+    configuration_weakness = "configuration_weakness"
+    code_quality = "code_quality"
+    style_lint = "style_lint"
+    maintainability = "maintainability"
+    reliability = "reliability"
+    performance = "performance"
+    informational = "informational"
+    unknown = "unknown"
+
+
+class DependencyScope(str, Enum):
+    production = "production"
+    development = "development"
+    optional = "optional"
+    peer = "peer"
+    build = "build"
+    test = "test"
+    transitive = "transitive"
+    unknown = "unknown"
+
+
+class Exposure(str, Enum):
+    proven = "proven"
+    likely = "likely"
+    conditional = "conditional"
+    very_low = "very_low"
+    unproven = "unproven"
+
+
+class FindingPriority(str, Enum):
+    immediate = "immediate"
+    high = "high"
+    normal = "normal"
+    low = "low"
+    informational = "informational"
+    none = "none"
+
+
 class FindingStatus(str, Enum):
     new = "new"
     confirmed = "confirmed"
@@ -207,6 +259,18 @@ class Finding(BaseModel):
     lifecycle_version: int = 1
     fix_available: bool = False
     verified: bool = False
+    disposition: FindingDisposition = FindingDisposition.confirmed
+    disposition_reason_codes: list[str] = Field(default_factory=list)
+    disposition_reason: str = "Historical finding; no Stage 15.2 disposition record was stored."
+    security_relevance: SecurityRelevance = SecurityRelevance.unknown
+    dependency_scope: DependencyScope = DependencyScope.unknown
+    exposure: Exposure = Exposure.unproven
+    priority: FindingPriority = FindingPriority.normal
+    actionability: str = "manual review required"
+    deployment_relevance: str = "unknown"
+    compensating_controls: list[str] = Field(default_factory=list)
+    contradicting_evidence: list[str] = Field(default_factory=list)
+    superseded_by: str | None = None
 
 
 class ScannerRun(BaseModel):
@@ -277,6 +341,8 @@ class Scan(BaseModel):
     code_graph: CodeGraph = Field(default_factory=CodeGraph)
     scanner_runs: list[ScannerRun] = Field(default_factory=list)
     findings: list[Finding] = Field(default_factory=list)
+    raw_observations: list[Finding] = Field(default_factory=list)
+    finding_quality: dict[str, Any] = Field(default_factory=dict)
     coverage: list[CoverageRecord] = Field(default_factory=list)
     ai_review: AIReview = Field(default_factory=AIReview)
     report_formats: list[str] = Field(default_factory=lambda: ["json", "md", "sarif", "pdf"])
@@ -307,7 +373,7 @@ class SystemSettings(BaseModel):
     qwen_endpoint: str = "http://nope-ai:8080"
     runtime: str = "llama.cpp"
     context: int = Field(default=4096, ge=512, le=32768)
-    gpu_layers: int = Field(default=28, ge=0, le=128)
+    gpu_layers: int = Field(default=0, ge=0, le=128)
     timeout: int = Field(default=180, ge=5, le=1800)
     output_limit: int = Field(default=1024, ge=64, le=8192)
     concurrency: int = Field(default=1, ge=1, le=8)

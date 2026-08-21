@@ -105,7 +105,7 @@ export function FindingTable({
             <th>Finding</th>
             <th>Location</th>
             <th>Evidence</th>
-            <th>Status</th>
+            <th>Disposition</th>
           </tr>
         </thead>
         <tbody>
@@ -140,7 +140,11 @@ export function FindingTable({
                 </td>
                 <td className="mono location-cell">{finding.affected_file ?? finding.affected_route ?? "n/a"}</td>
                 <td>{finding.scanner_sources.join(" + ") || finding.raw_artifact_id || "Evidence"}</td>
-                <td>{finding.status}</td>
+                <td>
+                  <strong>{finding.disposition ?? "confirmed"}</strong>
+                  <br />
+                  <span className="muted">{finding.priority ?? finding.status}</span>
+                </td>
               </tr>
             ))
           )}

@@ -106,3 +106,5 @@ NOPE separates evidence from reasoning:
 - Repository intelligence indexes focused code context and RAG retrieves only the chunks relevant to a selected finding or search query.
 - AI analysis can challenge or explain findings through llama.cpp, but cannot silently downgrade scanner evidence.
 - Failed scanners and failed AI are visible coverage gaps.
+
+Stage 15.2 inserts a deterministic observation/disposition boundary between scanner adapters and persisted confirmed findings. Raw observations and quality metrics remain in the scan snapshot. See [FINDING_QUALITY.md](FINDING_QUALITY.md).

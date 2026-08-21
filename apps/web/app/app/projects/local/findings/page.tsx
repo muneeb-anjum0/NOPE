@@ -4,7 +4,7 @@ import { FilterSelect } from "@/components/filter-select";
 import { FindingTable } from "@/components/finding-table";
 import { PinkDotText } from "@/components/pink-dot-text";
 import { getActiveProjectId, scansForProject } from "@/lib/active-project";
-import { freshScan, getFindingDetail, getFindings, getProjects, getScans, selectScan, severityClass } from "@/lib/nope-data";
+import { freshScan, getFindingDetail, getFindingObservations, getFindings, getProjects, getScans, selectScan, severityClass } from "@/lib/nope-data";
 import type { FindingDetail } from "@/lib/types";
 
 type PageProps = {
@@ -57,10 +57,21 @@ export default async function FindingsPage({ searchParams }: PageProps) {
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
   const scans = scansForProject(allScans, activeProjectId);
   const scan = selectScan(scans, params.get("scan")) ?? freshScan();
+  const view = params.get("view") ?? "actionable";
   const findingsQuery = new URLSearchParams(params.toString());
   findingsQuery.set("page", "1");
   findingsQuery.set("page_size", "100");
-  const results = (await getFindings(scan.id, findingsQuery)) ?? {
+  const dispositionByView: Record<string, string> = {
+    conditional: "conditional",
+    informational: "informational",
+    withheld: "withheld",
+    rejected: "rejected",
+    raw: "raw",
+  };
+  const loaded = view === "actionable"
+    ? await getFindings(scan.id, findingsQuery)
+    : await getFindingObservations(scan.id, dispositionByView[view] ?? "raw");
+  const results = loaded ?? {
     scan_id: scan.id,
     total: scan.findings.length,
     page: 1,
@@ -84,6 +95,19 @@ export default async function FindingsPage({ searchParams }: PageProps) {
           <p>{activeProject ? `${activeProject.name}: server-backed filters, protected evidence, code context, and real graph flow.` : "Choose an active folder to inspect findings."}</p>
         </div>
       </section>
+
+      <nav className="tab-row" aria-label="Finding disposition views">
+        {[
+          ["actionable", "Actionable"],
+          ["conditional", "Conditional"],
+          ["informational", "Informational"],
+          ["withheld", "Withheld"],
+          ["rejected", "Rejected / Noise"],
+          ["raw", "Raw Scanner Observations"],
+        ].map(([value, label]) => (
+          <a key={value} className={view === value ? "active-tab" : ""} href={hrefWith(params, { view: value, finding: null, detail: null })}>{label}</a>
+        ))}
+      </nav>
 
       <form className="filter-bar" action="/app/projects/local/findings">
         <input name="scan" type="hidden" value={scan.id} />
@@ -185,6 +209,10 @@ function Overview({ detail, scanId }: { detail: FindingDetail; scanId: string })
     <div className="detail-stack">
       <p className="muted">{finding.description}</p>
       <dl className="detail-grid">
+        <div><dt>Disposition</dt><dd>{finding.disposition ?? "confirmed"}</dd></div>
+        <div><dt>Priority</dt><dd>{finding.priority ?? "normal"}</dd></div>
+        <div><dt>Exposure</dt><dd>{finding.exposure ?? "unproven"}</dd></div>
+        <div><dt>Actionability</dt><dd>{finding.actionability ?? "manual review required"}</dd></div>
         <div><dt>Confidence</dt><dd>{finding.confidence}</dd></div>
         <div><dt>Status</dt><dd>{finding.status}</dd></div>
         <div><dt>Rule</dt><dd>{finding.nope_rule_id ?? finding.original_rule_id ?? "n/a"}</dd></div>
@@ -192,6 +220,12 @@ function Overview({ detail, scanId }: { detail: FindingDetail; scanId: string })
         <div><dt>Location</dt><dd className="mono">{finding.affected_file ?? finding.affected_route ?? "n/a"}</dd></div>
         <div><dt>Scanner</dt><dd>{finding.scanner_sources.join(" + ") || "n/a"}</dd></div>
       </dl>
+      <div className="evidence-card">
+        <strong>Why NOPE classified this signal</strong>
+        <p>{finding.disposition_reason ?? "Historical finding without a stored disposition explanation."}</p>
+        <p className="mono muted">{finding.disposition_reason_codes?.join(" / ") || "HISTORICAL_DEFAULT"}</p>
+        {finding.compensating_controls?.map((control) => <p key={control}>Compensating control: {control}</p>)}
+      </div>
       <AIFindingActions finding={finding} scanId={scanId} />
     </div>
   );

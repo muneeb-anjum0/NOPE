@@ -1,0 +1,7 @@
+on: pull_request
+jobs:
+  build:
+    steps:
+      - run: npm run build
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}

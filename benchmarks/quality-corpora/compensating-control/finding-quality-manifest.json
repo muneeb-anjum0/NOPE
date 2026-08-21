@@ -1,0 +1,7 @@
+{
+  "name": "compensating-control-corpus",
+  "observations": [
+    {"id":"control-root","scanner":"Hadolint","rule":"DL3002","title":"Docker container runs as root","category":"Containers","file":"Dockerfile","expected_confirmed":false,"expected_disposition":"informational"},
+    {"id":"control-health","scanner":"Hadolint","rule":"DL-HEALTH","title":"Missing Dockerfile healthcheck","category":"Containers","file":"Dockerfile","expected_confirmed":false,"expected_disposition":"rejected"}
+  ]
+}

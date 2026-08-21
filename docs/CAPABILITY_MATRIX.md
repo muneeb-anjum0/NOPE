@@ -47,3 +47,6 @@ This is the companion table to the GitHub-facing README. Older build/audit notes
 | composer audit | `composer.lock` | JSON | Composer absence reported | Wired; tool external |
 | bundler-audit | `Gemfile.lock` | JSON | bundler-audit absence reported | Wired; tool external |
 | OWASP ZAP | `.nope/sandbox.json` dynamic target | JSON | skipped/partial/failed states | Wired for supported manifests |
+| Promotion Gate v3 | Scanner observations + repository context | Explicit disposition/reason codes | Unknown rules withheld; raw evidence retained | Implemented, deterministic |
+| Dependency scope | JavaScript workspace manifests + source/CI/scripts | Production/dev/optional/peer/transitive | Other ecosystems conservative | Implemented with documented limits |
+| Effective deployment | Dockerfile + Compose + bounded proxy/ingress evidence | Provenance-preserving context | Not a full orchestrator interpreter | Implemented |

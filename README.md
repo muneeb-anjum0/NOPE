@@ -463,3 +463,7 @@ If you change model/provider/dimension, rebuild or recreate the repository index
 - Qwen receives focused, redacted evidence rather than full repositories.
 - Sandbox workflows are opt-in and allowlisted.
 - GitHub private access is blocked until real credentials are supplied and verified.
+
+## Finding quality (Stage 15.2)
+
+External scanner results are preserved as raw observations and pass through deterministic Promotion Gate v3 before they can enter the default Actionable Findings view. Dependency scope, effective Docker/Compose controls, scanner trust, safe-pattern evidence, and supersession inform explicit dispositions; AI never controls promotion. See [Finding Quality and Promotion Gate v3](docs/FINDING_QUALITY.md).

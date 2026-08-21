@@ -1,0 +1,7 @@
+{
+  "name": "vulnerable-corpus",
+  "observations": [
+    {"id":"vuln-root","scanner":"Hadolint","rule":"DL3002","title":"Docker container runs as root","category":"Containers","file":"Dockerfile","expected_confirmed":true,"expected_disposition":"confirmed"},
+    {"id":"vuln-runtime-dep","scanner":"OSV-Scanner","rule":"CVE-2026-200","title":"Runtime HTTP remote code execution","category":"Dependencies","file":"package-lock.json","package":"runtime-http","cve":"CVE-2026-200","severity":"critical","expected_confirmed":true,"expected_disposition":"confirmed"}
+  ]
+}

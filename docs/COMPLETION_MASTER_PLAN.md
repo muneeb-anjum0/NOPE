@@ -94,3 +94,7 @@ Implemented local scope:
 Explicit boundary:
 
 - Rules v2 decision-making was not modified. AI still cannot create findings, promote withheld candidates, suppress findings, change severity, or change confidence.
+
+## Stage 15.2
+
+False-positive elimination and Promotion Gate v3 are implemented without changing the AI authority boundary. Final completion remains conditional on the full backend/browser/Docker regression and the independent requirement audit. See [FINDING_QUALITY.md](FINDING_QUALITY.md).

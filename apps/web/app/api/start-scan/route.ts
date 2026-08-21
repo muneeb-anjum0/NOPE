@@ -4,6 +4,8 @@ import { API_BASE } from "@/lib/api";
 import { E2E_SCAN_RUNNING } from "@/lib/e2e-fixtures";
 import { isE2EFixtureMode } from "@/lib/nope-data";
 
+const MAX_MULTIPART_BYTES = 520 * 1024 * 1024;
+
 function redirectWithError(request: Request, message: string, projectId?: string, scaffoldWarning = false) {
   const next = new URL(projectId ? `/app/projects/local/scans/${encodeURIComponent(projectId)}` : "/app/projects/local/scans", request.url);
   next.searchParams.set(scaffoldWarning ? "scaffoldWarning" : "error", message);
@@ -40,7 +42,18 @@ async function forwardScan(request: Request, path: string, init: RequestInit, pr
 }
 
 export async function POST(request: Request) {
-  const form = await request.formData();
+  const fallbackProjectId = new URL(request.url).searchParams.get("projectId") ?? undefined;
+  const contentLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_MULTIPART_BYTES) {
+    return redirectWithError(request, "ZIP files must be 512 MiB or smaller.", fallbackProjectId);
+  }
+
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    return redirectWithError(request, "The upload could not be read. ZIP files must be 512 MiB or smaller.", fallbackProjectId);
+  }
   const file = form.get("repository");
   const targetUrl = String(form.get("targetUrl") ?? "");
   const repositoryName =

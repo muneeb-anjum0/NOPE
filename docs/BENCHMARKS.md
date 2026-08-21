@@ -120,3 +120,5 @@ The scanner-plus-Qwen benchmark stays local because GitHub runners do not have t
 - `investigation` builds deterministic investigation reports over benchmark findings and checks citation coverage, structured report shape, relationship/attack-flow output, and JSON/Markdown/PDF/SARIF export generation. CI runs this without live Qwen so the check stays deterministic.
 
 No external credentials are required.
+
+Stage 15.2 adds `benchmarks/quality-corpora` for safe, vulnerable, mixed, compensating-control, and dev-dependency cases. `nope_api.quality_benchmarks.run_quality_corpus` reports precision, recall, F1, false-positive rate, and false-discovery rate using the explicit predicted-positive definition in [FINDING_QUALITY.md](FINDING_QUALITY.md).

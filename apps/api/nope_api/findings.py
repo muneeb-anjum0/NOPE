@@ -258,7 +258,7 @@ def _sort_findings(findings: list[Finding], sort: str, direction: Literal["asc",
 
 
 def finding_detail(scan: Scan, finding_id: str, lifecycle_events: list[dict[str, Any]] | None = None) -> FindingDetail | None:
-    finding = next((item for item in scan.findings if item.id == finding_id), None)
+    finding = next((item for item in [*scan.findings, *scan.raw_observations] if item.id == finding_id), None)
     if finding is None:
         return None
     return FindingDetail(

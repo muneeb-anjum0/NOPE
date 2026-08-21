@@ -31,3 +31,6 @@ Rules v2 is NOPE's newer detection layer. It does not replace scanner output. It
 
 Rules v2 is production-grade for NOPE's local scanner scope, but it is still bounded static analysis. It is not a full compiler or language server for every framework. The promotion gate stays conservative: weak candidates should show up as withheld or review items instead of polluting the normal Findings table.
 
+## Stage 15.2 authority boundary
+
+Rules v2 promotion remains authoritative deterministic evidence. Promotion Gate v3 may preserve a Rules v2 candidate as withheld/rejected when Rules v2 itself records missing or contradictory evidence, but external scanner similarity and Qwen cannot promote a candidate. See [FINDING_QUALITY.md](FINDING_QUALITY.md).

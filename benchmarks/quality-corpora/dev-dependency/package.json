@@ -1,0 +1,1 @@
+{"devDependencies":{"dangerous-builder":"1.0.0"},"scripts":{"build":"dangerous-builder compile"}}

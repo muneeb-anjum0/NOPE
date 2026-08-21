@@ -40,6 +40,18 @@ export type Finding = {
   test_guidance?: string | null;
   remediation: string;
   evidence?: Array<{ source: string; file?: string | null; line?: number | null; snippet?: string | null; message: string }>;
+  disposition?: "confirmed" | "confirmed_with_compensating_control" | "conditional" | "informational" | "withheld" | "rejected";
+  disposition_reason_codes?: string[];
+  disposition_reason?: string;
+  security_relevance?: string;
+  dependency_scope?: string;
+  exposure?: string;
+  priority?: string;
+  actionability?: string;
+  deployment_relevance?: string;
+  compensating_controls?: string[];
+  contradicting_evidence?: string[];
+  superseded_by?: string | null;
 };
 
 export type FindingsResult = {
@@ -134,6 +146,8 @@ export type Scan = {
   started_at?: string | null;
   completed_at?: string | null;
   findings: Finding[];
+  raw_observations?: Finding[];
+  finding_quality?: Record<string, unknown>;
   coverage: CoverageRecord[];
   stack?: Array<{ technology: string; category: string; confidence?: string; evidence?: string[] }>;
   scanner_runs: Array<{ scanner: string; status: string; message: string; findings_count: number; coverage_categories: string[] }>;

@@ -103,7 +103,13 @@ async def security_boundary(request: Request, call_next):
     content_length = request.headers.get("content-length")
     if content_length:
         try:
-            if int(content_length) > settings.api_max_request_bytes:
+            upload_paths = {"/api/scans/repository", "/api/scans/full"}
+            request_limit = (
+                settings.api_max_upload_request_bytes
+                if request.url.path in upload_paths
+                else settings.api_max_request_bytes
+            )
+            if int(content_length) > request_limit:
                 return JSONResponse({"detail": "Request body is too large."}, status_code=413)
         except ValueError:
             return JSONResponse({"detail": "Invalid Content-Length header."}, status_code=400)
@@ -674,6 +680,34 @@ def get_findings(
         direction=direction,
     )
     return query_findings(scan, parsed)
+
+
+@app.get("/api/scans/{scan_id}/observations")
+def get_finding_observations(
+    scan_id: str,
+    authorization: str | None = Header(default=None),
+    disposition: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
+):
+    scan = _load_scan(scan_id, authorization)
+    observations = scan.raw_observations or scan.findings
+    if disposition and disposition != "raw":
+        requested = {item.strip().lower() for item in disposition.split(",") if item.strip()}
+        observations = [item for item in observations if item.disposition.value in requested]
+    page_size = max(1, min(page_size, 100))
+    pages = max(1, (len(observations) + page_size - 1) // page_size)
+    page = max(1, min(page, pages))
+    start = (page - 1) * page_size
+    return {
+        "scan_id": scan.id,
+        "total": len(observations),
+        "page": page,
+        "page_size": page_size,
+        "pages": pages,
+        "items": observations[start : start + page_size],
+        "quality": scan.finding_quality,
+    }
 
 
 @app.get("/api/scans/{scan_id}/findings/{finding_id}")

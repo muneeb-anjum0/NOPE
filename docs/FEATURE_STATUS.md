@@ -48,3 +48,5 @@ The long phase-by-phase history is archived in [`audits/`](audits/). I keep it a
 | Benchmarks | [`BENCHMARKS.md`](BENCHMARKS.md) and [`../examples/nope-benchmark`](../examples/nope-benchmark) |
 
 The short version: NOPE is useful today as a local security review workbench. It is not pretending to be a polished SaaS, and that is a deliberate line in the sand.
+
+Stage 15.2 finding-quality hardening is implemented: Actionable Findings no longer equate to raw scanner output, and downgraded observations remain inspectable with deterministic explanations. Validation evidence and remaining limits are tracked in [FINDING_QUALITY.md](FINDING_QUALITY.md).

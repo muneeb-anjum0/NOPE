@@ -1,0 +1,6 @@
+services:
+  api:
+    build: .
+    user: "1000:1000"
+    healthcheck:
+      test: ["CMD", "true"]

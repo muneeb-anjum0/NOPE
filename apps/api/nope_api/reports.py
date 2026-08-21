@@ -179,7 +179,9 @@ def report_json(scan: Scan, context: ReportContext | None = None) -> dict:
             "low": counts["low"],
             "suppressed": _suppressed_count(scan),
             "failed_scanners": len(_failed_scanners(scan)),
+            "finding_quality": scan.finding_quality,
         },
+        "observation_dispositions": dict(Counter(item.disposition.value for item in (scan.raw_observations or scan.findings))),
         "dynamic_testing": _dynamic_summary(scan),
         "rules_v2": _rules_v2_summary(scan),
         "finding_lifecycle": _lifecycle_summary(scan),
@@ -247,7 +249,7 @@ def report_markdown(scan: Scan, context: ReportContext | None = None) -> str:
             lines.append(f"- Withheld {item.get('rule_id')}: {_redact(item.get('reason'))}")
     else:
         lines.append("- Rules v2 did not run for this scan.")
-    lines.extend(["", "## Findings"])
+    lines.extend(["", "## Confirmed Actionable Findings"])
     if not scan.findings:
         lines.append("No findings were produced in the tested scope.")
     for finding in scan.findings:
@@ -256,6 +258,10 @@ def report_markdown(scan: Scan, context: ReportContext | None = None) -> str:
                 f"### {finding.severity.value.upper()}: {_redact(finding.title)}",
                 f"- Category: {_redact(finding.category)}",
                 f"- Confidence: {finding.confidence.value}",
+                f"- Priority: {finding.priority.value}",
+                f"- Exposure: {finding.exposure.value}",
+                f"- Why promoted: {_redact(finding.disposition_reason)}",
+                f"- Reason codes: {', '.join(finding.disposition_reason_codes) or 'historical-default'}",
                 f"- File: {_redact(finding.affected_file)}",
                 f"- Route: {_redact(finding.affected_route)}",
                 f"- Status: {_redact(finding.status)}",
@@ -266,6 +272,19 @@ def report_markdown(scan: Scan, context: ReportContext | None = None) -> str:
                 "",
             ]
         )
+    observations = scan.raw_observations or scan.findings
+    for disposition, heading in (
+        ("conditional", "Conditional Security Concerns"),
+        ("informational", "Informational / Dependency Advisories"),
+        ("withheld", "Withheld Candidates (Diagnostic Appendix)"),
+        ("rejected", "Rejected / Noise Observations (Diagnostic Appendix)"),
+    ):
+        grouped = [item for item in observations if item.disposition.value == disposition]
+        lines.extend(["", f"## {heading}"])
+        if not grouped:
+            lines.append("- None recorded.")
+        for item in grouped:
+            lines.append(f"- {_redact(item.title)} — {_redact(item.disposition_reason)} ({', '.join(item.disposition_reason_codes)})")
     lifecycle = _lifecycle_summary(scan)
     lines.extend(["## Finding Lifecycle", *[f"- {key}: {value}" for key, value in lifecycle["states"].items()]])
     lines.extend(["", "## Baseline Comparison", f"- Drift events: {baseline.get('summary', {}).get('total_drift_events', 0)}"])
@@ -284,7 +303,7 @@ def report_markdown(scan: Scan, context: ReportContext | None = None) -> str:
 def report_sarif(scan: Scan, context: ReportContext | None = None) -> dict:
     rules = {}
     results = []
-    for finding in scan.findings:
+    for finding in (scan.raw_observations or scan.findings):
         rule_id = finding.cwe or finding.original_rule_id or finding.category
         rules[rule_id] = {
             "id": rule_id,
@@ -302,7 +321,11 @@ def report_sarif(scan: Scan, context: ReportContext | None = None) -> dict:
         results.append(
             {
                 "ruleId": rule_id,
-                "level": "error" if finding.severity.value in {"critical", "high"} else "warning",
+                "level": (
+                    "error" if finding.disposition.value.startswith("confirmed") and finding.severity.value in {"critical", "high"}
+                    else "warning" if finding.disposition.value.startswith("confirmed")
+                    else "note"
+                ),
                 "message": {"text": _redact(finding.title)},
                 "locations": [location],
                 "partialFingerprints": {
@@ -316,6 +339,13 @@ def report_sarif(scan: Scan, context: ReportContext | None = None) -> dict:
                     "schema_version": finding.schema_version,
                     "rules_v2": finding.source_metadata.get("rules_v2", False),
                     "rule_version": finding.source_metadata.get("rule_version"),
+                    "nope_disposition": finding.disposition.value,
+                    "disposition_reason_codes": finding.disposition_reason_codes,
+                    "disposition_reason": _redact(finding.disposition_reason),
+                    "upstream_severity": finding.original_severity,
+                    "priority": finding.priority.value,
+                    "exposure": finding.exposure.value,
+                    "dependency_scope": finding.dependency_scope.value,
                 },
             }
         )

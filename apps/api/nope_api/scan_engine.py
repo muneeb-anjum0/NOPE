@@ -7,6 +7,7 @@ from nope_api.ai import run_ai_review
 from nope_api.attack_surface import build_attack_surface, build_code_graph
 from nope_api.config import Settings
 from nope_api.finding_validation import validate_findings, validation_counts
+from nope_api.finding_quality import apply_finding_quality_gate
 from nope_api.models import CoverageRecord, CoverageStatus, Scan, ScanMode, ScannerRun, now_utc
 from nope_api.repository_intelligence import build_repository_index
 from nope_api.rules_engine import dedupe_findings, run_rules
@@ -101,16 +102,21 @@ async def _execute_scanner_plugin(plugin, root: Path, settings: Settings, semaph
 
 def _promote_validated_findings(scan: Scan, findings: list, root: Path | None) -> list:
     candidates = dedupe_findings(findings)
-    promoted, decisions = validate_findings(candidates, root)
+    _, decisions = validate_findings(candidates, root)
     counts = validation_counts(decisions)
+    promoted, observations, quality = apply_finding_quality_gate(candidates, root, decisions)
+    scan.raw_observations = observations
+    scan.finding_quality = quality
     scan.stages.append(
         {
             "name": "Validating candidate findings",
             "status": "completed",
             "message": (
-                f"{counts['promoted']} promoted, "
-                f"{counts['needs_context']} need more context, "
-                f"{counts['rejected']} rejected before Findings."
+                f"{quality['promoted_count']} confirmed, "
+                f"{quality['conditional_count']} conditional, "
+                f"{quality['informational_count']} informational, "
+                f"{quality['withheld_count']} withheld, "
+                f"{quality['rejected_count']} rejected."
             ),
             "data": {
                 "candidate_count": len(candidates),
@@ -118,6 +124,7 @@ def _promote_validated_findings(scan: Scan, findings: list, root: Path | None) -
                 "needs_context": counts["needs_context"],
                 "rejected": counts["rejected"],
                 "candidates": decisions[:50],
+                "finding_quality": quality,
             },
         }
     )

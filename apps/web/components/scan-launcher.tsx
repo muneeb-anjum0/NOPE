@@ -3,9 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Upload } from "lucide-react";
 
+const MAX_ZIP_BYTES = 512 * 1024 * 1024;
+
 export function ScanLauncher({ projectId, scaffoldWarning }: { projectId?: string; scaffoldWarning?: string }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [fileName, setFileName] = useState("");
+  const [uploadError, setUploadError] = useState("");
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -15,16 +18,36 @@ export function ScanLauncher({ projectId, scaffoldWarning }: { projectId?: strin
   const setFiles = (files: FileList | null) => {
     const file = files?.[0];
     if (!file) return;
+    if (file.size > MAX_ZIP_BYTES) {
+      if (inputRef.current) inputRef.current.value = "";
+      setFileName("");
+      setUploadError(`ZIP files must be 512 MiB or smaller. “${file.name}” is ${(file.size / (1024 * 1024)).toFixed(1)} MiB.`);
+      return;
+    }
     if (inputRef.current) {
       const transfer = new DataTransfer();
       transfer.items.add(file);
       inputRef.current.files = transfer.files;
     }
     setFileName(file.name);
+    setUploadError("");
   };
 
   return (
-    <form className="app-grid" action="/api/start-scan" method="post" encType="multipart/form-data" data-scan-launcher-ready={hydrated ? "true" : "false"}>
+    <form
+      className="app-grid"
+      action={projectId ? `/api/start-scan?projectId=${encodeURIComponent(projectId)}` : "/api/start-scan"}
+      method="post"
+      encType="multipart/form-data"
+      data-scan-launcher-ready={hydrated ? "true" : "false"}
+      onSubmit={(event) => {
+        const file = inputRef.current?.files?.[0];
+        if (file && file.size > MAX_ZIP_BYTES) {
+          event.preventDefault();
+          setUploadError(`ZIP files must be 512 MiB or smaller. “${file.name}” is ${(file.size / (1024 * 1024)).toFixed(1)} MiB.`);
+        }
+      }}
+    >
       {projectId ? <input name="projectId" type="hidden" value={projectId} /> : null}
       <label
         className={`dropzone${fileName ? " dropzone-selected" : ""}`}
@@ -52,6 +75,7 @@ export function ScanLauncher({ projectId, scaffoldWarning }: { projectId?: strin
           onChange={(event) => setFiles(event.currentTarget.files)}
         />
       </label>
+      {uploadError ? <p className="login-error" role="alert">{uploadError}</p> : null}
       <input className="input-shell" name="targetUrl" type="url" placeholder="https://your-authorized-app.example" />
       <input name="repositoryName" type="hidden" value={fileName} />
       <select className="select-shell" name="depth" defaultValue="full" aria-label="Scan depth">

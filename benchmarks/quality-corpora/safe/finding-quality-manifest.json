@@ -1,0 +1,8 @@
+{
+  "name": "safe-corpus",
+  "observations": [
+    {"id":"safe-health","scanner":"Hadolint","rule":"DL-HEALTH","title":"Dockerfile has no HEALTHCHECK","category":"Containers","file":"Dockerfile","expected_confirmed":false,"expected_disposition":"rejected"},
+    {"id":"safe-dev","scanner":"OSV-Scanner","rule":"CVE-2026-100","title":"ESLint plugin advisory","category":"Dependencies","file":"package-lock.json","package":"eslint-plugin-demo","cve":"CVE-2026-100","expected_confirmed":false,"expected_disposition":"informational"},
+    {"id":"safe-auth","scanner":"Semgrep","rule":"idor","title":"Potential IDOR","category":"Authorization","file":"src/route.ts","validation_state":"rejected","validation_reasons":["Owner predicate binds data access to the authenticated user."],"expected_confirmed":false,"expected_disposition":"rejected"}
+  ]
+}
