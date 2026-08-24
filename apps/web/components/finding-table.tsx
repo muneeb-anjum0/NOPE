@@ -95,23 +95,19 @@ export function FindingTable({
         <colgroup>
           <col className="severity-column" />
           <col className="finding-column" />
-          <col className="location-column" />
-          <col className="evidence-column" />
           <col className="status-column" />
         </colgroup>
         <thead>
           <tr>
             <th>Severity</th>
             <th>Finding</th>
-            <th>Location</th>
-            <th>Evidence</th>
-            <th>Disposition</th>
+            <th>State</th>
           </tr>
         </thead>
         <tbody>
           {findings.length === 0 ? (
             <tr>
-              <td colSpan={5}>No findings yet. No scan evidence has been produced.</td>
+              <td colSpan={3}>No findings yet. No scan evidence has been produced.</td>
             </tr>
           ) : (
             visibleFindings.map((finding, index) => (
@@ -137,9 +133,8 @@ export function FindingTable({
                   <span className="muted">
                     <SlashMeta items={[finding.category, finding.confidence, lineRangeFor(finding)]} />
                   </span>
+                  <span className="mono finding-location-preview">{finding.affected_file ?? finding.affected_route ?? "n/a"}</span>
                 </td>
-                <td className="mono location-cell">{finding.affected_file ?? finding.affected_route ?? "n/a"}</td>
-                <td>{finding.scanner_sources.join(" + ") || finding.raw_artifact_id || "Evidence"}</td>
                 <td>
                   <strong>{finding.disposition ?? "confirmed"}</strong>
                   <br />

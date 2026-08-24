@@ -83,6 +83,7 @@ test.describe("Stage 8 core browser flows", () => {
     await page.getByRole("link", { name: "overview" }).click();
     await expect(page).toHaveURL(/tab=overview/);
     await page.waitForLoadState("networkidle");
+    await page.getByText("AI assistance", { exact: true }).click();
     await expect(page.getByRole("button", { name: "Explain" })).toBeEnabled();
 
     for (const label of ["Explain", "Challenge", "Fix", "Test", "Patch Review"]) {

@@ -2795,19 +2795,11 @@ textarea:focus-visible {
 }
 
 .finding-table .finding-column {
-  width: min(360px, 30%);
-}
-
-.finding-table .location-column {
-  width: 45%;
-}
-
-.finding-table .evidence-column {
-  width: 140px;
+  width: auto;
 }
 
 .finding-table .status-column {
-  width: 86px;
+  width: 150px;
 }
 
 .finding-title-cell,
@@ -2821,6 +2813,14 @@ textarea:focus-visible {
   max-width: 360px;
   white-space: normal;
   line-height: 1.25;
+}
+
+.finding-location-preview {
+  display: block;
+  margin-top: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .hot-slash {
@@ -4927,6 +4927,32 @@ textarea:focus-visible {
 .detail-stack {
   display: grid;
   gap: 12px;
+}
+
+.finding-more {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 4px;
+}
+
+.finding-more summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 9px 2px;
+}
+
+.finding-more summary:hover {
+  color: var(--text-primary);
+}
+
+.finding-more-body,
+.finding-more .detail-grid {
+  margin-top: 8px;
+}
+
+.finding-more-body {
+  display: grid;
+  gap: 10px;
 }
 
 @keyframes answer-reveal {

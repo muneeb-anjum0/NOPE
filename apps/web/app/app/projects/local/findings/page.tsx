@@ -82,7 +82,7 @@ export default async function FindingsPage({ searchParams }: PageProps) {
     filters: {},
     items: scan.findings,
   };
-  const selectedId = params.get("finding") ?? results.items[0]?.id ?? scan.findings[0]?.id;
+  const selectedId = params.get("finding") ?? undefined;
   const tab = params.get("tab") ?? "overview";
   const detail = selectedId ? await getFindingDetail(scan.id, selectedId) : null;
 
@@ -91,8 +91,8 @@ export default async function FindingsPage({ searchParams }: PageProps) {
       <section className="page-header">
         <div>
           <p className="section-kicker">Findings</p>
-          <h1><PinkDotText text="Evidence, not vibes." /></h1>
-          <p>{activeProject ? `${activeProject.name}: server-backed filters, protected evidence, code context, and real graph flow.` : "Choose an active folder to inspect findings."}</p>
+          <h1><PinkDotText text="Findings." /></h1>
+          <p>{activeProject ? `${results.total} results for ${activeProject.name}. Select one to inspect its evidence.` : "Choose an active folder to inspect findings."}</p>
         </div>
       </section>
 
@@ -102,8 +102,8 @@ export default async function FindingsPage({ searchParams }: PageProps) {
           ["conditional", "Conditional"],
           ["informational", "Informational"],
           ["withheld", "Withheld"],
-          ["rejected", "Rejected / Noise"],
-          ["raw", "Raw Scanner Observations"],
+          ["rejected", "Rejected"],
+          ["raw", "Raw"],
         ].map(([value, label]) => (
           <a key={value} className={view === value ? "active-tab" : ""} href={hrefWith(params, { view: value, finding: null, detail: null })}>{label}</a>
         ))}
@@ -152,8 +152,8 @@ export default async function FindingsPage({ searchParams }: PageProps) {
 
       <div className="findings-stack" data-brand-skip>
         <FindingDetailFocus />
-        <FindingDetailPanel detail={detail} tab={tab} params={params} scanId={scan.id} />
         <FindingTable findings={results.items} scanId={scan.id} selectedId={selectedId} searchQuery={params.toString()} total={results.total} />
+        <FindingDetailPanel detail={detail} tab={tab} params={params} scanId={scan.id} />
       </div>
     </>
   );
@@ -161,12 +161,7 @@ export default async function FindingsPage({ searchParams }: PageProps) {
 
 function FindingDetailPanel({ detail, tab, params, scanId }: { detail: FindingDetail | null; tab: string; params: URLSearchParams; scanId: string }) {
   if (!detail) {
-    return (
-      <div className="app-panel">
-        <div className="panel-title"><h2>Finding detail</h2></div>
-        <p className="muted">Select a finding to inspect evidence.</p>
-      </div>
-    );
+    return null;
   }
   const finding = detail.finding;
   const tabs = ["overview", "evidence", "code", "code_flow", "fix", "tests", "history"];
@@ -208,38 +203,51 @@ function Overview({ detail, scanId }: { detail: FindingDetail; scanId: string })
   return (
     <div className="detail-stack">
       <p className="muted">{finding.description}</p>
-      <dl className="detail-grid">
+      <dl className="detail-grid detail-grid-primary">
         <div><dt>Disposition</dt><dd>{finding.disposition ?? "confirmed"}</dd></div>
-        <div><dt>Priority</dt><dd>{finding.priority ?? "normal"}</dd></div>
-        <div><dt>Exposure</dt><dd>{finding.exposure ?? "unproven"}</dd></div>
         <div><dt>Reachability</dt><dd>{finding.reachability ?? "UNKNOWN"}</dd></div>
-        <div><dt>Data sensitivity</dt><dd>{finding.data_sensitivity ?? "UNKNOWN"}</dd></div>
-        <div><dt>Execution context</dt><dd>{finding.execution_contexts?.join(" / ") || "UNKNOWN"}</dd></div>
-        <div><dt>Actionability</dt><dd>{finding.actionability ?? "manual review required"}</dd></div>
         <div><dt>Confidence</dt><dd>{finding.confidence}</dd></div>
-        <div><dt>Status</dt><dd>{finding.status}</dd></div>
-        <div><dt>Rule</dt><dd>{finding.nope_rule_id ?? finding.original_rule_id ?? "n/a"}</dd></div>
-        <div><dt>CWE <span className="hot-slash">/</span> OWASP</dt><dd><SlashMeta items={[finding.cwe ?? "n/a", finding.owasp ?? "n/a"]} /></dd></div>
         <div><dt>Location</dt><dd className="mono">{finding.affected_file ?? finding.affected_route ?? "n/a"}</dd></div>
-        <div><dt>Scanner</dt><dd>{finding.scanner_sources.join(" + ") || "n/a"}</dd></div>
       </dl>
-      <div className="evidence-card">
-        <strong>Why NOPE classified this signal</strong>
-        <p>{finding.disposition_reason ?? "Historical finding without a stored disposition explanation."}</p>
-        <p className="mono muted">{finding.disposition_reason_codes?.join(" / ") || "HISTORICAL_DEFAULT"}</p>
-        {finding.compensating_controls?.map((control) => <p key={control}>Compensating control: {control}</p>)}
-      </div>
-      {finding.promotion_proof?.length ? (
-        <div className="evidence-card">
-          <strong>{finding.disposition === "confirmed" || finding.disposition === "confirmed_with_compensating_control" ? "Why NOPE promoted this" : "Why NOPE did not promote this"}</strong>
-          <p className="mono muted">Proof contract: {finding.proof_contract ?? "contextual"}</p>
-          {finding.promotion_proof.map((step, index) => (
-            <p key={`${step.fact}-${index}`}><strong>{step.fact.replaceAll("_", " ")}</strong>: {step.status} — {step.evidence}</p>
-          ))}
-          {finding.negative_evidence?.map((item) => <p key={item}>Negative evidence: {item}</p>)}
+      <details className="finding-more">
+        <summary>Technical metadata</summary>
+        <dl className="detail-grid">
+          <div><dt>Priority</dt><dd>{finding.priority ?? "normal"}</dd></div>
+          <div><dt>Exposure</dt><dd>{finding.exposure ?? "unproven"}</dd></div>
+          <div><dt>Data sensitivity</dt><dd>{finding.data_sensitivity ?? "UNKNOWN"}</dd></div>
+          <div><dt>Execution context</dt><dd>{finding.execution_contexts?.join(" / ") || "UNKNOWN"}</dd></div>
+          <div><dt>Actionability</dt><dd>{finding.actionability ?? "manual review required"}</dd></div>
+          <div><dt>Status</dt><dd>{finding.status}</dd></div>
+          <div><dt>Rule</dt><dd>{finding.nope_rule_id ?? finding.original_rule_id ?? "n/a"}</dd></div>
+          <div><dt>CWE <span className="hot-slash">/</span> OWASP</dt><dd><SlashMeta items={[finding.cwe ?? "n/a", finding.owasp ?? "n/a"]} /></dd></div>
+          <div><dt>Scanner</dt><dd>{finding.scanner_sources.join(" + ") || "n/a"}</dd></div>
+        </dl>
+      </details>
+      <details className="finding-more">
+        <summary>Classification proof</summary>
+        <div className="finding-more-body">
+          <div className="evidence-card">
+            <strong>Why NOPE classified this signal</strong>
+            <p>{finding.disposition_reason ?? "Historical finding without a stored disposition explanation."}</p>
+            <p className="mono muted">{finding.disposition_reason_codes?.join(" / ") || "HISTORICAL_DEFAULT"}</p>
+            {finding.compensating_controls?.map((control) => <p key={control}>Compensating control: {control}</p>)}
+          </div>
+          {finding.promotion_proof?.length ? (
+            <div className="evidence-card">
+              <strong>{finding.disposition === "confirmed" || finding.disposition === "confirmed_with_compensating_control" ? "Why NOPE promoted this" : "Why NOPE did not promote this"}</strong>
+              <p className="mono muted">Proof contract: {finding.proof_contract ?? "contextual"}</p>
+              {finding.promotion_proof.map((step, index) => (
+                <p key={`${step.fact}-${index}`}><strong>{step.fact.replaceAll("_", " ")}</strong>: {step.status} — {step.evidence}</p>
+              ))}
+              {finding.negative_evidence?.map((item) => <p key={item}>Negative evidence: {item}</p>)}
+            </div>
+          ) : null}
         </div>
-      ) : null}
-      <AIFindingActions finding={finding} scanId={scanId} />
+      </details>
+      <details className="finding-more">
+        <summary>AI assistance</summary>
+        <div className="finding-more-body"><AIFindingActions finding={finding} scanId={scanId} /></div>
+      </details>
     </div>
   );
 }
