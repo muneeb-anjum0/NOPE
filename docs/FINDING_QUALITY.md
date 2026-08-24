@@ -81,7 +81,7 @@ Canonical fingerprints merge package/CVE identities, code-flow identities, secre
 
 ## Reports and UI
 
-The default Findings view is Actionable. Conditional, Informational, Withheld, and retained Raw Scanner Observations are separate views. Rejected noise is discarded rather than presented as a finding. Finding details explain the disposition, reason codes, priority, exposure, and compensating controls for retained signals.
+The Findings workspace presents confirmed, conditional, informational, and withheld signals in one filterable list. Raw and rejected sections are not exposed; rejected noise is discarded rather than presented as a finding. Finding details explain the disposition, reason codes, priority, exposure, and compensating controls for retained signals.
 
 Executive JSON, Markdown, PDF, and ordinary Findings APIs use confirmed findings. Markdown includes non-confirmed diagnostic sections. SARIF preserves all raw observations and records NOPE disposition separately; non-confirmed observations use SARIF `note` level rather than being represented as NOPE vulnerabilities.
 

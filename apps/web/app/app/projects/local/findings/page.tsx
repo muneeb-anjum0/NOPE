@@ -4,8 +4,8 @@ import { FilterSelect } from "@/components/filter-select";
 import { FindingTable } from "@/components/finding-table";
 import { PinkDotText } from "@/components/pink-dot-text";
 import { getActiveProjectId, scansForProject } from "@/lib/active-project";
-import { freshScan, getFindingDetail, getFindingObservations, getFindings, getProjects, getScans, selectScan, severityClass } from "@/lib/nope-data";
-import type { FindingDetail } from "@/lib/types";
+import { freshScan, getFindingDetail, getFindingObservations, getProjects, getScans, selectScan, severityClass } from "@/lib/nope-data";
+import type { Finding, FindingDetail } from "@/lib/types";
 
 type PageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -49,6 +49,51 @@ function SlashMeta({ items }: { items: Array<string | null | undefined> }) {
   );
 }
 
+function unifiedFindings(items: Finding[], params: URLSearchParams) {
+  const matches = (value: string | null | undefined, expected: string | null) =>
+    !expected || (value ?? "").toLowerCase() === expected.toLowerCase();
+  const query = (params.get("query") ?? "").trim().toLowerCase();
+  const filtered = items.filter((finding) => {
+    if (finding.disposition === "rejected") return false;
+    if (!matches(finding.severity, params.get("severity"))) return false;
+    if (!matches(finding.status, params.get("status"))) return false;
+    if (!matches(finding.confidence, params.get("confidence"))) return false;
+    if (params.get("scanner") && !finding.scanner_sources.join(" ").toLowerCase().includes(params.get("scanner")!.toLowerCase())) return false;
+    if (params.get("cwe") && !(finding.cwe ?? "").toLowerCase().includes(params.get("cwe")!.toLowerCase())) return false;
+    if (params.get("file") && !(finding.affected_file ?? "").toLowerCase().includes(params.get("file")!.toLowerCase())) return false;
+    if (params.get("route") && !(finding.affected_route ?? "").toLowerCase().includes(params.get("route")!.toLowerCase())) return false;
+    if (query) {
+      const searchable = [
+        finding.title,
+        finding.description,
+        finding.category,
+        finding.affected_file,
+        finding.affected_route,
+        ...finding.scanner_sources,
+        ...(finding.evidence ?? []).map((item) => item.message),
+      ].filter(Boolean).join(" ").toLowerCase();
+      if (!searchable.includes(query)) return false;
+    }
+    return true;
+  });
+  const severityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+  const direction = params.get("direction") === "desc" ? -1 : 1;
+  const sort = params.get("sort") ?? "severity";
+  return filtered.sort((left, right) => {
+    if (sort === "severity") return ((severityRank[left.severity] ?? 9) - (severityRank[right.severity] ?? 9)) * direction;
+    const values: Record<string, [string, string]> = {
+      confidence: [left.confidence, right.confidence],
+      status: [left.status, right.status],
+      scanner: [left.scanner_sources.join(" "), right.scanner_sources.join(" ")],
+      file: [left.affected_file ?? "", right.affected_file ?? ""],
+      route: [left.affected_route ?? "", right.affected_route ?? ""],
+      title: [left.title, right.title],
+    };
+    const [a, b] = values[sort] ?? [left.title, right.title];
+    return a.localeCompare(b) * direction;
+  });
+}
+
 export default async function FindingsPage({ searchParams }: PageProps) {
   const resolved = (await searchParams) ?? {};
   const params = paramsFrom(resolved);
@@ -57,29 +102,19 @@ export default async function FindingsPage({ searchParams }: PageProps) {
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
   const scans = scansForProject(allScans, activeProjectId);
   const scan = selectScan(scans, params.get("scan")) ?? freshScan();
-  const view = params.get("view") ?? "actionable";
-  const findingsQuery = new URLSearchParams(params.toString());
-  findingsQuery.set("page", "1");
-  findingsQuery.set("page_size", "100");
-  const dispositionByView: Record<string, string> = {
-    conditional: "conditional",
-    informational: "informational",
-    withheld: "withheld",
-    raw: "raw",
-  };
-  const loaded = view === "actionable"
-    ? await getFindings(scan.id, findingsQuery)
-    : await getFindingObservations(scan.id, dispositionByView[view] ?? "raw");
-  const results = loaded ?? {
+  const loaded = await getFindingObservations(scan.id, "raw");
+  const allItems = loaded?.items ?? scan.raw_observations ?? scan.findings;
+  const items = unifiedFindings(allItems, params);
+  const results = {
     scan_id: scan.id,
-    total: scan.findings.length,
+    total: items.length,
     page: 1,
     page_size: 100,
     pages: 1,
     sort: "severity",
     direction: "asc" as const,
     filters: {},
-    items: scan.findings,
+    items,
   };
   const selectedId = params.get("finding") ?? undefined;
   const tab = params.get("tab") ?? "overview";
@@ -94,18 +129,6 @@ export default async function FindingsPage({ searchParams }: PageProps) {
           <p>{activeProject ? `${results.total} results for ${activeProject.name}. Select one to inspect its evidence.` : "Choose an active folder to inspect findings."}</p>
         </div>
       </section>
-
-      <nav className="tab-row" aria-label="Finding disposition views">
-        {[
-          ["actionable", "Actionable"],
-          ["conditional", "Conditional"],
-          ["informational", "Informational"],
-          ["withheld", "Withheld"],
-          ["raw", "Raw"],
-        ].map(([value, label]) => (
-          <a key={value} className={view === value ? "active-tab" : ""} href={hrefWith(params, { view: value, finding: null, detail: null })}>{label}</a>
-        ))}
-      </nav>
 
       <form className="filter-bar" action="/app/projects/local/findings">
         <input name="scan" type="hidden" value={scan.id} />
