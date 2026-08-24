@@ -9,7 +9,6 @@ const filters = [
   ["promoted", "Promoted"],
   ["withheld", "Withheld"],
   ["needs_manual_review", "Review"],
-  ["rejected", "Rejected"],
 ] as const;
 
 function numberValue(value: unknown) {
@@ -69,7 +68,6 @@ function FamilyMatrix({ summary }: { summary: RulesV2Summary | null }) {
           <strong>{family}</strong>
           <span>{numberValue(counts.promoted)} promoted</span>
           <span>{numberValue(counts.withheld) + numberValue(counts.needs_manual_review)} held</span>
-          <span>{numberValue(counts.rejected)} rejected</span>
         </div>
       ))}
     </div>
@@ -110,7 +108,6 @@ export default async function RulesV2Page({
           <span><strong>{metric(summary, "promoted")}</strong> promoted</span>
           <span><strong>{metric(summary, "withheld")}</strong> withheld</span>
           <span><strong>{metric(summary, "needs_manual_review")}</strong> review</span>
-          <span><strong>{metric(summary, "rejected")}</strong> rejected</span>
         </div>
 
         <div className="rules-v2-meta">

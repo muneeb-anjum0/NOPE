@@ -65,7 +65,6 @@ export default async function FindingsPage({ searchParams }: PageProps) {
     conditional: "conditional",
     informational: "informational",
     withheld: "withheld",
-    rejected: "rejected",
     raw: "raw",
   };
   const loaded = view === "actionable"
@@ -102,7 +101,6 @@ export default async function FindingsPage({ searchParams }: PageProps) {
           ["conditional", "Conditional"],
           ["informational", "Informational"],
           ["withheld", "Withheld"],
-          ["rejected", "Rejected"],
           ["raw", "Raw"],
         ].map(([value, label]) => (
           <a key={value} className={view === value ? "active-tab" : ""} href={hrefWith(params, { view: value, finding: null, detail: null })}>{label}</a>

@@ -27,7 +27,18 @@ from nope_api.findings import finding_detail, parse_finding_query, query_finding
 from nope_api.github import SecureGitHubAdapter, enforce_extracted_repository_policy
 from nope_api.ingestion import extract_zip, extract_zip_bytes
 from nope_api.lifecycle import LifecycleTransitionRequest
-from nope_api.models import AuthorizationScope, FindingStatus, GitHubSettings, Project, ProjectSettings, Scan, ScanMode, ScanRequest, SystemSettings
+from nope_api.models import (
+    AuthorizationScope,
+    FindingDisposition,
+    FindingStatus,
+    GitHubSettings,
+    Project,
+    ProjectSettings,
+    Scan,
+    ScanMode,
+    ScanRequest,
+    SystemSettings,
+)
 from nope_api.queue import clear_scan_cancel, enqueue_scan_job, queue_status, request_scan_cancel, scan_events
 from nope_api.reports import ReportContext, render_report
 from nope_api.repository_intelligence import (
@@ -691,7 +702,13 @@ def get_finding_observations(
     page_size: int = 100,
 ):
     scan = _load_scan(scan_id, authorization)
-    observations = scan.raw_observations or scan.findings
+    observations = [
+        item
+        for item in (scan.raw_observations or scan.findings)
+        if item.disposition != FindingDisposition.rejected
+    ]
+    if disposition and "rejected" in disposition.lower().split(","):
+        raise HTTPException(status_code=404, detail="Rejected observations are not retained.")
     if disposition and disposition != "raw":
         requested = {item.strip().lower() for item in disposition.split(",") if item.strip()}
         observations = [item for item in observations if item.disposition.value in requested]

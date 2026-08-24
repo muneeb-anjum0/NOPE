@@ -165,10 +165,15 @@ def report_json(scan: Scan, context: ReportContext | None = None) -> dict:
     context = context or ReportContext()
     counts = _count_findings(scan)
     baseline = _baseline_summary(scan, context)
+    visible_observations = [
+        item for item in (scan.raw_observations or scan.findings) if item.disposition.value != "rejected"
+    ]
+    scan_payload = scan.model_dump(mode="json")
+    scan_payload["raw_observations"] = [item.model_dump(mode="json") for item in visible_observations]
     return {
         "brand": "NOPE",
         "generated_at": context.generated_at.isoformat(),
-        "scan": scan.model_dump(mode="json"),
+        "scan": scan_payload,
         "summary": {
             "verdict": scan.verdict,
             "score": scan.score,
@@ -181,7 +186,7 @@ def report_json(scan: Scan, context: ReportContext | None = None) -> dict:
             "failed_scanners": len(_failed_scanners(scan)),
             "finding_quality": scan.finding_quality,
         },
-        "observation_dispositions": dict(Counter(item.disposition.value for item in (scan.raw_observations or scan.findings))),
+        "observation_dispositions": dict(Counter(item.disposition.value for item in visible_observations)),
         "dynamic_testing": _dynamic_summary(scan),
         "rules_v2": _rules_v2_summary(scan),
         "finding_lifecycle": _lifecycle_summary(scan),
@@ -281,7 +286,6 @@ def report_markdown(scan: Scan, context: ReportContext | None = None) -> str:
         ("conditional", "Conditional Security Concerns"),
         ("informational", "Informational / Dependency Advisories"),
         ("withheld", "Withheld Candidates (Diagnostic Appendix)"),
-        ("rejected", "Rejected / Noise Observations (Diagnostic Appendix)"),
     ):
         grouped = [item for item in observations if item.disposition.value == disposition]
         lines.extend(["", f"## {heading}"])
@@ -307,7 +311,11 @@ def report_markdown(scan: Scan, context: ReportContext | None = None) -> str:
 def report_sarif(scan: Scan, context: ReportContext | None = None) -> dict:
     rules = {}
     results = []
-    for finding in (scan.raw_observations or scan.findings):
+    for finding in (
+        item
+        for item in (scan.raw_observations or scan.findings)
+        if item.disposition.value != "rejected"
+    ):
         rule_id = finding.cwe or finding.original_rule_id or finding.category
         rules[rule_id] = {
             "id": rule_id,

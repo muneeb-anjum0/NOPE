@@ -85,7 +85,9 @@ export async function getFindings(scanId: string, searchParams?: URLSearchParams
 export async function getFindingObservations(scanId: string, disposition: string): Promise<FindingsResult | null> {
   if (isE2EFixtureMode()) {
     const scan = e2eScans.find((item) => item.id === scanId);
-    const items = (scan?.raw_observations ?? scan?.findings ?? []).filter((item) => disposition === "raw" || item.disposition === disposition);
+    const items = (scan?.raw_observations ?? scan?.findings ?? []).filter(
+      (item) => item.disposition !== "rejected" && (disposition === "raw" || item.disposition === disposition),
+    );
     return { scan_id: scanId, total: items.length, page: 1, page_size: 100, pages: 1, sort: "disposition", direction: "asc", filters: {}, items };
   }
   try {

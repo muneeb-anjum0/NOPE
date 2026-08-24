@@ -120,6 +120,26 @@ def test_type_schema_and_frontend_client_cannot_prove_server_route(tmp_path):
     assert client.disposition_reason_codes == ["REJECTED_NO_SERVER_ROUTE"]
 
 
+def test_browser_theme_preference_is_not_authorization(tmp_path):
+    write(
+        tmp_path,
+        "components/theme-toggle.tsx",
+        '"use client"; export function setTheme(theme: string) { '
+        'localStorage.setItem("muneeb-systems-theme", theme); }',
+    )
+    confirmed, result = classify(
+        tmp_path,
+        observation(
+            "components/theme-toggle.tsx",
+            title="Client-provided role or tenant trusted",
+            category="Authorization",
+            rule="NOPE-AUTHZ-002",
+        ),
+    )
+    assert not confirmed
+    assert result.disposition_reason_codes == ["REJECTED_NO_SERVER_ROUTE"]
+
+
 def test_test_fixture_fake_secret_is_rejected(tmp_path):
     write(
         tmp_path,

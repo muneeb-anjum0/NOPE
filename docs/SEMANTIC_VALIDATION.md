@@ -21,7 +21,7 @@ Dockerfile `EXPOSE`, a container bind to `0.0.0.0`, a route-looking string, fron
 | Root container | Effective final runtime user after deployment overrides. |
 | Dependency advisory | Runtime/deployment/privileged-CI scope from Stage 15.2. |
 
-Findings store execution contexts, reachability, sensitivity, proof contract, proof steps, and negative evidence. The detail UI and reports explain why NOPE promoted or declined a signal. Raw, withheld, and rejected observations remain inspectable.
+Findings store execution contexts, reachability, sensitivity, proof contract, proof steps, and negative evidence. The detail UI and reports explain why NOPE promoted or declined a retained signal. Rejected gate decisions are discarded as noise and are not persisted, exported, or shown in user-facing views.
 
 Scans and findings are persisted as versioned JSON payloads. New fields have conservative defaults, so historical scans remain readable and no relational migration is required. Normalized Rules v2 evidence tables remain unchanged.
 

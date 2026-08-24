@@ -8,7 +8,15 @@ from nope_api.attack_surface import build_attack_surface, build_code_graph
 from nope_api.config import Settings
 from nope_api.finding_validation import validate_findings, validation_counts
 from nope_api.finding_quality import apply_finding_quality_gate
-from nope_api.models import CoverageRecord, CoverageStatus, Scan, ScanMode, ScannerRun, now_utc
+from nope_api.models import (
+    CoverageRecord,
+    CoverageStatus,
+    FindingDisposition,
+    Scan,
+    ScanMode,
+    ScannerRun,
+    now_utc,
+)
 from nope_api.repository_intelligence import build_repository_index
 from nope_api.rules_engine import dedupe_findings, run_rules
 from nope_api.rules_v2 import run_rules_v2
@@ -105,7 +113,12 @@ def _promote_validated_findings(scan: Scan, findings: list, root: Path | None) -
     _, decisions = validate_findings(candidates, root)
     counts = validation_counts(decisions)
     promoted, observations, quality = apply_finding_quality_gate(candidates, root, decisions)
-    scan.raw_observations = observations
+    # Rejected candidates are internal gate decisions, not scan results. Keeping
+    # them out of the persisted scan prevents known noise from resurfacing in
+    # the UI, exports, or downstream integrations.
+    scan.raw_observations = [
+        item for item in observations if item.disposition != FindingDisposition.rejected
+    ]
     scan.finding_quality = quality
     scan.stages.append(
         {
@@ -115,15 +128,15 @@ def _promote_validated_findings(scan: Scan, findings: list, root: Path | None) -
                 f"{quality['promoted_count']} confirmed, "
                 f"{quality['conditional_count']} conditional, "
                 f"{quality['informational_count']} informational, "
-                f"{quality['withheld_count']} withheld, "
-                f"{quality['rejected_count']} rejected."
+                f"{quality['withheld_count']} withheld."
             ),
             "data": {
                 "candidate_count": len(candidates),
                 "promoted": counts["promoted"],
                 "needs_context": counts["needs_context"],
-                "rejected": counts["rejected"],
-                "candidates": decisions[:50],
+                "candidates": [
+                    item for item in decisions if item.get("state") != "rejected"
+                ][:50],
                 "finding_quality": quality,
             },
         }
