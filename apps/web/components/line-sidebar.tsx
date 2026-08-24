@@ -14,14 +14,14 @@ const FALLOFF_CURVES = {
 
 const routeItems = [
   { href: "/app/projects/local", label: "Overview" },
+  { href: "/app/projects/local/scans", label: "Scans" },
   { href: "/app/projects/local/findings", label: "Findings" },
   { href: "/app/projects/local/investigations", label: "Investigations" },
-  { href: "/app/projects/local/rules", label: "Rules v2" },
-  { href: "/app/projects/local/search", label: "Search" },
   { href: "/app/projects/local/attack-map", label: "Attack Map" },
   { href: "/app/projects/local/coverage", label: "Coverage" },
-  { href: "/app/projects/local/scans", label: "Scans" },
   { href: "/app/projects/local/assets", label: "Assets" },
+  { href: "/app/projects/local/search", label: "Search" },
+  { href: "/app/projects/local/rules", label: "Rules v2" },
   { href: "/app/projects/local/reports", label: "Reports" },
   { href: "/app/projects/local/settings", label: "Settings" },
 ];
