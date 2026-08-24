@@ -102,7 +102,10 @@ export default async function RepositorySearchPage({
                 <strong>{Math.round(result.score * 100)}%</strong>
               </div>
               <div className="source-badge-row">{result.sources.map(badge)}</div>
-              <pre>{result.text}</pre>
+              <details className="search-code-reveal">
+                <summary>View matched code</summary>
+                <pre>{result.text}</pre>
+              </details>
               <ScoreBreakdown result={result} />
             </article>
           ))

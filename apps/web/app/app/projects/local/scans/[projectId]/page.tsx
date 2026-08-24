@@ -63,9 +63,10 @@ export default async function ScanFolderPage({
         </div>
       </div>
 
-      <section className="app-grid split">
-        <div className="app-panel">
-          <div className="panel-title"><h2>Latest drift</h2><span className="mono muted">{comparison ? `${comparison.current_scan_id} vs ${comparison.reference_scan_id}` : "needs matching folder scan"}</span></div>
+      <section className="scan-secondary-tools">
+        <details className="app-panel reveal-panel">
+          <summary><span><strong>Latest drift</strong><small>{comparison ? `${comparison.summary.new ?? 0} new · ${comparison.summary.fixed ?? 0} fixed` : "Run twice to compare"}</small></span><span className="reveal-action">Review</span></summary>
+          <div className="reveal-panel-body">
           {comparison ? (
             <>
               <div className="metric-grid">
@@ -88,9 +89,11 @@ export default async function ScanFolderPage({
           ) : (
             <p className="muted">Run this same folder again to compare drift. Other folders and loose ZIP uploads are ignored.</p>
           )}
-        </div>
-        <div className="app-panel">
-          <div className="panel-title"><h2>Baselines</h2><span className="mono muted">{baselines.length} saved</span></div>
+          </div>
+        </details>
+        <details className="app-panel reveal-panel">
+          <summary><span><strong>Baselines</strong><small>{baselines.length} saved reference{baselines.length === 1 ? "" : "s"}</small></span><span className="reveal-action">Review</span></summary>
+          <div className="reveal-panel-body">
           <div className="detail-stack">
             {baselines.map((baseline) => (
               <div className="collapse-row" key={baseline.id}>
@@ -108,7 +111,8 @@ export default async function ScanFolderPage({
               <p className="mono">{(comparison.incremental_scope.changed_files ?? []).slice(0, 4).join(", ") || "No changed files inferred."}</p>
             </div>
           ) : null}
-        </div>
+          </div>
+        </details>
       </section>
     </>
   );

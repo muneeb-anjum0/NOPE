@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Finding } from "@/lib/types";
 
-const BATCH_SIZE = 7;
+const BATCH_SIZE = 5;
 
 function severityClass(severity: string) {
   return `severity-pill severity-${severity}`;

@@ -64,7 +64,7 @@ test.describe("Stage 8 core browser flows", () => {
     test.setTimeout(90_000);
     await login(page);
     await page.goto("/app/projects/local/findings?scan=scan_stage8_completed");
-    await expect(page.getByText("7 of 8")).toBeVisible();
+    await expect(page.getByText("5 of 8")).toBeVisible();
     await page.getByRole("button", { name: /Load more/i }).click();
     await expect(page.getByText("8 of 8")).toBeVisible();
     await expect(page.getByText("8 shown")).toBeVisible();
@@ -105,6 +105,7 @@ test.describe("Stage 8 core browser flows", () => {
     test.setTimeout(90_000);
     await login(page);
     await page.goto("/app/projects/local/attack-map?scan=scan_stage8_completed");
+    await page.getByText("Open interactive attack map").click();
     await expect(page.getByText("GET /app/invoices/:id")).toBeVisible();
     await expect(page.getByText("Missing ownership check")).toBeVisible();
 
@@ -118,6 +119,7 @@ test.describe("Stage 8 core browser flows", () => {
 
     await page.goto("/app/projects/local/scans/project_stage8?scan=scan_stage8_completed");
     await expect(page.getByText("Latest drift")).toBeVisible();
+    await page.getByText("Baselines", { exact: true }).click();
     await expect(page.getByText("Stage 8 baseline")).toBeVisible();
 
     if ((page.viewportSize()?.width ?? 1440) <= 390) {

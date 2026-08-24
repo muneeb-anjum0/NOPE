@@ -44,6 +44,21 @@ function CoverageCard({ record }: { record: CoverageRecord }) {
   );
 }
 
+function CoverageGroup({ status, records }: { status: string; records: CoverageRecord[] }) {
+  const needsAttention = status === "Failed" || status === "Not tested" || status === "Partial";
+  return (
+    <details className={`coverage-lane ${statusClass(status)}`} open={needsAttention}>
+      <summary className="coverage-lane-title">
+        <span><strong>{status}</strong><small>{needsAttention ? "Review these gaps" : "Completed coverage"}</small></span>
+        <span className="mono muted">{records.length}</span>
+      </summary>
+      <div className="coverage-domain-list">
+        {records.map((record) => <CoverageCard key={record.domain} record={record} />)}
+      </div>
+    </details>
+  );
+}
+
 export default async function CoveragePage({
   searchParams,
 }: {
@@ -68,8 +83,8 @@ export default async function CoveragePage({
       <section className="page-header">
         <div>
           <p className="section-kicker">Coverage</p>
-          <h1><PinkDotText text="Not tested does not mean secure." /></h1>
-          <p>Scanner failures and untested domains are first-class evidence.</p>
+          <h1><PinkDotText text="What did we actually test?" /></h1>
+          <p>Coverage gaps open automatically. Verified areas stay tucked away until you need them.</p>
         </div>
       </section>
       <section className="coverage-command">
@@ -89,17 +104,7 @@ export default async function CoveragePage({
           )) : null}
         </div>
         <div className="coverage-lane-board">
-          {groups.map((group) => (
-            <section className={`coverage-lane ${statusClass(group.status)}`} key={group.status}>
-              <div className="coverage-lane-title">
-                <h2>{group.status}</h2>
-                <span className="mono muted">{group.records.length}</span>
-              </div>
-              <div className="coverage-domain-list">
-                {group.records.map((record) => <CoverageCard key={record.domain} record={record} />)}
-              </div>
-            </section>
-          ))}
+          {groups.map((group) => <CoverageGroup key={group.status} status={group.status} records={group.records} />)}
         </div>
       </section>
     </>
