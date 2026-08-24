@@ -79,10 +79,6 @@ export function SettingsForms({ system, project, projectSettings, github, saveSy
             <span><strong>Artifact MB</strong></span>
             <input className="input-shell" name="artifact_limit_mb" type="number" defaultValue={system?.artifact_limit_mb ?? 512} placeholder="e.g. 512" min={1} max={10240} />
           </label>
-          <label className="settings-edit-row">
-            <span><strong>Reports</strong></span>
-            <input className="input-shell" name="report_defaults" defaultValue={(system?.report_defaults ?? ["json", "md", "sarif", "pdf"]).join(",")} placeholder="e.g. json,md,sarif,pdf" />
-          </label>
           <div className="settings-edit-actions">
             <button className="button primary" type="submit">Save</button>
           </div>

@@ -120,7 +120,6 @@ export default async function SettingsPage() {
       rows: [
         ["Project", "Each login lands in its own local NOPE workspace shell.", "Local"],
         ["Session", "HttpOnly cookie backed by Postgres session records.", "Enabled"],
-        ["Reports", "Exports use the latest scan available to the local workspace.", "Ready"],
       ],
     },
     {
@@ -162,7 +161,7 @@ export default async function SettingsPage() {
       summary: "Where local credentials and evidence live during development.",
       rows: [
         ["Auth database", "Local users and sessions are stored in Postgres.", "Postgres"],
-        ["Artifacts", "Reports and evidence can be stored through MinIO.", "MinIO"],
+        ["Artifacts", "Scan evidence can be stored through MinIO.", "MinIO"],
         ["Queue", "Worker jobs use Redis for local coordination.", "Redis"],
       ],
     },

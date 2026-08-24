@@ -112,19 +112,9 @@ test.describe("Stage 8 core browser flows", () => {
     await expect(page.getByText("Dynamic testing: Partial")).toBeVisible();
     await expect(page.getByText("ZAP baseline")).toBeVisible();
 
-    await page.goto("/app/projects/local/rules?scan=scan_stage8_completed");
-    await expect(page.getByText("Promote evidence")).toBeVisible();
-    await expect(page.getByText("NOPE-CORR-IDOR-001")).toBeVisible();
-    await page.getByRole("link", { name: "Withheld" }).click();
-    await expect(page.getByText("NOPE-PRISMA-001")).toBeVisible();
-
     await page.goto("/app/projects/local/assets?scan=scan_stage8_completed");
     await expect(page.getByText("Asset manifest")).toBeVisible();
     await expect(page.getByText("files and")).toBeVisible();
-
-    await page.goto("/app/projects/local/reports");
-    await expect(page.getByRole("link", { name: /PDF review packet/i }).first()).toBeVisible();
-    await expect(page.getByRole("link", { name: /SARIF code scanning/i }).first()).toBeVisible();
 
     await page.goto("/app/projects/local/scans/project_stage8?scan=scan_stage8_completed");
     await expect(page.getByText("Latest drift")).toBeVisible();

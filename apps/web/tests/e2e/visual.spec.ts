@@ -7,7 +7,6 @@ const denseRoutes = [
   ["/app/projects/local/attack-map?scan=scan_stage8_completed", "attack-map"],
   ["/app/projects/local/coverage?scan=scan_stage8_completed", "coverage"],
   ["/app/projects/local/assets?scan=scan_stage8_completed", "assets"],
-  ["/app/projects/local/reports", "reports"],
   ["/app/projects/local/settings", "settings"],
 ] as const;
 
