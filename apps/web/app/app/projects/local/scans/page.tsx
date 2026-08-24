@@ -18,8 +18,8 @@ export default async function ScansPage({
       <section className="page-header">
         <div>
           <p className="section-kicker">Scans</p>
-          <h1><PinkDotText text="Project folders." /></h1>
-          <p>Create a folder for each app you want to track, then scan ZIPs inside that folder only.</p>
+          <h1><PinkDotText text="Scan your applications." /></h1>
+          <p>Keep each application in its own project, upload a ZIP, and follow every scan from ingestion to evidence.</p>
         </div>
       </section>
 

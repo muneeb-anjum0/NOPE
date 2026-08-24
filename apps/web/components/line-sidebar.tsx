@@ -1,282 +1,110 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect } from "react";
 import Link from "next/link";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Activity, Boxes, ChevronDown, FileSearch, Gauge, LayoutDashboard, ListChecks, PanelLeftClose, PanelLeftOpen, Radar, ScanSearch, SearchCode, Settings } from "lucide-react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import type { Project } from "@/lib/types";
 
-const FALLOFF_CURVES = {
-  linear: (p: number) => p,
-  smooth: (p: number) => p * p * (3 - 2 * p),
-  sharp: (p: number) => p * p * p,
-};
-
-const routeItems = [
-  { href: "/app/projects/local", label: "Overview" },
-  { href: "/app/projects/local/scans", label: "Scans" },
-  { href: "/app/projects/local/findings", label: "Findings" },
-  { href: "/app/projects/local/attack-map", label: "Attack Map" },
-  { href: "/app/projects/local/coverage", label: "Coverage" },
-  { href: "/app/projects/local/investigations", label: "Investigations" },
-  { href: "/app/projects/local/assets", label: "Assets" },
-  { href: "/app/projects/local/search", label: "Search" },
-  { href: "/app/projects/local/settings", label: "Settings" },
+const primaryItems = [
+  { href: "/app/projects/local", label: "Overview", note: "What needs attention", icon: LayoutDashboard },
+  { href: "/app/projects/local/scans", label: "Scans", note: "Upload and track", icon: ScanSearch },
+  { href: "/app/projects/local/findings", label: "Findings", note: "Review real signals", icon: ListChecks },
+  { href: "/app/projects/local/investigations", label: "Investigate", note: "Prove and remediate", icon: FileSearch },
+  { href: "/app/projects/local/settings", label: "Settings", note: "Configure NOPE", icon: Settings },
 ];
 
-type BitsSidebarProps = {
-  items: string[];
-  accentColor?: string;
-  textColor?: string;
-  markerColor?: string;
-  showIndex?: boolean;
-  showMarker?: boolean;
-  proximityRadius?: number;
-  maxShift?: number;
-  falloff?: keyof typeof FALLOFF_CURVES;
-  markerLength?: number;
-  markerGap?: number;
-  tickScale?: number;
-  scaleTick?: boolean;
-  itemGap?: number;
-  fontSize?: number;
-  smoothing?: number;
-  defaultActive?: number | null;
-  onItemClick?: (index: number, label: string) => void;
-  className?: string;
-};
+const analysisItems = [
+  { href: "/app/projects/local/coverage", label: "Coverage", icon: Gauge },
+  { href: "/app/projects/local/attack-map", label: "Attack map", icon: Radar },
+  { href: "/app/projects/local/assets", label: "Assets", icon: Boxes },
+  { href: "/app/projects/local/search", label: "Repository search", icon: SearchCode },
+];
 
-function BitsLineSidebar({
-  items,
-  accentColor = "#f01683",
-  textColor = "#c4c4c4",
-  markerColor = "#6c6c6c",
-  showIndex = true,
-  showMarker = true,
-  proximityRadius = 100,
-  maxShift = 30,
-  falloff = "smooth",
-  markerLength = 60,
-  markerGap = 0,
-  tickScale = 0.5,
-  scaleTick = true,
-  itemGap = 20,
-  fontSize = 1.1,
-  smoothing = 100,
-  defaultActive = null,
-  onItemClick,
-  className = "",
-}: BitsSidebarProps) {
-  const listRef = useRef<HTMLUListElement | null>(null);
-  const itemRefs = useRef<Array<HTMLLIElement | null>>([]);
-  const targetsRef = useRef<number[]>([]);
-  const currentRef = useRef<number[]>([]);
-  const rafRef = useRef<number | null>(null);
-  const lastRef = useRef(0);
-  const activeRef = useRef(defaultActive);
-  const smoothingRef = useRef(smoothing);
-  const [activeIndex, setActiveIndex] = useState(defaultActive);
-
-  activeRef.current = activeIndex;
-  smoothingRef.current = smoothing;
-
-  const runFrame = useCallback((now: number) => {
-    const dt = Math.min((now - lastRef.current) / 1000, 0.05);
-    lastRef.current = now;
-    const tau = Math.max(smoothingRef.current, 1) / 1000;
-    const k = 1 - Math.exp(-dt / tau);
-
-    let moving = false;
-    const elements = itemRefs.current;
-    for (let i = 0; i < elements.length; i += 1) {
-      const el = elements[i];
-      if (!el) continue;
-      const target = Math.max(targetsRef.current[i] || 0, activeRef.current === i ? 1 : 0);
-      const cur = currentRef.current[i] || 0;
-      const next = cur + (target - cur) * k;
-      const settled = Math.abs(target - next) < 0.0015;
-      const value = settled ? target : next;
-      currentRef.current[i] = value;
-      el.style.setProperty("--effect", value.toFixed(4));
-      if (!settled) moving = true;
-    }
-
-    rafRef.current = moving ? requestAnimationFrame(runFrame) : null;
-  }, []);
-
-  const startLoop = useCallback(() => {
-    if (rafRef.current != null) return;
-    lastRef.current = performance.now();
-    rafRef.current = requestAnimationFrame(runFrame);
-  }, [runFrame]);
-
-  const handlePointerMove = useCallback(
-    (event: React.PointerEvent<HTMLUListElement>) => {
-      const list = listRef.current;
-      if (!list) return;
-      const rect = list.getBoundingClientRect();
-      const pointerY = event.clientY - rect.top;
-      const ease = FALLOFF_CURVES[falloff] ?? FALLOFF_CURVES.linear;
-      const elements = itemRefs.current;
-      for (let i = 0; i < elements.length; i += 1) {
-        const el = elements[i];
-        if (!el) continue;
-        const center = el.offsetTop + el.offsetHeight / 2;
-        const distance = Math.abs(pointerY - center);
-        targetsRef.current[i] = ease(Math.max(0, 1 - distance / proximityRadius));
-      }
-      startLoop();
-    },
-    [falloff, proximityRadius, startLoop],
-  );
-
-  const handlePointerLeave = useCallback(() => {
-    targetsRef.current = targetsRef.current.map(() => 0);
-    startLoop();
-  }, [startLoop]);
-
-  const handleClick = useCallback(
-    (index: number, label: string) => {
-      setActiveIndex(index);
-      onItemClick?.(index, label);
-    },
-    [onItemClick],
-  );
-
-  useEffect(() => {
-    setActiveIndex(defaultActive);
-  }, [defaultActive]);
-
-  useEffect(() => {
-    startLoop();
-  }, [activeIndex, startLoop]);
-
-  useEffect(
-    () => () => {
-      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
-    },
-    [],
-  );
-
-  return (
-    <nav
-      className={`line-sidebar${showMarker ? " line-sidebar--markers" : ""}${scaleTick ? " line-sidebar--scale-tick" : ""}${className ? ` ${className}` : ""}`}
-      style={
-        {
-          "--accent-color": accentColor,
-          "--text-color": textColor,
-          "--marker-color": markerColor,
-          "--marker-length": `${markerLength}px`,
-          "--marker-gap": `${markerGap}px`,
-          "--tick-scale": tickScale,
-          "--max-shift": `${maxShift}px`,
-          "--item-gap": `${itemGap}px`,
-          "--font-size": `${fontSize}rem`,
-          "--smoothing": `${smoothing}ms`,
-        } as React.CSSProperties
-      }
-    >
-      <ul ref={listRef} className="line-sidebar__list" onPointerMove={handlePointerMove} onPointerLeave={handlePointerLeave}>
-        {items.map((label, index) => (
-          <li
-            key={`${label}-${index}`}
-            ref={(el) => {
-              itemRefs.current[index] = el;
-            }}
-            className="line-sidebar__item"
-          >
-            <button
-              type="button"
-              className="line-sidebar__button"
-              aria-current={activeIndex === index ? "page" : undefined}
-              aria-label={label}
-              onClick={() => handleClick(index, label)}
-            >
-              {showMarker ? <span className="line-sidebar__marker" aria-hidden="true" /> : null}
-              <span className="line-sidebar__label">
-                {showIndex ? <span className="line-sidebar__index">{String(index + 1).padStart(2, "0")}</span> : null}
-                <span className="line-sidebar__text">{label}</span>
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </nav>
-  );
+function matches(pathname: string, href: string) {
+  return pathname === href || (href !== "/app/projects/local" && pathname.startsWith(`${href}/`));
 }
 
 export function LineSidebar({ projects, activeProjectId }: Readonly<{ projects: Project[]; activeProjectId?: string | null }>) {
   const pathname = usePathname();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [collapsed, setCollapsed] = useState(false);
-  const currentPath = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
-  const activeIndex = Math.max(
-    0,
-    routeItems.findIndex((item) => pathname === item.href || (item.href !== "/app/projects/local" && pathname.startsWith(item.href))),
-  );
+  const analysisActive = analysisItems.some((item) => matches(pathname, item.href));
+  const [analysisOpen, setAnalysisOpen] = useState(analysisActive);
   const selectedScan = searchParams.get("scan") ?? "";
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
+  const currentPath = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
 
-  const hrefFor = (href: string, scanId = selectedScan) => {
-    const params = new URLSearchParams();
-    if (scanId) params.set("scan", scanId);
-    return `${href}${params.toString() ? `?${params.toString()}` : ""}`;
+  useEffect(() => {
+    if (analysisActive) setAnalysisOpen(true);
+  }, [analysisActive]);
+
+  const hrefFor = (href: string) => {
+    if (!selectedScan || href.endsWith("/scans") || href.endsWith("/settings")) return href;
+    return `${href}?scan=${encodeURIComponent(selectedScan)}`;
   };
 
   return (
-    <aside className={`sidebar-frame${collapsed ? " is-collapsed" : ""}`} aria-label="Project navigation">
+    <aside className={`sidebar-frame product-sidebar${collapsed ? " is-collapsed" : ""}`} aria-label="Project navigation">
       <div className="sidebar-header">
-        <Link className="sidebar-wordmark" href="/" aria-label="NOPE home">
-          <span className="sidebar-wordmark-text">NOPE</span><span className="wordmark-dot">.</span>
+        <Link className="sidebar-wordmark" href="/app/projects/local" aria-label="NOPE home">
+          <span className="sidebar-brand-mark"><Activity size={16} /></span>
+          <span className="sidebar-wordmark-text">NOPE<span className="wordmark-dot">.</span></span>
         </Link>
-        <button
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="sidebar-collapse-button"
-          type="button"
-          onClick={() => setCollapsed((value) => !value)}
-        >
-          {collapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
+        <button aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} className="sidebar-collapse-button" type="button" onClick={() => setCollapsed((value) => !value)}>
+          {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
         </button>
       </div>
-      <BitsLineSidebar
-        items={routeItems.map((item) => item.label)}
-        accentColor="#f02a56"
-        textColor="#a9b0ab"
-        markerColor="rgba(255, 255, 255, 0.28)"
-        defaultActive={activeIndex}
-        proximityRadius={100}
-        maxShift={30}
-        markerLength={60}
-        itemGap={20}
-        fontSize={1.05}
-        onItemClick={(index) => router.push(hrefFor(routeItems[index]?.href ?? "/app/projects/local"))}
-      />
+
+      <div className="sidebar-project-label">
+        <span className="project-pulse" aria-hidden="true" />
+        <span><small>Active project</small><strong>{activeProject?.name ?? "Choose a project"}</strong></span>
+      </div>
+
+      <nav className="product-navigation" aria-label="Main workflow">
+        <span className="sidebar-section-label">Workflow</span>
+        <ol className="primary-nav-list">
+          {primaryItems.map((item, index) => {
+            const active = matches(pathname, item.href);
+            const Icon = item.icon;
+            return (
+              <li key={item.href}>
+                <Link className={`product-nav-link${active ? " is-active" : ""}`} href={hrefFor(item.href)} aria-current={active ? "page" : undefined}>
+                  <span className="product-nav-number">{String(index + 1).padStart(2, "0")}</span>
+                  <Icon className="product-nav-icon" size={18} />
+                  <span className="product-nav-copy"><strong>{item.label}</strong><small>{item.note}</small></span>
+                </Link>
+              </li>
+            );
+          })}
+        </ol>
+
+        <div className={`analysis-nav${analysisOpen ? " is-open" : ""}${analysisActive ? " is-active" : ""}`}>
+          <button type="button" onClick={() => setAnalysisOpen((value) => !value)} aria-expanded={analysisOpen}>
+            <span><Radar size={17} /><span>Analyze scan</span></span><ChevronDown size={15} />
+          </button>
+          {analysisOpen ? (
+            <div className="analysis-nav-links">
+              {analysisItems.map((item) => {
+                const active = matches(pathname, item.href);
+                const Icon = item.icon;
+                return <Link key={item.href} className={active ? "is-active" : ""} href={hrefFor(item.href)}><Icon size={15} /><span>{item.label}</span></Link>;
+              })}
+            </div>
+          ) : null}
+        </div>
+      </nav>
+
       <form className="sidebar-folder-context" action="/api/active-project" method="post">
-        <label>Active folder</label>
+        <label>Switch project</label>
         <input name="returnTo" type="hidden" value={currentPath} />
         <details className="sidebar-folder-picker">
-          <summary>
-            <span>
-              <strong>{activeProject?.name ?? "No folder selected"}</strong>
-              <small>{activeProject?.repository || activeProject?.target_url || "folder scoped"}</small>
-            </span>
-            <span className="sidebar-folder-count mono">{projects.length}</span>
-          </summary>
+          <summary><span><strong>{activeProject?.name ?? "No project"}</strong><small>{activeProject?.repository || activeProject?.target_url || "Local workspace"}</small></span><span className="sidebar-folder-count mono">{projects.length}</span></summary>
           <div className="sidebar-folder-menu">
-            {projects.length === 0 ? <span className="sidebar-folder-empty">No folders yet</span> : null}
+            {projects.length === 0 ? <span className="sidebar-folder-empty">Create a project in Scans</span> : null}
             {projects.map((project) => (
-              <button
-                className={project.id === activeProjectId ? "is-active" : ""}
-                key={project.id}
-                name="projectId"
-                type="submit"
-                value={project.id}
-              >
-                <span>
-                  <strong>{project.name}</strong>
-                  <small>{project.repository || project.target_url || "folder workspace"}</small>
-                </span>
+              <button className={project.id === activeProjectId ? "is-active" : ""} key={project.id} name="projectId" type="submit" value={project.id}>
+                <span><strong>{project.name}</strong><small>{project.repository || project.target_url || "Local workspace"}</small></span>
               </button>
             ))}
           </div>

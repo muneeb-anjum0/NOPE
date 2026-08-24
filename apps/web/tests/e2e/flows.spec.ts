@@ -12,9 +12,9 @@ test.describe("Stage 8 core browser flows", () => {
     await visibleAppReady(page);
     await page.reload();
     await expect(page).toHaveURL(/\/app\/projects\/local/);
-    await expect(page.getByText("Evidence status")).toBeVisible();
+    await expect(page.getByText("Recommended next step")).toBeVisible();
 
-    await page.getByRole("button", { name: "Settings" }).press("Enter");
+    await page.getByRole("link", { name: /Settings/ }).click();
     await expect(page).toHaveURL(/\/settings/);
     await page.getByRole("button", { name: /Sign out/i }).click();
     await expect(page).toHaveURL(/\/$/);
@@ -80,7 +80,7 @@ test.describe("Stage 8 core browser flows", () => {
     await expect(page.getByText("Route id flows")).toBeVisible();
     await page.getByRole("link", { name: "code flow" }).click();
     await expect(page.getByText("retrieves data from")).toBeVisible();
-    await page.getByRole("link", { name: "overview" }).click();
+    await page.getByRole("link", { name: "overview", exact: true }).click();
     await expect(page).toHaveURL(/tab=overview/);
     await page.waitForLoadState("networkidle");
     await page.getByText("AI assistance", { exact: true }).click();
@@ -130,7 +130,7 @@ test.describe("Stage 8 core browser flows", () => {
     test.setTimeout(90_000);
     await login(page);
     await page.goto("/app/projects/local/investigations?scan=scan_stage8_completed&finding=fnd_stage8_idor");
-    await expect(page.getByText("Manual-review brain")).toBeVisible();
+    await expect(page.getByText("Turn a signal into a decision")).toBeVisible();
     await expect(page.getByText("Selected finding")).toBeVisible();
     await page.getByLabel("Mode").selectOption("Developer");
 

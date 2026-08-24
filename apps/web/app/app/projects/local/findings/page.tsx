@@ -125,8 +125,8 @@ export default async function FindingsPage({ searchParams }: PageProps) {
       <section className="page-header">
         <div>
           <p className="section-kicker">Findings</p>
-          <h1><PinkDotText text="Findings." /></h1>
-          <p>{activeProject ? `${results.total} results for ${activeProject.name}. Select one to inspect its evidence.` : "Choose an active folder to inspect findings."}</p>
+          <h1><PinkDotText text="What deserves attention." /></h1>
+          <p>{activeProject ? `${results.total} retained signals for ${activeProject.name}. Rejected scanner noise is already removed.` : "Choose an active project to inspect findings."}</p>
         </div>
       </section>
 

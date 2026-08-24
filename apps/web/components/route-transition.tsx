@@ -8,6 +8,7 @@ function routeName(pathname: string) {
   if (pathname === "/app/projects/local/search") return "repository-search";
   if (pathname === "/app/projects/local/attack-map") return "attack-map";
   if (pathname === "/app/projects/local/coverage") return "coverage";
+  if (pathname === "/app/projects/local/investigations") return "investigations";
   if (pathname === "/app/projects/local/scans") return "scans";
   if (pathname.startsWith("/app/projects/local/scans/")) return "scan-folder";
   if (pathname === "/app/projects/local/assets") return "assets";

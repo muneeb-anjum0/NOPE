@@ -1,13 +1,10 @@
-import { PinkDotText } from "@/components/pink-dot-text";
+import Link from "next/link";
+import { ArrowRight, CheckCircle2, CircleAlert, FileSearch, Gauge, Radar, ScanSearch, SearchCode, ShieldCheck } from "lucide-react";
 import { getActiveProjectId, scansForProject } from "@/lib/active-project";
-import { freshScan, getProjects, getScanComparison, getScans, selectScan } from "@/lib/nope-data";
+import { freshScan, getFindingObservations, getProjects, getScanComparison, getScans, selectScan } from "@/lib/nope-data";
 import { scansAreComparable } from "@/lib/scan-identity";
 
-export default async function ProjectOverview({
-  searchParams,
-}: {
-  searchParams?: Promise<{ scan?: string }>;
-}) {
+export default async function ProjectOverview({ searchParams }: { searchParams?: Promise<{ scan?: string }> }) {
   const params = (await searchParams) ?? {};
   const [projects, allScans] = await Promise.all([getProjects(), getScans()]);
   const activeProjectId = await getActiveProjectId(projects);
@@ -16,123 +13,85 @@ export default async function ProjectOverview({
   const scan = selectScan(scans, params.scan) ?? freshScan();
   const scanIndex = scans.findIndex((item) => item.id === scan.id);
   const previous = scans.find((item, index) => index > scanIndex && scansAreComparable(scan, item));
-  const comparison = previous ? await getScanComparison(scan.id, previous.id) : null;
-  const severityCounts = ["critical", "high", "medium", "low"].map((severity) => ({
-    severity,
-    count: (scan.findings ?? []).filter((finding) => finding.severity === severity).length,
-  }));
+  const [comparison, observations] = await Promise.all([
+    previous ? getScanComparison(scan.id, previous.id) : Promise.resolve(null),
+    scan.id !== "fresh_workspace" ? getFindingObservations(scan.id, "raw") : Promise.resolve(null),
+  ]);
+  const findings = (observations?.items ?? scan.raw_observations ?? scan.findings).filter((finding) => finding.disposition !== "rejected");
+  const confirmed = findings.filter((finding) => finding.disposition?.startsWith("confirmed"));
+  const needsReview = findings.filter((finding) => !finding.disposition?.startsWith("confirmed"));
+  const urgent = findings.filter((finding) => ["critical", "high"].includes(finding.severity));
   const coverage = scan.coverage ?? [];
   const scannerRuns = scan.scanner_runs ?? [];
-  const graphNodes = scan.code_graph?.nodes ?? [];
-  const untested = coverage.filter((record) => record.status === "Not tested" || record.status === "Failed");
-  const pipeline = [
-    ["Stack", scan.stack?.length ? "completed" : "pending"],
-    ["Attack surface", graphNodes.length ? "completed" : "pending"],
-    ["Scanners", scannerRuns.length ? "completed" : "pending"],
-    ["Qwen", scan.ai_review?.status ?? "pending"],
-  ];
-  const scannerSummary = {
-    passed: scannerRuns.filter((run) => run.status === "passed").length,
-    failed: scannerRuns.filter((run) => run.status === "failed").length,
-    skipped: scannerRuns.filter((run) => run.status === "skipped").length,
-  };
-  const totalFindings = (scan.findings ?? []).length;
-  const hasRealScan = scan.id !== "fresh_workspace";
-  const activeScanTitle = hasRealScan ? scan.repository_name || "Selected upload" : "No scan";
-  const activeScanMeta = hasRealScan ? scan.id : "Upload ZIP";
+  const gaps = coverage.filter((record) => record.status === "Not tested" || record.status === "Failed");
+  const hasScan = scan.id !== "fresh_workspace";
+  const scanQuery = hasScan ? `?scan=${encodeURIComponent(scan.id)}` : "";
+  const projectScanHref = activeProject ? `/app/projects/local/scans/${activeProject.id}` : "/app/projects/local/scans";
+  const nextHref = !activeProject ? "/app/projects/local/scans" : !hasScan ? projectScanHref : urgent.length ? `/app/projects/local/findings${scanQuery}` : needsReview.length ? `/app/projects/local/investigations${scanQuery}` : projectScanHref;
+  const nextLabel = !activeProject ? "Create your first project" : !hasScan ? "Upload a repository" : urgent.length ? `Review ${urgent.length} high-impact finding${urgent.length === 1 ? "" : "s"}` : needsReview.length ? `Investigate ${needsReview.length} uncertain signal${needsReview.length === 1 ? "" : "s"}` : "Run another scan";
 
   return (
-    <>
-      <section className="dashboard-hero">
-        <div>
-          <p className="section-kicker">Overview</p>
-          <h1><PinkDotText text={scan.verdict} /></h1>
-          <div className="hero-meta-tags" aria-label="Scan target">
-            <span className="mini-tag mini-tag-label">Folder</span>
-            <span className="mini-tag mono">{activeProject?.name ?? "none"}</span>
-            <span className="mini-tag mini-tag-label">Repository</span>
-            <span className="mini-tag mono">{scan.repository_name ?? "none"}</span>
-            <span className="mini-tag mini-tag-label">Target</span>
-            <span className="mini-tag mono">{scan.target_url ?? "none"}</span>
+    <div className="overview-command-center">
+      <section className="command-hero">
+        <div className="command-hero-copy">
+          <p className="section-kicker">Security workspace</p>
+          <h1>{activeProject ? activeProject.name : "Start with one application"}<span className="wordmark-dot">.</span></h1>
+          <p>{hasScan ? "NOPE has reduced the scanner noise into the signals that deserve your attention." : "Upload an application. NOPE will find what is worth your attention, show the evidence, and help you verify the fix."}</p>
+          <div className="command-actions">
+            <Link className="button primary command-primary-action" href={nextHref}>{nextLabel}<ArrowRight size={17} /></Link>
+            {hasScan ? <Link className="button ghost" href={`/app/projects/local/findings${scanQuery}`}>View all findings</Link> : null}
           </div>
         </div>
-        <div className={`dashboard-context${hasRealScan ? "" : " empty"}`}>
-          <div className="active-scan-tags" aria-label="Active scan">
-            <span className="mini-tag mini-tag-label">Active</span>
-            <span className="mini-tag mini-tag-strong">{activeScanTitle}</span>
-            <span className="mini-tag mono">{activeScanMeta}</span>
-            <span className="mini-tag">{hasRealScan ? scan.status : "idle"}</span>
-          </div>
+        <div className={`trust-orbit${hasScan ? "" : " is-idle"}`}>
+          <div className="trust-orbit-ring" aria-hidden="true" />
+          <div className="trust-orbit-core"><ShieldCheck size={28} /><strong>{hasScan ? scan.score : "—"}</strong><span>trust score</span></div>
+          <span className="orbit-label orbit-label-top">{scan.status}</span>
+          <span className="orbit-label orbit-label-bottom">{scan.coverage_percent}% covered</span>
         </div>
       </section>
 
-      <section className="dashboard-scoreboard" aria-label="Scan summary">
-        <div>
-          <span className="mono muted">Score</span>
-          <strong className="scoreboard-hot-number" data-brand-skip>{scan.score}</strong>
-          <span>{scan.coverage_percent}% coverage</span>
+      <section className="attention-strip" aria-label="Current security summary">
+        <SummaryMetric icon={<CircleAlert size={18} />} label="Needs attention" value={urgent.length} note="critical + high" tone="hot" />
+        <SummaryMetric icon={<CheckCircle2 size={18} />} label="Confirmed" value={confirmed.length} note="evidence-backed" />
+        <SummaryMetric icon={<FileSearch size={18} />} label="Needs review" value={needsReview.length} note="uncertain, not hidden" />
+        <SummaryMetric icon={<Gauge size={18} />} label="Coverage gaps" value={gaps.length} note={gaps.length ? "failed or untested" : "all checked"} />
+      </section>
+
+      <section className="overview-main-grid">
+        <div className="app-panel next-step-panel">
+          <div className="panel-title"><div><p className="detail-eyebrow">Recommended next step</p><h2>{nextLabel}</h2></div><span className="step-badge">01</span></div>
+          <p className="muted">{!hasScan ? "A scan creates the evidence NOPE needs. Nothing is guessed before that." : urgent.length ? "Start with the highest-impact retained signals. Each one includes its source, location, disposition, and evidence." : needsReview.length ? "These signals are intentionally uncertain. Investigate them without changing their deterministic classification." : "No urgent retained signals remain in this scan. Rescan after changes to measure drift."}</p>
+          <Link className="next-step-link" href={nextHref}>Continue workflow <ArrowRight size={16} /></Link>
         </div>
-        <div>
-          <span className="mono muted">Findings</span>
-          <strong className="scoreboard-hot-number" data-brand-skip>{totalFindings}</strong>
-          <span>{severityCounts.map((item) => `${item.count} ${item.severity}`).join(" / ")}</span>
-        </div>
-        <div>
-          <span className="mono muted">Drift</span>
-          <strong className="scoreboard-hot-number" data-brand-skip>{comparison ? comparison.summary.total_drift_events ?? 0 : 0}</strong>
-          <span>{comparison ? `${comparison.summary.new ?? 0} new / ${comparison.summary.fixed ?? 0} fixed` : "Needs two scans"}</span>
-        </div>
-        <div>
-          <span className="mono muted">Pipeline</span>
-          <strong>{scan.status}</strong>
-          <span>{scannerRuns.length} scanner runs</span>
+
+        <div className="app-panel scan-context-panel">
+          <div className="panel-title"><h2>Current scan</h2><span className={`status-light ${scan.status}`} /> </div>
+          <dl className="compact-scan-context">
+            <div><dt>Repository</dt><dd>{scan.repository_name ?? "No upload yet"}</dd></div>
+            <div><dt>Status</dt><dd>{scan.status}</dd></div>
+            <div><dt>Scanners</dt><dd>{scannerRuns.filter((run) => run.status === "passed").length}/{scannerRuns.length} passed</dd></div>
+            <div><dt>Drift</dt><dd>{comparison ? `${comparison.summary.new ?? 0} new · ${comparison.summary.fixed ?? 0} fixed` : "Needs two scans"}</dd></div>
+          </dl>
         </div>
       </section>
 
-      <section className="dashboard-workspace overview-status-grid">
-        <aside className="dashboard-rail overview-evidence-rail">
-          <div className="app-panel evidence-ribbon">
-            <div className="panel-title">
-              <h2>Evidence status</h2>
-              <span className="mono muted">{scan.status}</span>
-            </div>
-            <div className="evidence-ribbon-grid">
-              <div className="evidence-ribbon-main" aria-label="Pipeline evidence stages">
-                {pipeline.map(([label, status], index) => (
-                  <div className={`evidence-chip ${status === "pending" ? "is-waiting" : "is-ready"}`} key={label}>
-                    <span className="mono">{String(index + 1).padStart(2, "0")}</span>
-                    <strong>{label}</strong>
-                    <em>{status}</em>
-                  </div>
-                ))}
-              </div>
-              <div className="evidence-ribbon-side">
-                <div className="evidence-metric">
-                  <span className="mono muted">Scanners</span>
-                  <strong>{scannerRuns.length}</strong>
-                  <p>{scannerSummary.passed} passed / {scannerSummary.failed} failed / {scannerSummary.skipped} skipped</p>
-                </div>
-                <div className="evidence-metric">
-                  <span className="mono muted">Qwen</span>
-                  <strong>{scan.ai_review?.status ?? "pending"}</strong>
-                  <p>{scan.ai_review?.provider && scan.ai_review.provider !== "none" ? scan.ai_review.provider : "focused review"}</p>
-                </div>
-                <div className="evidence-metric evidence-metric-wide">
-                  <span className="mono muted">Untested / failed</span>
-                  <strong>{untested.length}</strong>
-                  <div className="evidence-mini-tags">
-                    {untested.slice(0, 4).map((record) => (
-                      <span className={record.status === "Failed" ? "is-failed" : ""} key={record.domain}>{record.domain}</span>
-                    ))}
-                    {untested.length > 4 ? <span>+{untested.length - 4} more</span> : null}
-                    {untested.length === 0 ? <span>All covered</span> : null}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </aside>
+      <section className="analysis-hub">
+        <div className="analysis-hub-heading"><div><p className="section-kicker">Go deeper</p><h2>Analyze this scan</h2></div><p>Open these only when you need supporting context.</p></div>
+        <div className="analysis-card-grid">
+          <AnalysisCard href={`/app/projects/local/coverage${scanQuery}`} icon={<Gauge />} title="Coverage" copy="See what ran, failed, or was not tested." meta={`${scan.coverage_percent}%`} />
+          <AnalysisCard href={`/app/projects/local/attack-map${scanQuery}`} icon={<Radar />} title="Attack map" copy="Trace routes, handlers, and exposed paths." meta={`${scan.code_graph?.nodes?.length ?? 0} nodes`} />
+          <AnalysisCard href={`/app/projects/local/search${scanQuery}`} icon={<SearchCode />} title="Repository search" copy="Retrieve focused code and security context." meta="hybrid RAG" />
+          <AnalysisCard href={projectScanHref} icon={<ScanSearch />} title="Scan history" copy="Compare runs, baselines, and security drift." meta={`${scans.length} runs`} />
+        </div>
       </section>
-    </>
+    </div>
   );
+}
+
+function SummaryMetric({ icon, label, value, note, tone = "" }: { icon: React.ReactNode; label: string; value: number; note: string; tone?: string }) {
+  return <div className={`attention-metric ${tone}`}><span className="attention-icon">{icon}</span><span><small>{label}</small><strong>{value}</strong><em>{note}</em></span></div>;
+}
+
+function AnalysisCard({ href, icon, title, copy, meta }: { href: string; icon: React.ReactNode; title: string; copy: string; meta: string }) {
+  return <Link className="analysis-card" href={href}><span className="analysis-card-icon">{icon}</span><span><strong>{title}</strong><small>{copy}</small></span><em>{meta}</em><ArrowRight className="analysis-card-arrow" size={16} /></Link>;
 }

@@ -41,9 +41,9 @@ export default async function InvestigationsPage({ searchParams }: PageProps) {
     <>
       <section className="page-header">
         <div>
-          <p className="section-kicker">Investigations</p>
-          <h1><PinkDotText text="Manual-review brain, deterministic spine." /></h1>
-          <p>{activeProject ? `${activeProject.name}: retained findings can be investigated with bounded RAG, citations, and related evidence.` : "Choose an active folder to investigate findings."}</p>
+          <p className="section-kicker">Investigate</p>
+          <h1><PinkDotText text="Turn a signal into a decision." /></h1>
+          <p>{activeProject ? `Challenge the evidence, understand reachability, and plan a verified fix for ${activeProject.name}.` : "Choose an active project to investigate findings."}</p>
         </div>
       </section>
 
