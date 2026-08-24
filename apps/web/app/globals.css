@@ -3524,58 +3524,6 @@ textarea:focus-visible {
   background: var(--passed);
 }
 
-.upload-progress-card {
-  display: grid;
-  gap: 9px;
-  padding: 14px 16px;
-  border: 1px solid rgba(240, 42, 86, 0.3);
-  border-radius: var(--radius-sm);
-  background: rgba(240, 42, 86, 0.06);
-}
-
-.upload-progress-copy {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.upload-progress-copy span {
-  color: var(--brand-primary);
-}
-
-.upload-progress-track {
-  height: 8px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.upload-progress-track span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--brand-primary);
-  transition: width 160ms ease;
-}
-
-.upload-progress-card.is-complete {
-  border-color: rgba(63, 211, 146, 0.35);
-  background: rgba(63, 211, 146, 0.07);
-}
-
-.upload-progress-card.is-complete .upload-progress-copy span,
-.upload-progress-card.is-complete .upload-progress-track span {
-  color: var(--passed);
-  background: var(--passed);
-}
-
-.upload-progress-card p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
 .scan-history-list {
   display: grid;
   gap: 8px;
