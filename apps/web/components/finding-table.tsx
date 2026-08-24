@@ -129,16 +129,24 @@ export function FindingTable({
                 </td>
                 <td className="finding-title-cell">
                   <strong>{finding.title}</strong>
-                  <br />
-                  <span className="muted">
-                    <SlashMeta items={[finding.category, finding.confidence, lineRangeFor(finding)]} />
+                  <span className="finding-summary-preview">
+                    {finding.disposition_reason || finding.description}
+                  </span>
+                  <span className="muted finding-context-preview">
+                    <SlashMeta items={[
+                      finding.category,
+                      finding.confidence,
+                      finding.nope_rule_id ?? finding.original_rule_id,
+                      finding.scanner_sources[0],
+                      lineRangeFor(finding),
+                    ]} />
                   </span>
                   <span className="mono finding-location-preview">{finding.affected_file ?? finding.affected_route ?? "n/a"}</span>
                 </td>
                 <td>
                   <strong>{finding.disposition ?? "confirmed"}</strong>
                   <br />
-                  <span className="muted">{finding.priority ?? finding.status}</span>
+                  <span className="muted">{finding.priority ? `${finding.priority} priority` : finding.status}</span>
                 </td>
               </tr>
             ))

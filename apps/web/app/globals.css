@@ -2815,6 +2815,23 @@ textarea:focus-visible {
   line-height: 1.25;
 }
 
+.finding-summary-preview {
+  display: -webkit-box;
+  max-width: 900px;
+  margin-top: 6px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.finding-context-preview {
+  display: block;
+  margin-top: 7px;
+}
+
 .finding-location-preview {
   display: block;
   margin-top: 5px;
