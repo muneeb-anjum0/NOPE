@@ -4,7 +4,7 @@ import { expectNoSeriousAxeViolations, login, visibleAppReady } from "./helpers"
 const majorRoutes = [
   ["/", "NOPE"],
   ["/login", "Open your own fresh dashboard"],
-  ["/app/projects/local", "Recommended next step"],
+  ["/app/projects/local", "Next"],
   ["/app/projects/local/scans", "Scan your applications"],
   ["/app/projects/local/scans/project_stage8", "Upload ZIP"],
   ["/app/projects/local/findings?scan=scan_stage8_completed&finding=fnd_stage8_idor&detail=open", "Finding detail"],

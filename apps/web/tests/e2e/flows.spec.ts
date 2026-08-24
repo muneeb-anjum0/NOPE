@@ -12,7 +12,7 @@ test.describe("Stage 8 core browser flows", () => {
     await visibleAppReady(page);
     await page.reload();
     await expect(page).toHaveURL(/\/app\/projects\/local/);
-    await expect(page.getByText("Recommended next step")).toBeVisible();
+    await expect(page.getByText("Next", { exact: true })).toBeVisible();
 
     await page.getByRole("link", { name: /Settings/ }).click();
     await expect(page).toHaveURL(/\/settings/);

@@ -4,6 +4,7 @@ import { freezeForVisuals, login } from "./helpers";
 const denseRoutes = [
   ["/app/projects/local?scan=scan_stage8_completed", "overview"],
   ["/app/projects/local/findings?scan=scan_stage8_completed&finding=fnd_stage8_idor&detail=open", "findings"],
+  ["/app/projects/local/investigations?scan=scan_stage8_completed&finding=fnd_stage8_idor", "investigations"],
   ["/app/projects/local/attack-map?scan=scan_stage8_completed", "attack-map"],
   ["/app/projects/local/coverage?scan=scan_stage8_completed", "coverage"],
   ["/app/projects/local/assets?scan=scan_stage8_completed", "assets"],

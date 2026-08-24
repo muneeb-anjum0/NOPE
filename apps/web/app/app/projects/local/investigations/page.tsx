@@ -1,5 +1,5 @@
+import Link from "next/link";
 import { AIFindingActions } from "@/components/ai-finding-actions";
-import { FindingTable } from "@/components/finding-table";
 import { PinkDotText } from "@/components/pink-dot-text";
 import { getActiveProjectId, scansForProject } from "@/lib/active-project";
 import { freshScan, getFindingObservations, getProjects, getScans, selectScan, severityClass } from "@/lib/nope-data";
@@ -54,6 +54,25 @@ export default async function InvestigationsPage({ searchParams }: PageProps) {
         </div>
       ) : (
         <div className="investigation-page-grid">
+          <aside className="app-panel investigation-secondary">
+            <div className="panel-title">
+              <div><p className="detail-eyebrow">Queue</p><h2>Choose a finding</h2></div>
+              <span className="mono">{results.total}</span>
+            </div>
+            <nav className="investigation-picker" aria-label="Investigation findings">
+              {results.items.map((finding, index) => {
+                const next = new URLSearchParams(params.toString());
+                next.set("scan", scan.id);
+                next.set("finding", finding.id);
+                return (
+                  <Link className={finding.id === selected.id ? "is-active" : ""} href={`/app/projects/local/investigations?${next.toString()}`} key={finding.id}>
+                    <span className="mono">{String(index + 1).padStart(2, "0")}</span>
+                    <span><strong>{finding.title}</strong><small>{finding.severity} · {finding.disposition ?? "confirmed"}</small></span>
+                  </Link>
+                );
+              })}
+            </nav>
+          </aside>
           <section className="app-panel investigation-primary">
             <div className="panel-title">
               <div>
@@ -71,13 +90,6 @@ export default async function InvestigationsPage({ searchParams }: PageProps) {
               <div><dt>Sources</dt><dd>{selected.scanner_sources.join(" + ") || "n/a"}</dd></div>
             </dl>
             <AIFindingActions finding={selected} scanId={scan.id} showInvestigationControls />
-          </section>
-          <section className="app-panel investigation-secondary">
-            <div className="panel-title">
-              <h2>Investigation queue</h2>
-              <span className="mono">{results.total} findings</span>
-            </div>
-            <FindingTable findings={results.items} scanId={scan.id} selectedId={selected.id} searchQuery={params.toString()} total={results.total} basePath="/app/projects/local/investigations" />
           </section>
         </div>
       )}
