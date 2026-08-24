@@ -395,6 +395,13 @@ def deterministic_investigation_report(
             if isinstance(value, str) and value
         }
     )
+    confirmed = finding.disposition.value.startswith("confirmed")
+    classification_status = "Verified" if confirmed else "Possible"
+    classification_label = (
+        "promoted deterministic finding"
+        if confirmed
+        else f"retained {finding.disposition.value} finding"
+    )
     report = {
         "version": INVESTIGATION_VERSION,
         "mode": mode,
@@ -403,8 +410,8 @@ def deterministic_investigation_report(
         "generated_at_unix": int(time.time()),
         "summary": [
             _status_statement(
-                "Verified",
-                f"{finding.title} is a promoted deterministic finding at {location}{line}. The investigation is constrained to scanner evidence, Rules v2 metadata, and bounded repository retrieval.",
+                classification_status,
+                f"{finding.title} is a {classification_label} at {location}{line}. The investigation is constrained to scanner evidence, deterministic metadata, and bounded repository retrieval.",
                 [primary],
             )
         ],
@@ -437,7 +444,7 @@ def deterministic_investigation_report(
         "exploitability": [
             _status_statement(
                 "Supported",
-                f"Exploitability is tied to the {finding.severity.value} severity and {finding.confidence.value} confidence from deterministic evidence, not AI scoring.",
+                f"Exploitability assessment retains the pipeline disposition {finding.disposition.value}, {finding.severity.value} severity, and {finding.confidence.value} confidence; AI does not promote the signal.",
                 [primary],
             )
         ],
@@ -449,8 +456,8 @@ def deterministic_investigation_report(
         ],
         "why_rules_promoted_it": [
             _status_statement(
-                "Verified",
-                f"The finding already exists with rule {finding.nope_rule_id or finding.original_rule_id or 'scanner rule'} and scanner sources {', '.join(finding.scanner_sources or ['unknown'])}. AI investigation does not create or promote findings.",
+                classification_status,
+                f"The pipeline retained this as {finding.disposition.value} under rule {finding.nope_rule_id or finding.original_rule_id or 'scanner rule'} with scanner sources {', '.join(finding.scanner_sources or ['unknown'])}. AI investigation does not create or promote findings and does not change that disposition.",
                 [primary],
             )
         ],
@@ -1245,7 +1252,15 @@ async def finding_action(
 
 
 def _find_scan_finding(scan: Scan, finding_id: str) -> Finding | None:
-    return next((finding for finding in scan.findings if finding.id == finding_id), None)
+    retained = [*scan.findings, *scan.raw_observations]
+    return next(
+        (
+            finding
+            for finding in retained
+            if finding.id == finding_id and finding.disposition.value != "rejected"
+        ),
+        None,
+    )
 
 
 def _ai_status_label(status: str) -> str:
